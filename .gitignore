@@ -1,6 +1,10 @@
 # Environment variables
 .env
 .env.local
+*secret*
+*env*
+*setup*
+*.json
 
 # Python
 __pycache__/

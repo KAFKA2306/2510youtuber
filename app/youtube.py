@@ -104,6 +104,10 @@ class YouTubeManager:
                         client_config = json.load(f)
             else:
                 client_config = self.client_secrets
+            logger.debug(f"YouTube client_config: {client_config}")
+
+            if not client_config:
+                raise ValueError("YouTube client secrets are missing or invalid for OAuth flow.")
 
             # OAuth フローを作成
             flow = InstalledAppFlow.from_client_config(client_config, self.SCOPES)
