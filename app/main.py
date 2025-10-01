@@ -165,16 +165,26 @@ class YouTubeWorkflow:
 
     async def _step2_generate_script(self, news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
         logger.info("Step 2: Starting script generation...")
+        logger.info(f"3-stage quality check: {'ENABLED' if cfg.use_three_stage_quality_check else 'DISABLED'}")
+
         try:
             prompt_b = self._get_prompts().get("prompt_b", self._default_script_prompt())
+
+            # 3段階品質チェックを使用（設定で有効な場合）
             script_content = generate_dialogue(
-                news_items, prompt_b, target_duration_minutes=cfg.max_video_duration_minutes
+                news_items,
+                prompt_b,
+                target_duration_minutes=cfg.max_video_duration_minutes,
+                use_quality_check=cfg.use_three_stage_quality_check
             )
+
             if not script_content or len(script_content) < 100:
                 raise Exception("Generated script too short or empty")
+
             script_path = FileUtils.get_temp_file(prefix="script_", suffix=".txt")
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(script_content)
+
             logger.info(f"Generated script: {len(script_content)} characters")
             return {
                 "success": True,
@@ -183,6 +193,7 @@ class YouTubeWorkflow:
                 "length": len(script_content),
                 "step": "script_generation",
                 "files": [script_path],
+                "quality_checked": cfg.use_three_stage_quality_check,
             }
         except Exception as e:
             logger.error(f"Step 2 failed: {e}")
