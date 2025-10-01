@@ -90,6 +90,7 @@ class VideoGenerator:
         return self._create_default_background(title)
 
     def _create_default_background(self, title: str) -> str:
+        """デフォルト背景を作成（日本語対応）"""
         try:
             import textwrap
 
@@ -98,35 +99,67 @@ class VideoGenerator:
             width, height = 1920, 1080
             image = Image.new("RGB", (width, height), color=(25, 35, 45))
             draw = ImageDraw.Draw(image)
-            try:
-                font_size = 72
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
-            except Exception:
-                try:
-                    font = ImageFont.load_default()
-                except Exception:
-                    font = None
+
+            # 日本語フォントを取得
+            font_size = 72
+            font = self._get_japanese_font_for_background(font_size)
+
             if font:
-                wrapped_title = textwrap.fill(title, width=20)
+                # 日本語の場合、適切な文字数で改行
+                wrapped_title = textwrap.fill(title, width=15)  # 20 -> 15 (日本語対応)
                 bbox = draw.textbbox((0, 0), wrapped_title, font=font)
                 text_width = bbox[2] - bbox[0]
                 text_height = bbox[3] - bbox[1]
                 x = (width - text_width) // 2
                 y = (height - text_height) // 2
-                shadow_offset = 3
-                draw.text((x + shadow_offset, y + shadow_offset), wrapped_title, font=font, fill=(0, 0, 0, 128))
+
+                # 影を描画（視認性向上）
+                shadow_offset = 4
+                draw.text((x + shadow_offset, y + shadow_offset), wrapped_title, font=font, fill=(0, 0, 0))
+
+                # メインテキスト
                 draw.text((x, y), wrapped_title, font=font, fill=(255, 255, 255))
+
+            # グラデーション背景
             for y_pos in range(height):
                 alpha = int(255 * (1 - y_pos / height) * 0.3)
                 overlay = Image.new("RGBA", (width, 1), (70, 130, 180, alpha))
                 image.paste(overlay, (0, y_pos), overlay)
+
             temp_path = tempfile.mktemp(suffix=".png")
             image.save(temp_path, "PNG")
-            logger.debug(f"Created default background: {temp_path}")
+            logger.debug(f"Created default background with Japanese font: {temp_path}")
             return temp_path
         except Exception as e:
             logger.warning(f"Failed to create default background: {e}")
             return self._create_simple_background()
+
+    def _get_japanese_font_for_background(self, size: int):
+        """背景用の日本語フォントを取得"""
+        from PIL import ImageFont
+
+        # 日本語フォントの候補
+        japanese_font_paths = [
+            "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",  # IPA ゴシック
+            "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+            "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",  # macOS
+            "C:/Windows/Fonts/msgothic.ttc",  # Windows
+            "C:/Windows/Fonts/YuGothB.ttc",  # Windows Yu Gothic Bold
+        ]
+
+        for font_path in japanese_font_paths:
+            if os.path.exists(font_path):
+                try:
+                    return ImageFont.truetype(font_path, size)
+                except Exception as e:
+                    logger.debug(f"Failed to load font {font_path}: {e}")
+                    continue
+
+        # フォールバック
+        try:
+            return ImageFont.load_default()
+        except Exception:
+            return None
 
     def _create_simple_background(self) -> str:
         try:
@@ -160,29 +193,68 @@ class VideoGenerator:
         return settings
 
     def _build_subtitle_filter(self, subtitle_path: str) -> str:
-        """字幕フィルタを構築"""
+        """字幕フィルタを構築（日本語対応、視認性向上）"""
         try:
             # On Windows, paths must be escaped.
             if os.name == "nt":
                 subtitle_path = subtitle_path.replace("\\", "\\\\").replace(":", "\\:")
 
+            # 日本語フォントを優先的に使用
+            japanese_fonts = [
+                "IPAGothic",  # IPA ゴシック (Linux)
+                "IPA Gothic",
+                "Noto Sans CJK JP",  # Noto Sans 日本語
+                "Meiryo",  # Windows
+                "Hiragino Sans",  # macOS
+                "Yu Gothic",  # Windows/Mac
+                "MS Gothic",  # Windows
+            ]
+
+            # 利用可能な日本語フォントを検索
+            font_name = self._find_available_font(japanese_fonts)
+
             subtitle_style = (
-                f"subtitles={subtitle_path}:force_style='FontName=DejaVu Sans Bold,"
-                f"FontSize=24,"
-                f"PrimaryColour=&H00ffffff,"
-                f"OutlineColour=&H00000000,"
-                f"BorderStyle=1,"
-                f"Outline=2,"
-                f"Shadow=0,"
-                f"Alignment=2,"
-                f"MarginV=80'"
+                f"subtitles={subtitle_path}:force_style='FontName={font_name},"
+                f"FontSize=32,"  # 視認性向上: 24 -> 32
+                f"PrimaryColour=&H00FFFFFF,"  # 白
+                f"OutlineColour=&H00000000,"  # 黒アウトライン
+                f"BackColour=&H80000000,"  # 半透明黒背景
+                f"BorderStyle=3,"  # ボックス背景
+                f"Outline=3,"  # 太いアウトライン
+                f"Shadow=1,"  # 影を追加
+                f"Alignment=2,"  # 下部中央
+                f"MarginV=60,"  # 下部マージン
+                f"Bold=1'"  # 太字
             )
 
+            logger.info(f"Using subtitle font: {font_name}")
             return subtitle_style
 
         except Exception as e:
             logger.warning(f"Failed to build subtitle filter: {e}")
             return None
+
+    def _find_available_font(self, font_candidates: list) -> str:
+        """利用可能なフォントを検索"""
+        import subprocess
+
+        for font_name in font_candidates:
+            try:
+                # fc-listでフォントの存在を確認
+                result = subprocess.run(
+                    ["fc-list", f":family={font_name}"],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    return font_name
+            except Exception:
+                continue
+
+        # フォールバック: デフォルト
+        logger.warning("No Japanese font found, using default font")
+        return "Arial"
 
     def _get_video_info(self, video_path: str) -> Dict[str, Any]:
         try:

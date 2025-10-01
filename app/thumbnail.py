@@ -32,21 +32,31 @@ class ThumbnailGenerator:
             logger.warning("PIL not available, thumbnail generation will be limited")
 
     def _get_available_fonts(self) -> Dict[str, str]:
-        """利用可能なフォントパスを取得"""
+        """利用可能なフォントパスを取得（日本語優先）"""
         font_paths = {}
 
-        # システムフォントパスの候補
+        # システムフォントパスの候補（日本語フォント優先）
         font_candidates = [
-            # Linux
+            # 日本語フォント (Linux)
+            "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
+            "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf",
+            "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+            # 日本語フォント (macOS)
+            "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
+            "/System/Library/Fonts/ヒラギノ角ゴシック W8.ttc",
+            # 日本語フォント (Windows)
+            "C:/Windows/Fonts/msgothic.ttc",
+            "C:/Windows/Fonts/meiryo.ttc",
+            "C:/Windows/Fonts/YuGothB.ttc",
+            "C:/Windows/Fonts/YuGothM.ttc",
+            # Noto CJK
+            "/usr/share/fonts/truetype/noto-cjk/NotoSansCJK-Bold.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+            # 欧文フォント（フォールバック）
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-            "/usr/share/fonts/truetype/noto-cjk/NotoSansCJK-Bold.ttc",
-            # macOS
             "/System/Library/Fonts/Arial.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            # Windows
             "C:/Windows/Fonts/arial.ttf",
-            "C:/Windows/Fonts/calibri.ttf",
         ]
 
         for font_path in font_candidates:
@@ -54,42 +64,47 @@ class ThumbnailGenerator:
                 font_name = Path(font_path).stem.lower()
                 font_paths[font_name] = font_path
 
+        logger.info(f"Found {len(font_paths)} available fonts (Japanese priority)")
         return font_paths
 
     def _load_color_schemes(self) -> Dict[str, Dict[str, Any]]:
-        """カラースキームを定義"""
+        """カラースキームを定義（人気YouTubeスタイル）"""
         return {
             "economic_blue": {
-                "background": (25, 35, 45),
-                "primary": (70, 130, 180),
+                "background": (10, 20, 40),  # より濃い青
+                "primary": (0, 120, 215),  # 鮮やかな青
+                "secondary": (255, 255, 255),
+                "accent": (255, 215, 0),  # 金色（クリック誘導）
+                "text": (255, 255, 255),
+                "shadow": (0, 0, 0, 220),  # 濃い影
+                "highlight": (255, 69, 0),  # オレンジ（強調用）
+            },
+            "financial_green": {
+                "background": (5, 30, 15),  # 深緑
+                "primary": (0, 180, 80),  # 鮮やかな緑
                 "secondary": (255, 255, 255),
                 "accent": (255, 215, 0),
                 "text": (255, 255, 255),
-                "shadow": (0, 0, 0, 180),
-            },
-            "financial_green": {
-                "background": (15, 45, 25),
-                "primary": (50, 150, 80),
-                "secondary": (255, 255, 255),
-                "accent": (255, 193, 7),
-                "text": (255, 255, 255),
-                "shadow": (0, 0, 0, 180),
+                "shadow": (0, 0, 0, 220),
+                "highlight": (255, 193, 7),  # 黄金色
             },
             "market_red": {
-                "background": (45, 15, 15),
-                "primary": (220, 50, 47),
+                "background": (40, 5, 5),  # 深紅
+                "primary": (255, 50, 50),  # 鮮やかな赤
                 "secondary": (255, 255, 255),
-                "accent": (255, 165, 0),
+                "accent": (255, 215, 0),
                 "text": (255, 255, 255),
-                "shadow": (0, 0, 0, 180),
+                "shadow": (0, 0, 0, 220),
+                "highlight": (255, 140, 0),  # オレンジレッド
             },
-            "neutral_gray": {
-                "background": (40, 40, 40),
-                "primary": (128, 128, 128),
+            "youtube_style": {
+                "background": (20, 20, 30),  # ダークグレー
+                "primary": (255, 0, 0),  # YouTube赤
                 "secondary": (255, 255, 255),
-                "accent": (0, 191, 255),
+                "accent": (255, 215, 0),  # 金色
                 "text": (255, 255, 255),
-                "shadow": (0, 0, 0, 180),
+                "shadow": (0, 0, 0, 230),
+                "highlight": (0, 255, 255),  # シアン（目を引く）
             },
         }
 
@@ -248,39 +263,61 @@ class ThumbnailGenerator:
         return image
 
     def _prepare_main_title(self, title: str, mode: str) -> str:
-        """メインタイトルを準備"""
-        # 長すぎるタイトルを調整
-        if len(title) > 25:
+        """メインタイトルを準備（人気YouTubeスタイル）"""
+        import re
+
+        # 数値を強調記号で囲む（YouTubeスタイル）
+        # 例: "10月利上げ" -> "【10月】利上げ"
+        title = re.sub(r'(\d+[%％円ドル年月日])', r'【\1】', title)
+
+        # 重要キーワードを強調
+        important_patterns = [
+            (r'(速報|緊急|注目|衝撃|驚愕)', r'⚡\1⚡'),
+            (r'(暴落|急落|急騰|高騰)', r'📉\1📈'),
+        ]
+
+        for pattern, replacement in important_patterns:
+            title = re.sub(pattern, replacement, title)
+
+        # 長すぎる場合は調整
+        if len(title) > 30:
             # 重要キーワードを抽出
-            keywords = ["株価", "円安", "円高", "金利", "インフレ", "GDP", "決算"]
+            keywords = ["株価", "円安", "円高", "金利", "インフレ", "GDP", "決算", "速報", "利上げ"]
             important_words = [word for word in keywords if word in title]
 
             if important_words:
                 # 重要語句を含む短縮版
-                return f"{important_words[0]}関連ニュース"
+                return f"【{important_words[0]}】最新情報"
             else:
                 # 一般的な短縮
-                return title[:20] + "..."
+                return title[:25] + "..."
 
         return title
 
     def _draw_main_title(self, draw, title: str, colors: Dict, mode: str):
-        """メインタイトルを描画"""
+        """メインタイトルを描画（人気YouTubeスタイル）"""
         width, height = self.output_size
 
-        # フォントサイズを決定
-        font_size = 72 if len(title) <= 15 else 60 if len(title) <= 20 else 48
+        # フォントサイズを大きく（視認性・インパクト重視）
+        if len(title) <= 10:
+            font_size = 90  # 大きく
+        elif len(title) <= 15:
+            font_size = 80
+        elif len(title) <= 20:
+            font_size = 70
+        else:
+            font_size = 60
 
         font = self._get_font(font_size)
 
-        # テキストを改行
-        wrapped_lines = textwrap.fill(title, width=15).split("\n")
+        # 日本語の場合、適切な文字数で改行
+        wrapped_lines = textwrap.fill(title, width=12).split("\n")  # 15 -> 12
 
         # 全体の高さを計算
-        total_height = len(wrapped_lines) * font_size * 1.2
+        total_height = len(wrapped_lines) * font_size * 1.3
 
-        # 開始Y位置（中央配置）
-        start_y = (height - total_height) // 2
+        # 開始Y位置（やや上寄り）
+        start_y = (height - total_height) // 2 - 50
 
         for i, line in enumerate(wrapped_lines):
             # テキストサイズを取得
@@ -290,14 +327,22 @@ class ThumbnailGenerator:
 
             # X位置（中央配置）
             x = (width - text_width) // 2
-            y = start_y + i * font_size * 1.2
+            y = start_y + i * font_size * 1.3
 
-            # 影を描画
-            shadow_offset = 4 if mode == "breaking" else 3
-            draw.text((x + shadow_offset, y + shadow_offset), line, font=font, fill=colors["shadow"])
+            # 多重影（立体感）
+            for offset in range(6, 1, -1):
+                shadow_alpha = 200 - (offset * 20)
+                draw.text((x + offset, y + offset), line, font=font, fill=(0, 0, 0, shadow_alpha))
 
-            # メインテキストを描画
-            text_color = colors["accent"] if mode == "breaking" else colors["text"]
+            # アウトライン（縁取り）
+            outline_color = (0, 0, 0)
+            for dx in [-2, 0, 2]:
+                for dy in [-2, 0, 2]:
+                    if dx != 0 or dy != 0:
+                        draw.text((x + dx, y + dy), line, font=font, fill=outline_color)
+
+            # メインテキストを描画（鮮やかな色）
+            text_color = colors.get("highlight", colors["accent"]) if mode == "breaking" else colors["accent"]
             draw.text((x, y), line, font=font, fill=text_color)
 
     def _draw_date(self, draw, date_text: str, colors: Dict):
@@ -399,10 +444,22 @@ class ThumbnailGenerator:
         return keywords
 
     def _get_font(self, size: int):
-        """フォントを取得"""
+        """フォントを取得（日本語フォント優先）"""
         from PIL import ImageFont
 
-        # 利用可能なフォントを試行
+        # 日本語フォントを優先的に試行
+        japanese_font_names = ["ipag", "ipagp", "msgothic", "meiryo", "yugothb", "yugothm", "notosanscjk"]
+
+        # 日本語フォントを優先
+        for font_name, font_path in self.font_paths.items():
+            if any(jp_name in font_name for jp_name in japanese_font_names):
+                try:
+                    return ImageFont.truetype(font_path, size)
+                except Exception as e:
+                    logger.debug(f"Failed to load Japanese font {font_path}: {e}")
+                    continue
+
+        # その他のフォントも試行
         for font_name, font_path in self.font_paths.items():
             try:
                 return ImageFont.truetype(font_path, size)
@@ -411,6 +468,7 @@ class ThumbnailGenerator:
 
         # フォールバック: デフォルトフォント
         try:
+            logger.warning("Using default font as fallback")
             return ImageFont.load_default()
         except Exception:
             return None

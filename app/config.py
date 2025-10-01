@@ -148,6 +148,16 @@ class Config:
         return os.getenv("LOCAL_OUTPUT_DIR", "output")
 
     @property
+    def use_three_stage_quality_check(self) -> bool:
+        """3段階品質チェックを使用するか."""
+        return os.getenv("USE_THREE_STAGE_QUALITY_CHECK", "true").lower() == "true"
+
+    @property
+    def quality_check_threshold(self) -> float:
+        """品質チェックの合格基準（10点満点）."""
+        return float(os.getenv("QUALITY_CHECK_THRESHOLD", "7.0"))
+
+    @property
     def save_local_backup(self) -> bool:
         """ローカルバックアップを保存."""
         return os.getenv("SAVE_LOCAL_BACKUP", "true").lower() == "true"
