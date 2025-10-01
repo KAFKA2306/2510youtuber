@@ -13,7 +13,7 @@ from flask import Flask, request, jsonify, render_template_string
 from app.main import workflow
 from app.config import cfg
 from app.sheets import sheets_manager
-from app.slack import discord_notifier
+from app.discord import discord_notifier
 
 app = Flask(__name__)
 

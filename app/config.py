@@ -220,7 +220,8 @@ def debug_config():
         if result.get('client_id'):
             print(f"  Client: {result['client_id']}")
 
-    print(f"\nOther settings:")
+    print(f"
+Other settings:")
     print(f"  Debug mode: {cfg.debug}")
     print(f"  Log level: {cfg.log_level}")
     print(f"  Max video duration: {cfg.max_video_duration_minutes} min")

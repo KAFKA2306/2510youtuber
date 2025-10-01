@@ -90,6 +90,4 @@ htmlcov/
 *.backup
 
 # Refarence
-ref/Auto-YouTube/
-ref/YouTube-Automation-Bot/
-ref/gemini-youtube-automation/
+ref/*

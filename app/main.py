@@ -14,7 +14,7 @@ import traceback
 
 # 各モジュールをインポート
 from app.config import cfg
-from app.slack import discord_notifier
+from app.discord import discord_notifier
 from app.sheets import sheets_manager
 from app.search_news import collect_news
 from app.script_gen import generate_dialogue

@@ -8,7 +8,7 @@ import logging
 import re
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from anthropic import Anthropic
+import google.generativeai as genai
 from app.config import cfg
 
 logger = logging.getLogger(__name__)
@@ -21,13 +21,14 @@ class ScriptGenerator:
         self._setup_client()
 
     def _setup_client(self):
-        """Anthropic APIクライアントを初期化"""
+        """Gemini APIクライアントを初期化"""
         try:
-            if not cfg.anthropic_api_key:
-                raise ValueError("Anthropic API key not configured")
+            if not cfg.gemini_api_key:
+                raise ValueError("Gemini API key not configured")
 
-            self.client = Anthropic(api_key=cfg.anthropic_api_key)
-            logger.info("Script generator initialized")
+            genai.configure(api_key=cfg.gemini_api_key)
+            self.client = genai.GenerativeModel('gemini-1.5-flash')
+            logger.info("Script generator initialized with Gemini")
 
         except Exception as e:
             logger.error(f"Failed to initialize script generator: {e}")
@@ -48,21 +49,13 @@ class ScriptGenerator:
             対談形式の台本テキスト
         """
         try:
-            # ニュース要約を整形
             news_summary = self._format_news_for_script(news_items)
-
-            # プロンプトを構築
             full_prompt = self._build_script_prompt(
                 news_summary, prompt_b, target_duration_minutes
             )
-
-            # Claude APIで台本生成
-            script = self._call_claude_for_script(full_prompt)
-
-            # 台本を後処理
+            script = self._call_gemini_for_script(full_prompt)
             cleaned_script = self._clean_script(script)
 
-            # 品質検証
             if self._validate_script_quality(cleaned_script, target_duration_minutes):
                 logger.info(f"Generated script: {len(cleaned_script)} characters")
                 return cleaned_script
@@ -77,7 +70,6 @@ class ScriptGenerator:
     def _format_news_for_script(self, news_items: List[Dict[str, Any]]) -> str:
         """ニュース項目を台本生成用に整形"""
         formatted_sections = []
-
         for i, item in enumerate(news_items, 1):
             section = f"""
 【ニュース{i}】{item.get('title', '無題')}
@@ -90,23 +82,17 @@ class ScriptGenerator:
 
 重要ポイント:
 """
-            # 重要ポイントを追加
             key_points = item.get('key_points', [])
             for point in key_points:
                 section += f"- {point}\n"
-
             formatted_sections.append(section)
-
         return "\n".join(formatted_sections)
 
     def _build_script_prompt(self, news_summary: str,
                            base_prompt: str,
                            target_duration: int) -> str:
         """台本生成用の詳細プロンプトを構築"""
-
-        # 目標文字数を計算（1分あたり約300文字と仮定）
         target_chars = target_duration * 300
-
         full_prompt = f"""
 {base_prompt}
 
@@ -143,141 +129,97 @@ class ScriptGenerator:
 """
         return full_prompt
 
-    def _call_claude_for_script(self, prompt: str, max_retries: int = 3) -> str:
-        """台本生成用Claude API呼び出し"""
+    def _call_gemini_for_script(self, prompt: str, max_retries: int = 3) -> str:
+        """台本生成用Gemini API呼び出し"""
         import time
         import random
 
         for attempt in range(max_retries):
             try:
-                response = self.client.messages.create(
-                    model="claude-3-sonnet-20240229",
-                    max_tokens=8000,  # 長めの台本のため多めに設定
-                    temperature=0.7,  # 創造性と一貫性のバランス
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ]
-                )
-
-                content = response.content[0].text
+                response = self.client.generate_content(prompt)
+                content = response.text
                 logger.debug(f"Generated script length: {len(content)}")
                 return content
-
             except Exception as e:
                 if "rate_limit" in str(e).lower() and attempt < max_retries - 1:
                     wait_time = (2 ** attempt) + random.uniform(0, 1)
                     logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
                     time.sleep(wait_time)
                     continue
-
                 if attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 3
                     logger.warning(f"Script generation error, retrying in {wait_time}s: {e}")
                     time.sleep(wait_time)
                     continue
-
                 raise
-
         raise Exception("Max retries exceeded for script generation")
 
     def _clean_script(self, raw_script: str) -> str:
         """台本テキストのクリーニング"""
-
-        # 基本的なクリーニング
         script = raw_script.strip()
-
-        # 不要な前置きや説明を除去
         patterns_to_remove = [
             r'^.*?以下.*?台本.*?[:：]\s*',
             r'^.*?対談.*?[:：]\s*',
             r'^.*?スクリプト.*?[:：]\s*',
         ]
-
         for pattern in patterns_to_remove:
             script = re.sub(pattern, '', script, flags=re.IGNORECASE | re.MULTILINE)
-
-        # 話者名の統一
         script = re.sub(r'田中[氏さん]*[:：]', '田中:', script)
         script = re.sub(r'鈴木[氏さん]*[:：]', '鈴木:', script)
-
-        # 空行の整理
         script = re.sub(r'\n\s*\n\s*\n+', '\n\n', script)
-
-        # 文字化けや不要文字の除去
         script = re.sub(r'[^\w\s\n\r！？。、：（）「」『』【】\-\+\*\/\%\$\&\#\.]+', '', script)
-
         return script.strip()
 
     def _validate_script_quality(self, script: str, target_duration: int) -> bool:
         """台本の品質を検証"""
         try:
-            # 長さチェック
-            min_chars = target_duration * 200  # 最小文字数
-            max_chars = target_duration * 400  # 最大文字数
-
+            min_chars = target_duration * 200
+            max_chars = target_duration * 400
             if not (min_chars <= len(script) <= max_chars):
                 logger.warning(f"Script length {len(script)} not in range {min_chars}-{max_chars}")
                 return False
-
-            # 話者の存在チェック
             tanaka_lines = len(re.findall(r'^田中:', script, re.MULTILINE))
             suzuki_lines = len(re.findall(r'^鈴木:', script, re.MULTILINE))
-
             if tanaka_lines < 5 or suzuki_lines < 5:
                 logger.warning(f"Insufficient dialogue lines: 田中={tanaka_lines}, 鈴木={suzuki_lines}")
                 return False
-
-            # バランスチェック（一方だけが話し続けていないか）
+            if max(tanaka_lines, suzuki_lines) == 0:
+                return False
             line_ratio = min(tanaka_lines, suzuki_lines) / max(tanaka_lines, suzuki_lines)
             if line_ratio < 0.3:
                 logger.warning(f"Unbalanced dialogue ratio: {line_ratio}")
                 return False
-
-            # 必要な要素の存在チェック
             required_elements = [
-                r'(今日|本日)',  # 時事性
-                r'(によると|報道|発表)',  # 出典言及
-                r'(パーセント|％|\d+%)',  # 数値データ
+                r'(今日|本日)',
+                r'(によると|報道|発表)',
+                r'(パーセント|％|\d+%)',
             ]
-
             missing_elements = []
             for element in required_elements:
                 if not re.search(element, script):
                     missing_elements.append(element)
-
             if missing_elements:
                 logger.warning(f"Missing required elements: {missing_elements}")
-                # 軽微な不足は許容
                 if len(missing_elements) > 1:
                     return False
-
             return True
-
         except Exception as e:
             logger.error(f"Script validation error: {e}")
             return False
 
     def _get_fallback_script(self, news_items: List[Dict[str, Any]]) -> str:
         """フォールバック用の基本台本"""
-
         current_date = datetime.now().strftime('%Y年%m月%d日')
-
         script = f"""田中: 皆さん、こんにちは。{current_date}の経済ニュース分析をお届けします。今日は私、田中と、
 
 鈴木: 金融アナリストの鈴木がお送りします。今日は重要なニュースがいくつか入ってきていますね。
 
 田中: そうですね。では早速、今日のトピックを見ていきましょう。
 """
-
-        # ニュース項目を簡単に紹介
         for i, item in enumerate(news_items, 1):
             title = item.get('title', f'ニュース{i}')
             summary = item.get('summary', 'システムエラーにより詳細を取得できませんでした。')
             source = item.get('source', '情報源不明')
-
             script += f"""
 田中: {i}番目のニュースです。{title}について、{source}からの報道です。
 
@@ -287,7 +229,6 @@ class ScriptGenerator:
 
 鈴木: 視聴者の皆様には、信頼できる情報源からの正確な情報をご確認いただくことをお勧めします。
 """
-
         script += """
 田中: 本日は技術的な問題により、通常の詳細な分析をお届けできず申し訳ありませんでした。
 
@@ -297,12 +238,10 @@ class ScriptGenerator:
 
 鈴木: ありがとうございました。
 """
-
         return script
 
     def generate_short_script(self, topic: str, duration_minutes: int = 10) -> str:
         """短尺の特定トピック用台本を生成"""
-
         prompt = f"""
 以下のトピックについて、{duration_minutes}分程度の対談形式台本を作成してください：
 
@@ -310,7 +249,7 @@ class ScriptGenerator:
 
 要件:
 - 田中氏と鈴木氏の対談形式
-- 約{duration_minutes * 300}文字程度
+- 約{duration_duration_minutes * 300}文字程度
 - 専門的だが理解しやすい内容
 - 具体的なデータや事例を含める
 
@@ -318,11 +257,9 @@ class ScriptGenerator:
 田中: [発言内容]
 鈴木: [発言内容]
 """
-
         try:
-            response = self._call_claude_for_script(prompt)
+            response = self._call_gemini_for_script(prompt)
             return self._clean_script(response)
-
         except Exception as e:
             logger.error(f"Failed to generate short script for '{topic}': {e}")
             return self._get_fallback_script([{
@@ -332,7 +269,7 @@ class ScriptGenerator:
             }])
 
 # グローバルインスタンス
-script_generator = ScriptGenerator() if cfg.anthropic_api_key else None
+script_generator = ScriptGenerator() if cfg.gemini_api_key else None
 
 def generate_dialogue(news_items: List[Dict[str, Any]],
                      prompt_b: str,
@@ -357,11 +294,8 @@ def generate_short_script(topic: str, duration_minutes: int = 10) -> str:
         }])
 
 if __name__ == "__main__":
-    # テスト実行
     print("Testing script generation...")
-
-    if cfg.anthropic_api_key:
-        # テスト用ニュースデータ
+    if cfg.gemini_api_key:
         test_news = [
             {
                 'title': '日経平均株価が年初来高値を更新',
@@ -382,23 +316,18 @@ if __name__ == "__main__":
                 'category': '企業'
             }
         ]
-
-        # 台本生成テスト
         try:
             generator = ScriptGenerator()
             test_prompt = """
 以下のニュース要約をもとに、二人の専門家による対談形式の台本を作成してください。
 自然な会話の流れで、視聴者にとって理解しやすく、情報価値の高い内容にしてください。
 """
-
             script = generator.generate_dialogue(test_news, test_prompt, 15)
             print(f"Generated script ({len(script)} characters):")
             print("=" * 50)
             print(script[:500] + "..." if len(script) > 500 else script)
             print("=" * 50)
-
         except Exception as e:
             print(f"Test failed: {e}")
-
     else:
-        print("Anthropic API not configured, skipping test")
+        print("Gemini API not configured, skipping test")

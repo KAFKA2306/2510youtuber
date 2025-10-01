@@ -1,15 +1,15 @@
 """
 ニュース収集モジュール
 
-Anthropic Claudeを使用して最新の経済ニュースを収集・要約します。
+Perplexity AIを使用して最新の経済ニュースを収集・要約します。
 """
 
 import json
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import httpx
-from anthropic import Anthropic
 from app.config import cfg
 
 logger = logging.getLogger(__name__)
@@ -18,21 +18,12 @@ class NewsCollector:
     """ニュース収集クラス"""
 
     def __init__(self):
-        self.client = None
-        self._setup_client()
-
-    def _setup_client(self):
-        """Anthropic APIクライアントを初期化"""
-        try:
-            if not cfg.anthropic_api_key:
-                raise ValueError("Anthropic API key not configured")
-
-            self.client = Anthropic(api_key=cfg.anthropic_api_key)
-            logger.info("Anthropic client initialized")
-
-        except Exception as e:
-            logger.error(f"Failed to initialize Anthropic client: {e}")
-            raise
+        self.api_key = cfg.perplexity_api_key
+        self.api_url = "https://api.perplexity.ai/chat/completions"
+        if not self.api_key:
+            logger.warning("Perplexity API key not configured")
+        else:
+            logger.info("NewsCollector initialized for Perplexity")
 
     def collect_news(self, prompt_a: str, mode: str = "daily") -> List[Dict[str, Any]]:
         """
@@ -46,16 +37,9 @@ class NewsCollector:
             ニュース項目のリスト
         """
         try:
-            # モードに応じてプロンプトを調整
             adjusted_prompt = self._adjust_prompt_for_mode(prompt_a, mode)
-
-            # Claude APIを呼び出し
-            response = self._call_claude_with_retry(adjusted_prompt)
-
-            # 結果をパース
-            news_items = self._parse_news_response(response)
-
-            # 検証とクリーニング
+            response_text = self._call_perplexity_with_retry(adjusted_prompt)
+            news_items = self._parse_news_response(response_text)
             validated_news = self._validate_news_items(news_items)
 
             logger.info(f"Collected {len(validated_news)} news items (mode: {mode})")
@@ -119,203 +103,143 @@ class NewsCollector:
 """
         return full_prompt
 
-    def _call_claude_with_retry(self, prompt: str, max_retries: int = 3) -> str:
-        """リトライ機能付きClaude API呼び出し"""
+    def _call_perplexity_with_retry(self, prompt: str, max_retries: int = 3) -> str:
+        """リトライ機能付きPerplexity API呼び出し"""
         import time
         import random
 
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "llama-3-sonar-large-32k-online",
+            "messages": [
+                {"role": "system", "content": "You are an expert financial news analyst. Provide answers in JSON format as requested."},
+                {"role": "user", "content": prompt}
+            ]
+        }
+
         for attempt in range(max_retries):
             try:
-                response = self.client.messages.create(
-                    model="claude-3-sonnet-20240229",
-                    max_tokens=4000,
-                    temperature=0.3,  # 一貫性を重視
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ]
-                )
-
-                content = response.content[0].text
-                logger.debug(f"Claude response length: {len(content)}")
-                return content
-
-            except Exception as e:
-                if "rate_limit" in str(e).lower() and attempt < max_retries - 1:
+                with httpx.Client() as client:
+                    response = client.post(self.api_url, json=payload, headers=headers, timeout=120.0)
+                    response.raise_for_status()
+                    data = response.json()
+                    content = data['choices'][0]['message']['content']
+                    logger.debug(f"Perplexity response length: {len(content)}")
+                    return content
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429 and attempt < max_retries - 1:
                     wait_time = (2 ** attempt) + random.uniform(0, 1)
                     logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
                     time.sleep(wait_time)
                     continue
-
+                else:
+                    logger.error(f"Perplexity API error: {e}")
+                    raise
+            except Exception as e:
                 if attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 2
-                    logger.warning(f"Claude API error, retrying in {wait_time}s: {e}")
+                    logger.warning(f"Perplexity API error, retrying in {wait_time}s: {e}")
                     time.sleep(wait_time)
                     continue
-
                 raise
 
-        raise Exception("Max retries exceeded for Claude API")
+        raise Exception("Max retries exceeded for Perplexity API")
 
     def _parse_news_response(self, response: str) -> List[Dict[str, Any]]:
-        """Claude応答からニュースデータを抽出"""
+        """Perplexity応答からニュースデータを抽出"""
         try:
             # JSON部分を抽出
-            start_markers = ["```json", "[", "{"]
-            end_markers = ["```", "]", "}"]
-
-            json_start = -1
-            json_end = -1
-
-            # 開始位置を探す
-            for marker in start_markers:
-                pos = response.find(marker)
-                if pos != -1:
-                    if marker == "```json":
-                        json_start = pos + len(marker)
-                    elif marker in ["[", "{"]:
-                        json_start = pos
-                    break
-
-            # 終了位置を探す
-            if json_start != -1:
-                remaining = response[json_start:]
-                for marker in end_markers:
-                    if marker == "```":
-                        pos = remaining.find(marker)
-                    elif marker == "]":
-                        pos = remaining.rfind(marker)
-                    elif marker == "}":
-                        # 最後の}を探す
-                        pos = remaining.rfind(marker)
-
-                    if pos != -1:
-                        json_end = json_start + pos
-                        if marker in ["]", "}"]:
-                            json_end += 1
-                        break
-
-            if json_start != -1 and json_end != -1:
-                json_str = response[json_start:json_end].strip()
-
-                # JSONとして解析
-                news_data = json.loads(json_str)
-
-                # リストでない場合はリストに変換
-                if isinstance(news_data, dict):
-                    news_data = [news_data]
-
-                return news_data
-
+            match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
+            if match:
+                json_str = match.group(1)
             else:
-                logger.warning("No valid JSON found in Claude response")
-                return []
+                # フォールバックとして、最初と最後の[]を探す
+                start = response.find('[')
+                end = response.rfind(']') + 1
+                if start != -1 and end != 0:
+                    json_str = response[start:end]
+                else:
+                    raise ValueError("No JSON block found in response")
+
+            news_data = json.loads(json_str)
+            if isinstance(news_data, dict):
+                news_data = [news_data]
+            return news_data
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from Claude response: {e}")
+            logger.error(f"Failed to parse JSON from Perplexity response: {e}")
             logger.debug(f"Raw response: {response[:500]}...")
             return []
 
     def _validate_news_items(self, news_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """ニュース項目の検証とクリーニング"""
         validated = []
-
         for item in news_items:
             try:
-                # 必須フィールドの確認
                 required_fields = ["title", "url", "summary", "source"]
                 if not all(field in item and item[field] for field in required_fields):
                     logger.warning(f"Skipping invalid news item: missing required fields")
                     continue
 
-                # URLの基本検証
                 url = item.get("url", "")
                 if not (url.startswith("http://") or url.startswith("https://")):
                     logger.warning(f"Invalid URL format: {url}")
                     item["url"] = f"https://example.com/news/{hash(item['title']) % 10000}"
 
-                # デフォルト値の設定
                 validated_item = {
-                    "title": str(item["title"])[:200],  # 長さ制限
+                    "title": str(item["title"])[:200],
                     "url": item["url"],
-                    "summary": str(item["summary"])[:500],  # 長さ制限
-                    "key_points": item.get("key_points", [])[:5],  # 最大5個
+                    "summary": str(item["summary"])[:500],
+                    "key_points": item.get("key_points", [])[:5],
                     "source": str(item["source"]),
                     "impact_level": item.get("impact_level", "medium"),
                     "category": item.get("category", "経済"),
                     "collected_at": datetime.now().isoformat()
                 }
-
                 validated.append(validated_item)
 
             except Exception as e:
                 logger.warning(f"Failed to validate news item: {e}")
                 continue
-
         return validated
 
     def _get_fallback_news(self, mode: str) -> List[Dict[str, Any]]:
         """フォールバック用のダミーニュース"""
         current_time = datetime.now().isoformat()
-
         fallback_news = [
             {
                 "title": f"ニュース収集エラー - {mode}モード",
                 "url": "https://example.com/error",
                 "summary": f"ニュース収集中にエラーが発生しました。モード: {mode}。手動での確認が必要です。システム管理者に連絡してください。",
-                "key_points": [
-                    "API接続エラー",
-                    "手動確認が必要",
-                    "システム管理者への連絡が必要"
-                ],
+                "key_points": ["API接続エラー", "手動確認が必要", "システム管理者への連絡が必要"],
                 "source": "システム",
                 "impact_level": "high",
                 "category": "システム",
                 "collected_at": current_time
             }
         ]
-
         if mode == "test":
-            # テストモード用の追加ダミーデータ
             fallback_news.append({
                 "title": "テスト用ニュース項目",
                 "url": "https://example.com/test",
                 "summary": "これはテスト実行用のダミーニュースです。実際の運用では実在のニュースに置き換えられます。",
-                "key_points": [
-                    "テストデータ",
-                    "ダミー情報",
-                    "実運用時は削除"
-                ],
+                "key_points": ["テストデータ", "ダミー情報", "実運用時は削除"],
                 "source": "テストシステム",
                 "impact_level": "low",
                 "category": "テスト",
                 "collected_at": current_time
             })
-
         return fallback_news
 
     def search_specific_topic(self, topic: str, num_items: int = 3) -> List[Dict[str, Any]]:
-        """特定トピックに関するニュースを検索
-
-        Args:
-            topic: 検索トピック
-            num_items: 取得件数
-
-        Returns:
-            ニュース項目のリスト
-        """
+        """特定トピックに関するニュースを検索"""
         prompt = f"""
 以下のトピックに関する最新のニュースを{num_items}件収集してください：
 
 トピック: {topic}
-
-以下の基準で選択してください：
-- {topic}に直接関連する内容
-- 最新の情報（過去1週間以内）
-- 信頼性の高い情報源
-- 分析価値の高い内容
 
 JSON形式で回答してください：
 [
@@ -330,18 +254,16 @@ JSON形式で回答してください：
   }}
 ]
 """
-
         try:
-            response = self._call_claude_with_retry(prompt)
+            response = self._call_perplexity_with_retry(prompt)
             news_items = self._parse_news_response(response)
             return self._validate_news_items(news_items)
-
         except Exception as e:
             logger.error(f"Failed to search topic '{topic}': {e}")
             return self._get_fallback_news("special")
 
 # グローバルインスタンス
-news_collector = NewsCollector() if cfg.anthropic_api_key else None
+news_collector = NewsCollector() if cfg.perplexity_api_key else None
 
 def collect_news(prompt_a: str, mode: str = "daily") -> List[Dict[str, Any]]:
     """ニュース収集の簡易関数"""
@@ -360,14 +282,8 @@ def search_topic(topic: str, num_items: int = 3) -> List[Dict[str, Any]]:
         return NewsCollector()._get_fallback_news("special")
 
 if __name__ == "__main__":
-    # テスト実行
     print("Testing news collection...")
-
-    # 設定確認
-    print(f"Anthropic API configured: {bool(cfg.anthropic_api_key)}")
-
-    if cfg.anthropic_api_key:
-        # テストプロンプト
+    if cfg.perplexity_api_key:
         test_prompt = """
 今日の重要な経済ニュースを2-3件収集してください：
 - 株式市場の動向
@@ -376,19 +292,15 @@ if __name__ == "__main__":
 
 信頼性の高い情報源からの最新情報を優先してください。
 """
-
-        # ニュース収集テスト
         try:
             collector = NewsCollector()
             news = collector.collect_news(test_prompt, "test")
             print(f"Collected {len(news)} news items:")
-
             for i, item in enumerate(news, 1):
                 print(f"\n{i}. {item['title']}")
                 print(f"   Source: {item['source']}")
                 print(f"   Summary: {item['summary'][:100]}...")
-
         except Exception as e:
             print(f"Test failed: {e}")
     else:
-        print("Anthropic API not configured, skipping test")
+        print("Perplexity API not configured, skipping test")
