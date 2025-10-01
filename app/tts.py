@@ -57,6 +57,37 @@ class TTSManager:
         if openai and os.getenv('OPENAI_API_KEY'):
             self.openai_client = OpenAI()
 
+    async def _synthesize_with_fallback(self, text: str, output_path: str, voice_config: Dict[str, Any]) -> bool:
+        """複数の方法で音声合成を試行"""
+        # Method 1: ElevenLabs (Primary)
+        if self.client:
+            try:
+                logger.info("Attempting synthesis with ElevenLabs (primary)")
+                if await self._elevenlabs_synthesize_logic(text, output_path, voice_config):
+                    return True
+            except Exception as e:
+                logger.warning(f"ElevenLabs failed: {e}")
+
+        # Method 2: VOICEVOX Nemo (Free, High Quality)
+        if self._voicevox_nemo_synthesize(text, output_path):
+            return True
+
+        # Method 3: OpenAI TTS (If API key available)
+        if self._openai_tts_synthesize(text, output_path):
+            return True
+
+        # Method 4: Google TTS Free (gTTS)
+        if self._gtts_synthesize(text, output_path):
+            return True
+
+        # Method 5: Coqui TTS (Local)
+        if self._coqui_tts_synthesize(text, output_path):
+            return True
+
+        # Final Fallback: pyttsx3 (Always works)
+        logger.warning("All primary TTS methods failed, using pyttsx3 as final fallback.")
+        return self._pyttsx3_synthesize(text, output_path)
+
     async def _elevenlabs_synthesize_logic(self, text: str, output_path: str, voice_config: Dict[str, Any]) -> bool:
         """ElevenLabsによる実際の音声合成ロジック"""
         if not self.client:
@@ -79,6 +110,143 @@ class TTSManager:
         except Exception as e:
             logger.error(f"ElevenLabs TTS API call failed: {e}")
             return False
+
+    def _voicevox_nemo_synthesize(self, text: str, output_path: str) -> bool:
+        """VOICEVOX Nemo による音声合成"""
+        try:
+            health_response = requests.get(f'http://localhost:{self.voicevox_port}/health', timeout=3)
+            if health_response.status_code != 200:
+                raise Exception("VOICEVOX Nemo not running or unhealthy")
+
+            query_params = {'text': text, 'speaker': self.voicevox_speaker}
+            query_response = requests.post(
+                f'http://localhost:{self.voicevox_port}/audio_query',
+                params=query_params,
+                timeout=10
+            )
+
+            if query_response.status_code != 200:
+                raise Exception(f"Query failed: {query_response.status_code}")
+
+            synthesis_params = {'speaker': self.voicevox_speaker}
+            synthesis_response = requests.post(
+                f'http://localhost:{self.voicevox_port}/synthesis',
+                params=synthesis_params,
+                json=query_response.json(),
+                timeout=30
+            )
+
+            if synthesis_response.status_code == 200:
+                with open(output_path, 'wb') as f:
+                    f.write(synthesis_response.content)
+                logger.info("VOICEVOX Nemo synthesis successful")
+                return True
+            else:
+                logger.error(f"VOICEVOX Nemo synthesis failed: {synthesis_response.status_code}")
+
+        except requests.exceptions.ConnectionError:
+            logger.warning("VOICEVOX Nemo server is not reachable.")
+        except Exception as e:
+            logger.warning(f"VOICEVOX Nemo failed: {e}")
+
+        return False
+
+    def _gtts_synthesize(self, text: str, output_path: str) -> bool:
+        """Google TTS (gTTS) による音声合成"""
+        try:
+            tts = gTTS(text=text, lang='ja')
+            audio_buffer = BytesIO()
+            tts.write_to_fp(audio_buffer)
+            audio_buffer.seek(0)
+
+            with open(output_path, 'wb') as f:
+                f.write(audio_buffer.read())
+
+            logger.info("gTTS synthesis successful")
+            return True
+
+        except Exception as e:
+            logger.warning(f"gTTS failed: {e}")
+
+        return False
+
+    def _coqui_tts_synthesize(self, text: str, output_path: str) -> bool:
+        """Coqui TTS による音声合成"""
+        try:
+            result = subprocess.run([
+                'tts', '--text', text, '--out_path', output_path,
+                '--model_name', 'tts_models/ja/kokoro/tacotron2-DDC'
+            ], capture_output=True, text=True, timeout=60)
+
+            if result.returncode == 0 and os.path.exists(output_path):
+                logger.info("Coqui TTS synthesis successful")
+                return True
+            else:
+                logger.error(f"Coqui TTS CLI failed. Stderr: {result.stderr}")
+
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            logger.warning(f"Coqui TTS CLI not found or timed out: {e}")
+        except Exception as e:
+            logger.warning(f"Coqui TTS failed: {e}")
+
+        return False
+
+    def _openai_tts_synthesize(self, text: str, output_path: str) -> bool:
+        """OpenAI TTS による音声合成"""
+        if not self.openai_client:
+            logger.debug("OpenAI client not initialized. Skipping OpenAI TTS.")
+            return False
+
+        try:
+            response = self.openai_client.audio.speech.create(
+                model="tts-1",
+                voice="nova",
+                input=text
+            )
+
+            with open(output_path, 'wb') as f:
+                f.write(response.content)
+
+            logger.info("OpenAI TTS synthesis successful")
+            return True
+
+        except Exception as e:
+            logger.warning(f"OpenAI TTS failed: {e}")
+
+        return False
+
+    def _pyttsx3_synthesize(self, text: str, output_path: str) -> bool:
+        """pyttsx3 による音声合成（最終フォールバック）"""
+        try:
+            if self.pyttsx3_engine is None:
+                self.pyttsx3_engine = pyttsx3.init()
+
+            voices = self.pyttsx3_engine.getProperty('voices')
+            if voices:
+                japanese_voice = None
+                for voice in voices:
+                    if 'japanese' in voice.name.lower() or 'ja' in voice.id.lower():
+                        japanese_voice = voice
+                        break
+
+                if japanese_voice:
+                    self.pyttsx3_engine.setProperty('voice', japanese_voice.id)
+                else:
+                    self.pyttsx3_engine.setProperty('voice', voices[0].id)
+
+            self.pyttsx3_engine.setProperty('rate', 150)
+            self.pyttsx3_engine.setProperty('volume', 0.9)
+
+            self.pyttsx3_engine.save_to_file(text, output_path)
+            self.pyttsx3_engine.runAndWait()
+
+            logger.info("pyttsx3 synthesis successful")
+            return True
+
+        except Exception as e:
+            logger.error(f"pyttsx3 failed (final fallback): {e}")
+
+        return False
 
     def split_text_for_tts(self, text: str) -> List[Dict[str, Any]]:
         """テキストをTTS用チャンクに分割"""
@@ -148,22 +316,18 @@ class TTSManager:
 
     def _get_voice_config(self, speaker: str) -> Dict[str, Any]:
         """話者に応じた音声設定を取得"""
-        # These are example Voice IDs. Replace with your actual ElevenLabs Voice IDs.
-        voice_configs = {
-            "田中": {
-                "voice_id": "8PfKHL4nZToWC3pbz9U9",  # Example: Adam
-                "settings": VoiceSettings(stability=0.5, similarity_boost=0.75, style=0.1, use_speaker_boost=True),
-            },
-            "鈴木": {
-                "voice_id": "8PfKHL4nZToWC3pbz9U9",  # Example: Rachel
-                "settings": VoiceSettings(stability=0.4, similarity_boost=0.8, style=0.2, use_speaker_boost=True),
-            },
-            "ナレーター": {
-                "voice_id": "pNInz6obpgDQGcFmaJgB",  # Example: Paul
-                "settings": VoiceSettings(stability=0.6, similarity_boost=0.7, style=0.0, use_speaker_boost=True),
-            },
-        }
-        return voice_configs.get(speaker, voice_configs["田中"])
+        voice_configs = cfg.tts_voice_configs
+        config = voice_configs.get(speaker, voice_configs.get("田中", {}))
+
+        # Add VoiceSettings object for ElevenLabs
+        if config:
+            config["settings"] = VoiceSettings(
+                stability=config.get("stability", 0.5),
+                similarity_boost=config.get("similarity_boost", 0.75),
+                style=config.get("style", 0.1),
+                use_speaker_boost=config.get("use_speaker_boost", True)
+            )
+        return config
 
     async def synthesize_script(self, script_text: str, target_voice: str = "neutral") -> List[str]:
         """台本全体を音声合成"""
@@ -179,16 +343,11 @@ class TTSManager:
             audio_paths = []
             for chunk in chunks:
                 output_path = f"temp/tts_chunk_{chunk['id']}.mp3"
-                elevenlabs_synthesizer_func = None
-                if self.client:
-                    async def elevenlabs_wrapper(text, path, vc=chunk["voice_config"]):
-                        return await self._elevenlabs_synthesize_logic(text, path, vc)
-                    elevenlabs_synthesizer_func = elevenlabs_wrapper
 
-                success = await tts_fallback_manager.synthesize_with_fallback(
+                success = await self._synthesize_with_fallback(
                     chunk["text"],
                     output_path,
-                    elevenlabs_synthesizer=elevenlabs_synthesizer_func
+                    chunk["voice_config"]
                 )
                 if success:
                     audio_paths.append(output_path)
