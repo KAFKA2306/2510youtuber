@@ -64,7 +64,7 @@ class DriveManager:
     def _verify_folder_access(self):
         """指定フォルダへのアクセス権限を確認"""
         try:
-            folder_info = self.service.files().get(fileId=self.folder_id, fields="id,name,mimeType").execute()
+            folder_info = self.service.files().get(fileId=self.folder_id, fields="id,name,mimeType", supportsAllDrives=True).execute()
 
             if folder_info.get("mimeType") != "application/vnd.google-apps.folder":
                 raise ValueError(f"Specified ID is not a folder: {self.folder_id}")
@@ -102,7 +102,7 @@ class DriveManager:
 
             file_result = (
                 self.service.files()
-                .create(body=file_metadata, media_body=media, fields="id,name,size,webViewLink,webContentLink")
+                .create(body=file_metadata, media_body=media, fields="id,name,size,webViewLink,webContentLink", supportsAllDrives=True)
                 .execute()
             )
 
@@ -152,7 +152,7 @@ class DriveManager:
     def _make_file_public(self, file_id: str):
         try:
             permission = {"type": "anyone", "role": "reader"}
-            self.service.permissions().create(fileId=file_id, body=permission).execute()
+            self.service.permissions().create(fileId=file_id, body=permission, supportsAllDrives=True).execute()
             logger.debug(f"Made file public: {file_id}")
         except Exception as e:
             logger.warning(f"Failed to make file public: {e}")
@@ -163,6 +163,12 @@ class DriveManager:
         try:
             package_folder_id = self._create_package_folder(metadata)
             upload_results = {"package_folder_id": package_folder_id, "uploaded_files": [], "errors": []}
+
+            # Save locally if configured
+            local_dir = None
+            if cfg.save_local_backup:
+                local_dir = self._create_local_backup_folder(metadata)
+
             if video_path and os.path.exists(video_path):
                 video_result = self.upload_file(
                     video_path,
@@ -172,6 +178,11 @@ class DriveManager:
                 upload_results["uploaded_files"].append({"type": "video", "result": video_result})
                 upload_results["video_file_id"] = video_result.get("file_id")
                 upload_results["video_link"] = video_result.get("web_view_link")
+
+                # Save local backup
+                if local_dir and video_result.get("error"):
+                    self._save_local_copy(video_path, local_dir, "video.mp4")
+
             if thumbnail_path and os.path.exists(thumbnail_path):
                 thumbnail_result = self.upload_file(
                     thumbnail_path,
@@ -180,6 +191,11 @@ class DriveManager:
                 )
                 upload_results["uploaded_files"].append({"type": "thumbnail", "result": thumbnail_result})
                 upload_results["thumbnail_file_id"] = thumbnail_result.get("file_id")
+
+                # Save local backup
+                if local_dir and thumbnail_result.get("error"):
+                    self._save_local_copy(thumbnail_path, local_dir, "thumbnail.png")
+
             if subtitle_path and os.path.exists(subtitle_path):
                 subtitle_result = self.upload_file(
                     subtitle_path,
@@ -188,6 +204,11 @@ class DriveManager:
                 )
                 upload_results["uploaded_files"].append({"type": "subtitle", "result": subtitle_result})
                 upload_results["subtitle_file_id"] = subtitle_result.get("file_id")
+
+                # Save local backup
+                if local_dir and subtitle_result.get("error"):
+                    self._save_local_copy(subtitle_path, local_dir, "subtitles.srt")
+
             if metadata:
                 metadata_path = self._create_metadata_file(metadata, package_folder_id)
                 if metadata_path:
@@ -195,12 +216,23 @@ class DriveManager:
                         metadata_path, folder_id=package_folder_id, custom_name="metadata.json"
                     )
                     upload_results["uploaded_files"].append({"type": "metadata", "result": metadata_result})
+
+                    # Save local backup
+                    if local_dir and metadata_result.get("error"):
+                        self._save_local_copy(metadata_path, local_dir, "metadata.json")
+
                     try:
                         os.remove(metadata_path)
                     except Exception:
                         pass
+
             upload_results["package_folder_link"] = self._get_folder_link(package_folder_id)
             upload_results["upload_completed_at"] = datetime.now().isoformat()
+
+            if local_dir:
+                upload_results["local_backup_dir"] = local_dir
+                logger.info(f"Files saved locally to: {local_dir}")
+
             logger.info(f"Video package uploaded to folder: {package_folder_id}")
             return upload_results
         except Exception as e:
@@ -216,7 +248,7 @@ class DriveManager:
             folder_metadata = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
             if self.folder_id:
                 folder_metadata["parents"] = [self.folder_id]
-            folder_result = self.service.files().create(body=folder_metadata, fields="id,name").execute()
+            folder_result = self.service.files().create(body=folder_metadata, fields="id,name", supportsAllDrives=True).execute()
             folder_id = folder_result.get("id")
             logger.info(f"Created package folder: {folder_name} ({folder_id})")
             return folder_id
@@ -237,7 +269,7 @@ class DriveManager:
 
     def _get_folder_link(self, folder_id: str) -> str:
         try:
-            folder_info = self.service.files().get(fileId=folder_id, fields="webViewLink").execute()
+            folder_info = self.service.files().get(fileId=folder_id, fields="webViewLink", supportsAllDrives=True).execute()
             return folder_info.get("webViewLink", "")
         except Exception as e:
             logger.warning(f"Failed to get folder link: {e}")
@@ -252,13 +284,41 @@ class DriveManager:
             "upload_failed_at": datetime.now().isoformat(),
         }
 
+    def _create_local_backup_folder(self, metadata: Dict[str, Any] = None) -> str:
+        """ローカルバックアップフォルダを作成"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            title = metadata.get("title", "Untitled") if metadata else "Untitled"
+            safe_title = "".join(c for c in title if c.isalnum() or c in (" ", "-", "_")).strip()
+            folder_name = f"{timestamp}_{safe_title[:30]}"
+
+            base_dir = cfg.local_output_dir
+            local_dir = os.path.join(base_dir, folder_name)
+
+            os.makedirs(local_dir, exist_ok=True)
+            logger.info(f"Created local backup folder: {local_dir}")
+            return local_dir
+        except Exception as e:
+            logger.error(f"Failed to create local backup folder: {e}")
+            return None
+
+    def _save_local_copy(self, source_path: str, dest_dir: str, dest_filename: str):
+        """ファイルをローカルにコピー"""
+        try:
+            import shutil
+            dest_path = os.path.join(dest_dir, dest_filename)
+            shutil.copy2(source_path, dest_path)
+            logger.info(f"Saved local copy: {dest_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save local copy: {e}")
+
     def list_files(self, folder_id: str = None, limit: int = 100) -> List[Dict[str, Any]]:
         try:
             target_folder_id = folder_id or self.folder_id
             query = f"'{target_folder_id}' in parents and trashed=false" if target_folder_id else "trashed=false"
             results = (
                 self.service.files()
-                .list(q=query, pageSize=limit, fields="files(id,name,size,mimeType,createdTime,webViewLink)")
+                .list(q=query, pageSize=limit, fields="files(id,name,size,mimeType,createdTime,webViewLink)", supportsAllDrives=True, includeItemsFromAllDrives=True)
                 .execute()
             )
             files = results.get("files", [])
@@ -282,7 +342,7 @@ class DriveManager:
 
     def delete_file(self, file_id: str) -> bool:
         try:
-            self.service.files().delete(fileId=file_id).execute()
+            self.service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
             logger.info(f"Deleted file: {file_id}")
             return True
         except Exception as e:
@@ -298,7 +358,7 @@ class DriveManager:
             query = f"createdTime < '{cutoff_str}' and trashed=false"
             if self.folder_id:
                 query += f" and '{self.folder_id}' in parents"
-            results = self.service.files().list(q=query, fields="files(id,name,createdTime)").execute()
+            results = self.service.files().list(q=query, fields="files(id,name,createdTime)", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
             old_files = results.get("files", [])
             deleted_count = 0
             for file_info in old_files:

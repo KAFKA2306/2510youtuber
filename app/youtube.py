@@ -100,25 +100,34 @@ class YouTubeManager:
                     client_config = json.loads(self.client_secrets)
                 else:
                     # ファイルパスの場合
+                    if not os.path.exists(self.client_secrets):
+                        raise FileNotFoundError(f"OAuth client file not found: {self.client_secrets}")
+
                     with open(self.client_secrets, "r") as f:
                         client_config = json.load(f)
             else:
                 client_config = self.client_secrets
-            logger.debug(f"YouTube client_config: {client_config}")
 
             if not client_config:
                 raise ValueError("YouTube client secrets are missing or invalid for OAuth flow.")
 
-            if not client_config:
-                raise ValueError("YouTube client secrets are missing or invalid for OAuth flow.")
+            # Check if it's a service account (wrong type)
+            if client_config.get("type") == "service_account":
+                raise ValueError(
+                    "Service account credentials cannot be used for YouTube uploads. "
+                    "You need OAuth 2.0 Client ID (Desktop app). "
+                    "Run: uv run python setup_youtube_oauth.py for setup instructions."
+                )
 
             # OAuth フローを作成
             flow = InstalledAppFlow.from_client_config(client_config, self.SCOPES)
 
             # ローカルサーバーで認証実行
-            creds = flow.run_local_server(port=0)
+            logger.info("Opening browser for YouTube OAuth authentication...")
+            logger.info("Please sign in and grant permissions in your browser.")
+            creds = flow.run_local_server(port=8080)
 
-            logger.info("Completed YouTube OAuth flow")
+            logger.info("✅ YouTube OAuth authentication completed successfully!")
             return creds
 
         except Exception as e:

@@ -142,6 +142,16 @@ class Config:
         """動画品質."""
         return os.getenv("VIDEO_QUALITY", "high")
 
+    @property
+    def local_output_dir(self) -> str:
+        """ローカル出力ディレクトリ."""
+        return os.getenv("LOCAL_OUTPUT_DIR", "output")
+
+    @property
+    def save_local_backup(self) -> bool:
+        """ローカルバックアップを保存."""
+        return os.getenv("SAVE_LOCAL_BACKUP", "true").lower() == "true"
+
     def _setup_logging(self):
         """ログ設定."""
         log_level = getattr(logging, self.log_level.upper(), logging.INFO)

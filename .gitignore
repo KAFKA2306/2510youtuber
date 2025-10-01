@@ -53,6 +53,7 @@ tmp/
 *md
 *.lock
 *txt
+*test*
 
 # Generated content
 output/
@@ -96,3 +97,16 @@ htmlcov/
 
 # Refarence
 ref/*
+# YouTube OAuth token
+token.pickle
+
+# OAuth client secrets
+secret/youtube_oauth_client.json
+secret/*oauth*.json
+
+# Output files
+output/
+*.mp4
+*.wav
+*.srt
+*.png
