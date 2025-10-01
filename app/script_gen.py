@@ -162,6 +162,13 @@ class ScriptGenerator:
 - 聞き手の理解を助ける解説を含める
 - 自然な会話の流れを保つ
 
+【言語に関する重要な指示】
+- すべての内容を純粋な日本語で記述してください
+- 英語の単語や表現を使用しないでください
+- 専門用語は理解しやすい日本語で説明を加えてください
+- AI、GDP、ITなどの一般的な略語のみ使用可能
+- 視聴者が理解できない英語が混じらないように注意してください
+
 【台本フォーマット】
 田中: [発言内容]
 鈴木: [発言内容]
@@ -176,6 +183,7 @@ class ScriptGenerator:
 現在の日時: {datetime.now().strftime("%Y年%m月%d日 %H時")}
 
 上記の要件に従って、自然で情報価値の高い対談台本を作成してください。
+特に、視聴者が理解しやすいよう、すべて日本語で明瞭に記述してください。
 """
         return full_prompt
 
@@ -253,6 +261,11 @@ class ScriptGenerator:
 
         英語が混入している場合、自動的に修正します。
         """
+        # 設定で無効化されている場合はスキップ
+        if not cfg.use_japanese_quality_check:
+            logger.info("Japanese quality check is disabled in config")
+            return script
+
         if not HAS_JAPANESE_QUALITY_CHECK:
             logger.warning("Japanese quality check not available, skipping")
             return script
@@ -261,14 +274,15 @@ class ScriptGenerator:
             # 日本語純度チェック
             purity_result = check_script_japanese_purity(script)
 
-            if purity_result["is_pure_japanese"]:
-                logger.info(f"Script is pure Japanese (score: {purity_result['purity_score']:.1f})")
+            # 閾値をチェック
+            if purity_result["purity_score"] >= cfg.japanese_purity_threshold:
+                logger.info(f"Script passes Japanese purity check (score: {purity_result['purity_score']:.1f})")
                 return script
 
             # 改善が必要
             logger.warning(
                 f"Script contains {purity_result['total_issues']} English issues, "
-                f"purity score: {purity_result['purity_score']:.1f}"
+                f"purity score: {purity_result['purity_score']:.1f} (threshold: {cfg.japanese_purity_threshold})"
             )
 
             # 自動改善を試みる
@@ -442,7 +456,7 @@ class ScriptGenerator:
 
 要件:
 - 田中氏と鈴木氏の対談形式
-- 約{duration_duration_minutes * 300}文字程度
+- 約{duration_minutes * 300}文字程度
 - 専門的だが理解しやすい内容
 - 具体的なデータや事例を含める
 

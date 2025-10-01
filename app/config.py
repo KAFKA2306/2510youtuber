@@ -158,6 +158,16 @@ class Config:
         return float(os.getenv("QUALITY_CHECK_THRESHOLD", "7.0"))
 
     @property
+    def use_japanese_quality_check(self) -> bool:
+        """日本語品質チェックを使用するか（英語混入の検出と修正）."""
+        return os.getenv("USE_JAPANESE_QUALITY_CHECK", "true").lower() == "true"
+
+    @property
+    def japanese_purity_threshold(self) -> float:
+        """日本語純度の合格基準（0-100）."""
+        return float(os.getenv("JAPANESE_PURITY_THRESHOLD", "90.0"))
+
+    @property
     def save_local_backup(self) -> bool:
         """ローカルバックアップを保存."""
         return os.getenv("SAVE_LOCAL_BACKUP", "true").lower() == "true"

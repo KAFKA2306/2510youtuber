@@ -13,6 +13,15 @@ from rapidfuzz import fuzz
 
 logger = logging.getLogger(__name__)
 
+# 日本語品質チェックのインポート
+try:
+    from .japanese_quality import clean_subtitle_text, validate_subtitle_text
+    HAS_JAPANESE_QUALITY_CHECK = True
+    logger.info("Japanese quality check available for subtitles")
+except ImportError:
+    HAS_JAPANESE_QUALITY_CHECK = False
+    logger.warning("Japanese quality check not available for subtitles")
+
 
 class SubtitleAligner:
     """字幕整合クラス."""
@@ -265,6 +274,18 @@ class SubtitleAligner:
             # 最小表示時間を確保
             if subtitle["end"] - subtitle["start"] < self.min_display_duration:
                 subtitle["end"] = subtitle["start"] + self.min_display_duration
+
+            # 日本語品質チェック＆クリーニング
+            if HAS_JAPANESE_QUALITY_CHECK:
+                original_text = subtitle["text"]
+                # 検証
+                if not validate_subtitle_text(original_text):
+                    logger.warning(f"Subtitle contains non-Japanese text: '{original_text[:50]}'")
+                    # クリーニングを試みる
+                    cleaned_text = clean_subtitle_text(original_text)
+                    if cleaned_text != original_text:
+                        logger.info(f"Cleaned subtitle: '{original_text}' -> '{cleaned_text}'")
+                        subtitle["text"] = cleaned_text
 
             # インデックスを追加
             subtitle["index"] = len(processed) + 1

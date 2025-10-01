@@ -377,7 +377,7 @@ class YouTubeWorkflow:
         logger.info("Step 10: Starting YouTube upload...")
         try:
             youtube_result = youtube_upload(
-                video_path=video_path, metadata=metadata, thumbnail_path=thumbnail_path, privacy_status="private"
+                video_path=video_path, metadata=metadata, thumbnail_path=thumbnail_path, privacy_status="public"
             )
             if youtube_result.get("error"):
                 logger.warning(f"YouTube upload warning: {youtube_result['error']}")
