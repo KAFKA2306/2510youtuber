@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 
 import google.generativeai as genai
 
-from app.config import cfg
+from config import cfg
 
 logger = logging.getLogger(__name__)
 

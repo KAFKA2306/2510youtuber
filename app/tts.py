@@ -16,7 +16,7 @@ from elevenlabs import Voice, VoiceSettings
 from elevenlabs.client import AsyncElevenLabs
 from pydub import AudioSegment
 
-from app.config import cfg
+from config import cfg
 
 logger = logging.getLogger(__name__)
 

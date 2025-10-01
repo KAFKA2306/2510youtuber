@@ -9,10 +9,10 @@ from datetime import datetime
 
 from flask import Flask, jsonify, render_template_string, request
 
-from app.config import cfg
-from app.discord import discord_notifier
-from app.main import workflow
-from app.sheets import sheets_manager
+from config import cfg
+from discord import discord_notifier
+from main import workflow
+from sheets import sheets_manager
 
 app = Flask(__name__)
 
@@ -178,13 +178,13 @@ DASHBOARD_HTML = """
 """
 
 
-@app.route("/")
+@route("/")
 def dashboard():
     """ダッシュボード表示"""
     return render_template_string(DASHBOARD_HTML)
 
 
-@app.route("/api/status")
+@route("/api/status")
 def api_status():
     """システム状態API"""
     status = {"timestamp": datetime.now().isoformat(), "services": {}}
@@ -227,7 +227,7 @@ def api_status():
     return jsonify(status)
 
 
-@app.route("/api/run", methods=["POST"])
+@route("/api/run", methods=["POST"])
 def api_run():
     """ワークフロー実行API"""
     try:
@@ -258,7 +258,7 @@ def api_run():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route("/api/runs")
+@route("/api/runs")
 def api_runs():
     """実行履歴API"""
     try:
@@ -272,11 +272,11 @@ def api_runs():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/logs")
+@route("/api/logs")
 def api_logs():
     """ログAPI"""
     try:
-        log_file = "logs/app.log"
+        log_file = "logs/log"
         if os.path.exists(log_file):
             with open(log_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
@@ -289,13 +289,13 @@ def api_logs():
         return f"Error reading logs: {e}"
 
 
-@app.route("/api/health")
+@route("/api/health")
 def health_check():
     """ヘルスチェック"""
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat(), "version": "1.0.0"})
 
 
-@app.route("/api/webhook/discord", methods=["POST"])
+@route("/api/webhook/discord", methods=["POST"])
 def discord_webhook():
     """Discord Webhook エンドポイント"""
     try:
@@ -311,12 +311,12 @@ def discord_webhook():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.errorhandler(404)
+@errorhandler(404)
 def not_found(error):
     return jsonify({"error": "Not found"}), 404
 
 
-@app.errorhandler(500)
+@errorhandler(500)
 def internal_error(error):
     return jsonify({"error": "Internal server error"}), 500
 
@@ -326,4 +326,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     debug = cfg.debug
 
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    run(host="0.0.0.0", port=port, debug=debug)

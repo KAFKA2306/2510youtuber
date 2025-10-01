@@ -11,23 +11,23 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, List
 
-from app.align_subtitles import align_script_with_stt, export_srt
+from align_subtitles import align_script_with_stt, export_srt
 
 # 各モジュールをインポート
-from app.config import cfg
-from app.discord import discord_notifier
-from app.drive import upload_video_package
-from app.metadata import generate_youtube_metadata
-from app.script_gen import generate_dialogue
-from app.search_news import collect_news
-from app.sheets import load_prompts as load_prompts_from_sheets
-from app.sheets import sheets_manager
-from app.stt import transcribe_long_audio
-from app.thumbnail import generate_thumbnail
-from app.tts import synthesize_script
-from app.utils import FileUtils
-from app.video import generate_video
-from app.youtube import upload_video as youtube_upload
+from config import cfg
+from discord import discord_notifier
+from drive import upload_video_package
+from metadata import generate_youtube_metadata
+from script_gen import generate_dialogue
+from search_news import collect_news
+from sheets import load_prompts as load_prompts_from_sheets
+from sheets import sheets_manager
+from stt import transcribe_long_audio
+from thumbnail import generate_thumbnail
+from tts import synthesize_script
+from utils import FileUtils
+from video import generate_video
+from youtube import upload_video as youtube_upload
 
 logger = logging.getLogger(__name__)
 

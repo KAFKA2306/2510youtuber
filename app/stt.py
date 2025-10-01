@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 from elevenlabs.client import ElevenLabs
 from pydub import AudioSegment
 
-from app.config import cfg
+from config import cfg
 
 logger = logging.getLogger(__name__)
 
