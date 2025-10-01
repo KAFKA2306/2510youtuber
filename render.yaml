@@ -1,0 +1,95 @@
+services:
+  - type: web
+    name: youtuber-api
+    env: python
+    plan: starter
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: |
+      gunicorn --bind 0.0.0.0:$PORT app.web:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: PORT
+        value: "10000"
+      - fromGroup: youtuber-secrets
+
+  - type: cron
+    name: youtuber-daily
+    env: python
+    plan: starter
+    schedule: "0 9 * * 1-5"  # 平日9:00 JST
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: |
+      python -m app.main daily
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - fromGroup: youtuber-secrets
+
+  - type: cron
+    name: youtuber-cleanup
+    env: python
+    plan: starter
+    schedule: "0 2 * * 0"  # 日曜2:00 JST
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: |
+      python -c "
+      from app.utils import FileUtils
+      import os
+      # 一時ファイルクリーンアップ
+      for directory in ['temp', 'logs']:
+          if os.path.exists(directory):
+              cleaned = FileUtils.cleanup_old_files(directory, days_old=7)
+              print(f'Cleaned {cleaned} files from {directory}')
+      "
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - fromGroup: youtuber-secrets
+
+envVarGroups:
+  - name: youtuber-secrets
+    envVars:
+      # AI APIs
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY_2
+        sync: false
+      - key: GEMINI_API_KEY_3
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+
+      # Google Services
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        sync: false
+      - key: GOOGLE_SHEET_ID
+        sync: false
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        sync: false
+      - key: YOUTUBE_CLIENT_SECRET
+        sync: false
+
+      # Notifications
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+
+      # App Settings
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: MAX_VIDEO_DURATION_MINUTES
+        value: "30"
+      - key: MAX_CONCURRENT_TTS
+        value: "2"
+      - key: TTS_CHUNK_SIZE
+        value: "1000"
