@@ -25,6 +25,15 @@ except ImportError:
     HAS_QUALITY_CHECK = False
     logger.warning("3-stage quality check system not available")
 
+# 日本語品質チェックシステムのインポート
+try:
+    from .japanese_quality import improve_japanese_quality, check_script_japanese_purity
+    HAS_JAPANESE_QUALITY_CHECK = True
+    logger.info("Japanese quality check system is available")
+except ImportError:
+    HAS_JAPANESE_QUALITY_CHECK = False
+    logger.warning("Japanese quality check system not available")
+
 
 class ScriptGenerator:
     """台本生成クラス"""
@@ -77,7 +86,12 @@ class ScriptGenerator:
                         f"Quality={result['quality_score']}/10, "
                         f"Iterations={result['iterations']}"
                     )
-                    return result["final_script"]
+                    final_script = result["final_script"]
+
+                    # 日本語品質チェック＆改善
+                    final_script = self._ensure_pure_japanese(final_script)
+
+                    return final_script
                 else:
                     logger.warning(f"3-stage generation failed: {result.get('error')}, falling back to standard")
             except Exception as e:
@@ -92,6 +106,10 @@ class ScriptGenerator:
 
             if self._validate_script_quality(cleaned_script, target_duration_minutes):
                 logger.info(f"Generated script: {len(cleaned_script)} characters")
+
+                # 日本語品質チェック＆改善
+                cleaned_script = self._ensure_pure_japanese(cleaned_script)
+
                 return cleaned_script
             else:
                 logger.warning("Script quality validation failed, retrying with simplified prompt")
@@ -179,7 +197,7 @@ class ScriptGenerator:
                 response = self.client.generate_content(
                     prompt,
                     generation_config=generation_config,
-                    request_options={"timeout": 120}  # 120秒タイムアウト
+                    timeout=120  # 120秒タイムアウト
                 )
                 content = response.text
                 logger.debug(f"Generated script length: {len(content)}")
@@ -229,6 +247,46 @@ class ScriptGenerator:
         script = re.sub(r"\n\s*\n\s*\n+", "\n\n", script)
         script = re.sub(r"[^\w\s\n\r！？。、：（）「」『』【】\-\+\*\/\%\$\&\#\.]+", "", script)
         return script.strip()
+
+    def _ensure_pure_japanese(self, script: str) -> str:
+        """日本語純度を確保
+
+        英語が混入している場合、自動的に修正します。
+        """
+        if not HAS_JAPANESE_QUALITY_CHECK:
+            logger.warning("Japanese quality check not available, skipping")
+            return script
+
+        try:
+            # 日本語純度チェック
+            purity_result = check_script_japanese_purity(script)
+
+            if purity_result["is_pure_japanese"]:
+                logger.info(f"Script is pure Japanese (score: {purity_result['purity_score']:.1f})")
+                return script
+
+            # 改善が必要
+            logger.warning(
+                f"Script contains {purity_result['total_issues']} English issues, "
+                f"purity score: {purity_result['purity_score']:.1f}"
+            )
+
+            # 自動改善を試みる
+            improvement_result = improve_japanese_quality(script)
+
+            if improvement_result["success"] and improvement_result.get("changes_made"):
+                logger.info(
+                    f"Japanese quality improved: "
+                    f"{improvement_result['original_score']:.1f} -> {improvement_result['new_score']:.1f}"
+                )
+                return improvement_result["improved_script"]
+            else:
+                logger.warning("Could not improve Japanese quality, using original")
+                return script
+
+        except Exception as e:
+            logger.error(f"Japanese quality check failed: {e}")
+            return script
 
     def _validate_script_quality(self, script: str, target_duration: int) -> bool:
         """台本の品質を検証"""
