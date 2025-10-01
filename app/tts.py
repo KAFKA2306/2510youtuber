@@ -1,24 +1,25 @@
-"""
-音声合成（TTS）モジュール
+"""音声合成（TTS）モジュール
 
 ElevenLabs TTSを使用して台本テキストを音声に変換します。
 並列処理とチャンク分割により高速化を実現します。
 """
 
+import asyncio
+import hashlib
+import logging
 import os
 import re
-import asyncio
-import logging
-from typing import List, Optional, Dict, Any
 from datetime import datetime
-import tempfile
-import hashlib
-from pydub import AudioSegment
-from elevenlabs.client import AsyncElevenLabs
+from typing import Any, Dict, List, Optional
+
 from elevenlabs import Voice, VoiceSettings
+from elevenlabs.client import AsyncElevenLabs
+from pydub import AudioSegment
+
 from app.config import cfg
 
 logger = logging.getLogger(__name__)
+
 
 class TTSManager:
     """音声合成管理クラス"""
@@ -33,30 +34,32 @@ class TTSManager:
             logger.warning("No ElevenLabs API key configured")
         else:
             self.client = AsyncElevenLabs(api_key=self.api_key)
-            logger.info(f"TTS Manager initialized with ElevenLabs")
+            logger.info("TTS Manager initialized with ElevenLabs")
 
     def split_text_for_tts(self, text: str) -> List[Dict[str, Any]]:
         """テキストをTTS用チャンクに分割"""
         speaker_lines = self._split_by_speaker(text)
         chunks = []
         for speaker_data in speaker_lines:
-            speaker = speaker_data['speaker']
-            content = speaker_data['content']
+            speaker = speaker_data["speaker"]
+            content = speaker_data["content"]
             sub_chunks = self._split_long_content(content, self.chunk_size)
             for i, chunk_text in enumerate(sub_chunks):
-                chunks.append({
-                    'id': f"{speaker}_{len(chunks)}_{i}",
-                    'speaker': speaker,
-                    'text': chunk_text,
-                    'voice_config': self._get_voice_config(speaker),
-                    'order': len(chunks)
-                })
+                chunks.append(
+                    {
+                        "id": f"{speaker}_{len(chunks)}_{i}",
+                        "speaker": speaker,
+                        "text": chunk_text,
+                        "voice_config": self._get_voice_config(speaker),
+                        "order": len(chunks),
+                    }
+                )
         logger.info(f"Split text into {len(chunks)} TTS chunks")
         return chunks
 
     def _split_by_speaker(self, text: str) -> List[Dict[str, str]]:
         """話者別にテキストを分割"""
-        lines = text.split('\n')
+        lines = text.split("\n")
         speaker_lines = []
         current_speaker = None
         current_content = []
@@ -64,30 +67,24 @@ class TTSManager:
             line = line.strip()
             if not line:
                 continue
-            speaker_match = re.match(r'^(田中|鈴木|ナレーター|司会)[:：]\s*(.+)', line)
+            speaker_match = re.match(r"^(田中|鈴木|ナレーター|司会)[:：]\s*(.+)", line)
             if speaker_match:
                 if current_speaker and current_content:
-                    speaker_lines.append({
-                        'speaker': current_speaker,
-                        'content': ' '.join(current_content)
-                    })
+                    speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
                 current_speaker = speaker_match.group(1)
                 current_content = [speaker_match.group(2)]
             else:
                 if current_content:
                     current_content.append(line)
         if current_speaker and current_content:
-            speaker_lines.append({
-                'speaker': current_speaker,
-                'content': ' '.join(current_content)
-            })
+            speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
         return speaker_lines
 
     def _split_long_content(self, content: str, max_chars: int) -> List[str]:
         """長いコンテンツを適切な長さに分割"""
         if len(content) <= max_chars:
             return [content]
-        sentences = re.split(r'[。！？]', content)
+        sentences = re.split(r"[。！？]", content)
         chunks = []
         current_chunk = ""
         for sentence in sentences:
@@ -109,30 +106,27 @@ class TTSManager:
         """話者に応じた音声設定を取得"""
         # These are example Voice IDs. Replace with your actual ElevenLabs Voice IDs.
         voice_configs = {
-            '田中': {
-                'voice_id': '21m00Tcm4TlvDq8ikWAM', # Example: Adam
-                'settings': VoiceSettings(stability=0.5, similarity_boost=0.75, style=0.1, use_speaker_boost=True)
+            "田中": {
+                "voice_id": "21m00Tcm4TlvDq8ikWAM",  # Example: Adam
+                "settings": VoiceSettings(stability=0.5, similarity_boost=0.75, style=0.1, use_speaker_boost=True),
             },
-            '鈴木': {
-                'voice_id': 'Rachel', # Example: Rachel
-                'settings': VoiceSettings(stability=0.4, similarity_boost=0.8, style=0.2, use_speaker_boost=True)
+            "鈴木": {
+                "voice_id": "Rachel",  # Example: Rachel
+                "settings": VoiceSettings(stability=0.4, similarity_boost=0.8, style=0.2, use_speaker_boost=True),
             },
-            'ナレーター': {
-                'voice_id': 'pNInz6obpgDQGcFmaJgB', # Example: Paul
-                'settings': VoiceSettings(stability=0.6, similarity_boost=0.7, style=0.0, use_speaker_boost=True)
-            }
+            "ナレーター": {
+                "voice_id": "pNInz6obpgDQGcFmaJgB",  # Example: Paul
+                "settings": VoiceSettings(stability=0.6, similarity_boost=0.7, style=0.0, use_speaker_boost=True),
+            },
         }
-        return voice_configs.get(speaker, voice_configs['田中'])
+        return voice_configs.get(speaker, voice_configs["田中"])
 
     async def synthesize_chunk(self, chunk: Dict[str, Any]) -> Optional[str]:
         """単一チャンクの音声合成"""
         try:
-            audio_data = await self._call_elevenlabs_tts(
-                text=chunk['text'],
-                voice_config=chunk['voice_config']
-            )
+            audio_data = await self._call_elevenlabs_tts(text=chunk["text"], voice_config=chunk["voice_config"])
             if audio_data:
-                output_path = self._save_audio_chunk(chunk['id'], audio_data)
+                output_path = self._save_audio_chunk(chunk["id"], audio_data)
                 logger.debug(f"Generated audio for chunk {chunk['id']}: {output_path}")
                 return output_path
             else:
@@ -149,14 +143,11 @@ class TTSManager:
         try:
             audio_stream = await self.client.generate(
                 text=text,
-                voice=Voice(
-                    voice_id=voice_config['voice_id'],
-                    settings=voice_config['settings']
-                ),
-                model="eleven_multilingual_v2"
+                voice=Voice(voice_id=voice_config["voice_id"], settings=voice_config["settings"]),
+                model="eleven_multilingual_v2",
             )
-            
-            audio_bytes = b''
+
+            audio_bytes = b""
             async for chunk in audio_stream:
                 audio_bytes += chunk
             return audio_bytes
@@ -167,16 +158,15 @@ class TTSManager:
 
     def _save_audio_chunk(self, chunk_id: str, audio_data: bytes) -> str:
         """音声チャンクを一時ファイルに保存"""
-        os.makedirs('temp', exist_ok=True)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        os.makedirs("temp", exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         file_hash = hashlib.md5(chunk_id.encode()).hexdigest()[:8]
         filename = f"temp/tts_{timestamp}_{file_hash}.mp3"
-        with open(filename, 'wb') as f:
+        with open(filename, "wb") as f:
             f.write(audio_data)
         return filename
 
-    async def synthesize_script(self, script_text: str,
-                               target_voice: str = "neutral") -> List[str]:
+    async def synthesize_script(self, script_text: str, target_voice: str = "neutral") -> List[str]:
         """台本全体を音声合成"""
         try:
             chunks = self.split_text_for_tts(script_text)
@@ -214,15 +204,14 @@ class TTSManager:
             logger.error(f"Script synthesis failed: {e}")
             return self._generate_fallback_audio(script_text)
 
-    def _combine_audio_files(self, audio_paths: List[str],
-                            chunks: List[Dict[str, Any]]) -> str:
+    def _combine_audio_files(self, audio_paths: List[str], chunks: List[Dict[str, Any]]) -> str:
         """音声ファイルを結合"""
         try:
             combined = AudioSegment.empty()
-            path_chunk_map = {chunks[i]['id']: audio_paths[i] for i in range(min(len(chunks), len(audio_paths)))}
+            path_chunk_map = {chunks[i]["id"]: audio_paths[i] for i in range(min(len(chunks), len(audio_paths)))}
 
-            for chunk in sorted(chunks, key=lambda x: x['order']):
-                chunk_id = chunk['id']
+            for chunk in sorted(chunks, key=lambda x: x["order"]):
+                chunk_id = chunk["id"]
                 if chunk_id in path_chunk_map:
                     path = path_chunk_map[chunk_id]
                     if os.path.exists(path):
@@ -244,6 +233,7 @@ class TTSManager:
             if audio_paths:
                 fallback_path = f"fallback_audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
                 import shutil
+
                 shutil.copy2(audio_paths[0], fallback_path)
                 return fallback_path
             raise
@@ -276,27 +266,31 @@ class TTSManager:
         try:
             audio = AudioSegment.from_file(audio_path)
             return {
-                'duration_ms': len(audio),
-                'duration_sec': len(audio) / 1000,
-                'sample_rate': audio.frame_rate,
-                'channels': audio.channels,
-                'format': audio.sample_width * 8,
-                'file_size_mb': os.path.getsize(audio_path) / (1024 * 1024)
+                "duration_ms": len(audio),
+                "duration_sec": len(audio) / 1000,
+                "sample_rate": audio.frame_rate,
+                "channels": audio.channels,
+                "format": audio.sample_width * 8,
+                "file_size_mb": os.path.getsize(audio_path) / (1024 * 1024),
             }
         except Exception as e:
             logger.error(f"Failed to get audio info for {audio_path}: {e}")
             return {}
 
+
 # グローバルインスタンス
 tts_manager = TTSManager()
+
 
 async def synthesize_script(script_text: str, voice: str = "neutral") -> List[str]:
     """台本音声合成の簡易関数"""
     return await tts_manager.synthesize_script(script_text, voice)
 
+
 def split_text_for_tts(text: str) -> List[Dict[str, Any]]:
     """テキスト分割の簡易関数"""
     return tts_manager.split_text_for_tts(text)
+
 
 if __name__ == "__main__":
     import asyncio

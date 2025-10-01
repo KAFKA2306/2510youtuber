@@ -1,31 +1,31 @@
-"""
-字幕整合モジュール
+"""字幕整合モジュール.
 
 台本テキストとSTT結果を整合させて、正確なタイムスタンプ付き字幕を生成します。
 これにより字幕の精度を大幅に向上させます。
 """
 
-import re
 import logging
-from typing import List, Dict, Any, Tuple, Optional
+import re
 from datetime import timedelta
-from rapidfuzz import fuzz, process
+from typing import Any, Dict, List, Optional, Tuple
+
+from rapidfuzz import fuzz
 
 logger = logging.getLogger(__name__)
 
+
 class SubtitleAligner:
-    """字幕整合クラス"""
+    """字幕整合クラス."""
 
     def __init__(self):
+        """Initialize the SubtitleAligner."""
         self.min_similarity_threshold = 60  # 類似度閾値
-        self.max_subtitle_length = 80      # 字幕の最大文字数
-        self.min_display_duration = 1.0    # 最小表示時間（秒）
-        self.max_display_duration = 8.0    # 最大表示時間（秒）
+        self.max_subtitle_length = 80  # 字幕の最大文字数
+        self.min_display_duration = 1.0  # 最小表示時間（秒）
+        self.max_display_duration = 8.0  # 最大表示時間（秒）
 
-    def align_script_with_stt(self, script_text: str,
-                             stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        台本テキストとSTT結果を整合
+    def align_script_with_stt(self, script_text: str, stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """台本テキストとSTT結果を整合.
 
         Args:
             script_text: 元の台本テキスト
@@ -33,13 +33,11 @@ class SubtitleAligner:
 
         Returns:
             整合済みの字幕データ
+
         """
         try:
             # 台本を文単位に分割
             script_sentences = self._extract_sentences_from_script(script_text)
-
-            # STTテキストを再構成
-            stt_text = " ".join([word["word"] for word in stt_words])
 
             # 文ごとにタイムスタンプを割り当て
             aligned_subtitles = []
@@ -50,9 +48,7 @@ class SubtitleAligner:
                 speaker = sentence_data.get("speaker")
 
                 # この文に対応するSTT単語範囲を特定
-                word_range, word_index = self._find_matching_word_range(
-                    sentence, stt_words, word_index
-                )
+                word_range, word_index = self._find_matching_word_range(sentence, stt_words, word_index)
 
                 if word_range:
                     # タイムスタンプを取得
@@ -60,17 +56,13 @@ class SubtitleAligner:
                     end_time = word_range[-1]["end"]
 
                     # 字幕項目を作成
-                    subtitle_items = self._create_subtitle_items(
-                        sentence, start_time, end_time, speaker
-                    )
+                    subtitle_items = self._create_subtitle_items(sentence, start_time, end_time, speaker)
 
                     aligned_subtitles.extend(subtitle_items)
 
                 else:
                     # マッチングに失敗した場合の推定
-                    estimated_item = self._estimate_timing_for_sentence(
-                        sentence, aligned_subtitles, speaker
-                    )
+                    estimated_item = self._estimate_timing_for_sentence(sentence, aligned_subtitles, speaker)
                     if estimated_item:
                         aligned_subtitles.append(estimated_item)
 
@@ -85,9 +77,9 @@ class SubtitleAligner:
             return self._generate_fallback_subtitles(script_text, stt_words)
 
     def _extract_sentences_from_script(self, script_text: str) -> List[Dict[str, Any]]:
-        """台本から文を抽出"""
+        """台本から文を抽出."""
         sentences = []
-        lines = script_text.split('\n')
+        lines = script_text.split("\n")
 
         for line in lines:
             line = line.strip()
@@ -95,7 +87,7 @@ class SubtitleAligner:
                 continue
 
             # 話者名を検出
-            speaker_match = re.match(r'^(田中|鈴木|ナレーター|司会)[:：]\s*(.+)', line)
+            speaker_match = re.match(r"^(田中|鈴木|ナレーター|司会)[:：]\s*(.+)", line)
 
             if speaker_match:
                 speaker = speaker_match.group(1)
@@ -109,20 +101,17 @@ class SubtitleAligner:
 
             for sub_sentence in sub_sentences:
                 if sub_sentence.strip():
-                    sentences.append({
-                        "text": sub_sentence.strip(),
-                        "speaker": speaker
-                    })
+                    sentences.append({"text": sub_sentence.strip(), "speaker": speaker})
 
         return sentences
 
     def _split_long_sentence(self, sentence: str) -> List[str]:
-        """長い文を適切な長さに分割"""
+        """長い文を適切な長さに分割."""
         if len(sentence) <= self.max_subtitle_length:
             return [sentence]
 
         # 句読点で分割を試行
-        parts = re.split(r'[、。！？]', sentence)
+        parts = re.split(r"[、。！？]", sentence)
         result = []
         current_part = ""
 
@@ -143,14 +132,15 @@ class SubtitleAligner:
 
         return result
 
-    def _find_matching_word_range(self, sentence: str, stt_words: List[Dict[str, Any]],
-                                 start_index: int) -> Tuple[Optional[List[Dict[str, Any]]], int]:
-        """文に対応するSTT単語範囲を特定"""
+    def _find_matching_word_range(
+        self, sentence: str, stt_words: List[Dict[str, Any]], start_index: int
+    ) -> Tuple[Optional[List[Dict[str, Any]]], int]:
+        """文に対応するSTT単語範囲を特定."""
         if not stt_words or start_index >= len(stt_words):
             return None, start_index
 
         # 文から単語を抽出（話者名や記号を除去）
-        clean_sentence = re.sub(r'[、。！？「」『』（）]', '', sentence)
+        clean_sentence = re.sub(r"[、。！？「」『』（）]", "", sentence)
         sentence_words = clean_sentence.split()
 
         if not sentence_words:
@@ -189,9 +179,10 @@ class SubtitleAligner:
             estimated_end = min(start_index + estimated_word_count, len(stt_words))
             return stt_words[start_index:estimated_end], estimated_end
 
-    def _create_subtitle_items(self, sentence: str, start_time: float,
-                              end_time: float, speaker: Optional[str]) -> List[Dict[str, Any]]:
-        """字幕アイテムを作成"""
+    def _create_subtitle_items(
+        self, sentence: str, start_time: float, end_time: float, speaker: Optional[str]
+    ) -> List[Dict[str, Any]]:
+        """字幕アイテムを作成."""
         # 表示時間を調整
         duration = end_time - start_time
         if duration < self.min_display_duration:
@@ -211,29 +202,19 @@ class SubtitleAligner:
                     part_start = start_time + (i * part_duration)
                     part_end = part_start + part_duration
 
-                    items.append({
-                        "start": part_start,
-                        "end": part_end,
-                        "text": part,
-                        "speaker": speaker,
-                        "confidence": 0.9
-                    })
+                    items.append(
+                        {"start": part_start, "end": part_end, "text": part, "speaker": speaker, "confidence": 0.9}
+                    )
 
                 return items
 
         # 単一の字幕アイテム
-        return [{
-            "start": start_time,
-            "end": end_time,
-            "text": sentence,
-            "speaker": speaker,
-            "confidence": 0.9
-        }]
+        return [{"start": start_time, "end": end_time, "text": sentence, "speaker": speaker, "confidence": 0.9}]
 
-    def _estimate_timing_for_sentence(self, sentence: str,
-                                     existing_subtitles: List[Dict[str, Any]],
-                                     speaker: Optional[str]) -> Optional[Dict[str, Any]]:
-        """文のタイミングを推定"""
+    def _estimate_timing_for_sentence(
+        self, sentence: str, existing_subtitles: List[Dict[str, Any]], speaker: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        """文のタイミングを推定."""
         if not existing_subtitles:
             # 最初の文の場合
             return {
@@ -241,7 +222,7 @@ class SubtitleAligner:
                 "end": len(sentence) * 0.1,  # 1文字0.1秒と仮定
                 "text": sentence,
                 "speaker": speaker,
-                "confidence": 0.3
+                "confidence": 0.3,
             }
 
         # 前の字幕の終了時間から継続
@@ -251,7 +232,7 @@ class SubtitleAligner:
         # 文の長さから推定時間を計算
         estimated_duration = max(
             len(sentence) * 0.08,  # 1文字80ms
-            self.min_display_duration
+            self.min_display_duration,
         )
 
         return {
@@ -259,11 +240,11 @@ class SubtitleAligner:
             "end": estimated_start + estimated_duration,
             "text": sentence,
             "speaker": speaker,
-            "confidence": 0.3  # 推定値
+            "confidence": 0.3,  # 推定値
         }
 
     def _post_process_subtitles(self, subtitles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """字幕の後処理"""
+        """字幕の後処理."""
         if not subtitles:
             return []
 
@@ -292,9 +273,8 @@ class SubtitleAligner:
 
         return processed
 
-    def _generate_fallback_subtitles(self, script_text: str,
-                                   stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """フォールバック用字幕を生成"""
+    def _generate_fallback_subtitles(self, script_text: str, stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """フォールバック用字幕を生成."""
         sentences = self._extract_sentences_from_script(script_text)
         fallback_subtitles = []
 
@@ -312,20 +292,22 @@ class SubtitleAligner:
             start_time = i * time_per_sentence
             end_time = (i + 1) * time_per_sentence
 
-            fallback_subtitles.append({
-                "index": i + 1,
-                "start": start_time,
-                "end": end_time,
-                "text": sentence_data["text"],
-                "speaker": sentence_data.get("speaker"),
-                "confidence": 0.2  # 低い信頼度
-            })
+            fallback_subtitles.append(
+                {
+                    "index": i + 1,
+                    "start": start_time,
+                    "end": end_time,
+                    "text": sentence_data["text"],
+                    "speaker": sentence_data.get("speaker"),
+                    "confidence": 0.2,  # 低い信頼度
+                }
+            )
 
         logger.warning(f"Generated {len(fallback_subtitles)} fallback subtitles")
         return fallback_subtitles
 
     def to_srt_format(self, subtitles: List[Dict[str, Any]]) -> str:
-        """字幕データをSRT形式に変換"""
+        """字幕データをSRT形式に変換."""
         srt_content = ""
 
         for subtitle in subtitles:
@@ -339,7 +321,7 @@ class SubtitleAligner:
         return srt_content
 
     def _format_srt_timestamp(self, seconds: float) -> str:
-        """秒をSRT形式のタイムスタンプに変換"""
+        """秒をSRT形式のタイムスタンプに変換."""
         delta = timedelta(seconds=seconds)
         total_seconds = int(delta.total_seconds())
         hours = total_seconds // 3600
@@ -350,7 +332,7 @@ class SubtitleAligner:
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
 
     def to_vtt_format(self, subtitles: List[Dict[str, Any]]) -> str:
-        """字幕データをVTT形式に変換"""
+        """字幕データをVTT形式に変換."""
         vtt_content = "WEBVTT\n\n"
 
         for subtitle in subtitles:
@@ -363,7 +345,7 @@ class SubtitleAligner:
         return vtt_content
 
     def _format_vtt_timestamp(self, seconds: float) -> str:
-        """秒をVTT形式のタイムスタンプに変換"""
+        """秒をVTT形式のタイムスタンプに変換."""
         delta = timedelta(seconds=seconds)
         total_seconds = int(delta.total_seconds())
         hours = total_seconds // 3600
@@ -374,7 +356,7 @@ class SubtitleAligner:
         return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
 
     def get_subtitle_stats(self, subtitles: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """字幕統計情報を取得"""
+        """字幕統計情報を取得."""
         if not subtitles:
             return {}
 
@@ -391,29 +373,35 @@ class SubtitleAligner:
             "total_text_length": total_text_length,
             "avg_text_length": total_text_length / len(subtitles),
             "avg_confidence": avg_confidence,
-            "speakers": list(set(sub.get("speaker") for sub in subtitles if sub.get("speaker")))
+            "speakers": list(set(sub.get("speaker") for sub in subtitles if sub.get("speaker"))),
         }
+
 
 # グローバルインスタンス
 subtitle_aligner = SubtitleAligner()
 
+
 def align_script_with_stt(script_text: str, stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """字幕整合の簡易関数"""
+    """字幕整合の簡易関数."""
     return subtitle_aligner.align_script_with_stt(script_text, stt_words)
 
+
 def to_srt_format(subtitles: List[Dict[str, Any]]) -> str:
-    """SRT変換の簡易関数"""
+    """SRT変換の簡易関数."""
     return subtitle_aligner.to_srt_format(subtitles)
 
+
 def export_srt(subtitles: List[Dict[str, Any]], output_path: str):
-    """SRTファイルを出力"""
+    """SRTファイルを出力."""
     srt_content = to_srt_format(subtitles)
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         f.write(srt_content)
 
+
 def to_vtt_format(subtitles: List[Dict[str, Any]]) -> str:
-    """VTT変換の簡易関数"""
+    """VTT変換の簡易関数."""
     return subtitle_aligner.to_vtt_format(subtitles)
+
 
 if __name__ == "__main__":
     # テスト実行
@@ -444,7 +432,7 @@ if __name__ == "__main__":
         {"word": "大幅", "start": 5.7, "end": 6.2, "confidence": 0.8},
         {"word": "に", "start": 6.2, "end": 6.4, "confidence": 0.7},
         {"word": "上昇", "start": 6.4, "end": 6.9, "confidence": 0.9},
-        {"word": "しました", "start": 6.9, "end": 7.5, "confidence": 0.8}
+        {"word": "しました", "start": 6.9, "end": 7.5, "confidence": 0.8},
     ]
 
     try:

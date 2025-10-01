@@ -1,19 +1,22 @@
-"""""
+""" ""
 メタデータ生成モジュール
 
 YouTube動画のタイトル、説明文、タグ、カテゴリを自動生成します。
 SEO最適化と視聴者エンゲージメント向上を目的とした高品質なメタデータを作成します。
 """
 
-import re
 import json
 import logging
-from typing import List, Dict, Any, Optional
+import re
 from datetime import datetime
+from typing import Any, Dict, List
+
 import google.generativeai as genai
+
 from app.config import cfg
 
 logger = logging.getLogger(__name__)
+
 
 class MetadataGenerator:
     """メタデータ生成クラス"""
@@ -29,7 +32,7 @@ class MetadataGenerator:
                 raise ValueError("Gemini API key not configured")
 
             genai.configure(api_key=cfg.gemini_api_key)
-            self.client = genai.GenerativeModel('gemini-1.5-flash')
+            self.client = genai.GenerativeModel("gemini-1.5-flash")
             logger.info("Metadata generator initialized with Gemini")
 
         except Exception as e:
@@ -37,13 +40,9 @@ class MetadataGenerator:
             raise
 
     def generate_youtube_metadata(
-                                 self,
-                                 news_items: List[Dict[str, Any]],
-                                 script_content: str = "",
-                                 mode: str = "daily") -> Dict[str, Any]:
-        """
-        YouTube動画用メタデータを生成
-        """
+        self, news_items: List[Dict[str, Any]], script_content: str = "", mode: str = "daily"
+    ) -> Dict[str, Any]:
+        """YouTube動画用メタデータを生成"""
         try:
             prompt = self._build_metadata_prompt(news_items, script_content, mode)
             response = self._call_gemini_for_metadata(prompt)
@@ -55,15 +54,14 @@ class MetadataGenerator:
             logger.error(f"Failed to generate metadata: {e}")
             return self._get_fallback_metadata(news_items, mode)
 
-    def _build_metadata_prompt(self, news_items: List[Dict[str, Any]],
-                              script_content: str, mode: str) -> str:
+    def _build_metadata_prompt(self, news_items: List[Dict[str, Any]], script_content: str, mode: str) -> str:
         """メタデータ生成用プロンプトを構築"""
         current_date = datetime.now().strftime("%Y年%m月%d日")
         news_summary = self._create_news_summary(news_items)
         mode_context = {
             "daily": "日次の経済ニュース解説動画",
             "special": "特集・深堀り解説動画",
-            "breaking": "速報・緊急ニュース動画"
+            "breaking": "速報・緊急ニュース動画",
         }
         prompt = f"""
 以下の経済ニュース内容から、YouTube動画用のメタデータを生成してください。
@@ -120,18 +118,18 @@ class MetadataGenerator:
         summaries = []
         for i, item in enumerate(news_items, 1):
             summary = f"""
-【ニュース{i}】{item.get('title', '無題')}
-出典: {item.get('source', '不明')}
-要約: {item.get('summary', '')[:200]}...
-影響度: {item.get('impact_level', 'medium')}
+【ニュース{i}】{item.get("title", "無題")}
+出典: {item.get("source", "不明")}
+要約: {item.get("summary", "")[:200]}...
+影響度: {item.get("impact_level", "medium")}
 """
             summaries.append(summary)
         return "\n".join(summaries)
 
     def _call_gemini_for_metadata(self, prompt: str, max_retries: int = 3) -> str:
         """メタデータ生成用Gemini API呼び出し"""
-        import time
         import random
+        import time
 
         for attempt in range(max_retries):
             try:
@@ -141,7 +139,7 @@ class MetadataGenerator:
                 return content
             except Exception as e:
                 if "rate_limit" in str(e).lower() and attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    wait_time = (2**attempt) + random.uniform(0, 1)
                     logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
                     time.sleep(wait_time)
                     continue
@@ -156,14 +154,14 @@ class MetadataGenerator:
     def _parse_metadata_response(self, response: str) -> Dict[str, Any]:
         """メタデータレスポンスを解析"""
         try:
-            match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
+            match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
             if match:
                 json_str = match.group(1)
             else:
-                start = response.find('{')
-                end = response.rfind('}')
+                start = response.find("{")
+                end = response.rfind("}")
                 if start != -1 and end != -1:
-                    json_str = response[start:end+1]
+                    json_str = response[start : end + 1]
                 else:
                     raise ValueError("No JSON structure found")
             metadata = json.loads(json_str)
@@ -176,8 +174,7 @@ class MetadataGenerator:
             logger.error(f"Error parsing metadata response: {e}")
             return {}
 
-    def _validate_metadata(self, metadata: Dict[str, Any],
-                          news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _validate_metadata(self, metadata: Dict[str, Any], news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """メタデータの検証とクリーニング"""
         validated = {}
         try:
@@ -222,8 +219,7 @@ class MetadataGenerator:
                 return f"【{current_date}】{keywords[0]}など重要経済ニュース解説"
         return f"【{current_date}】今日の重要経済ニュース解説"
 
-    def _enhance_description(self, description: str,
-                           news_items: List[Dict[str, Any]]) -> str:
+    def _enhance_description(self, description: str, news_items: List[Dict[str, Any]]) -> str:
         """説明文を拡充"""
         current_date = datetime.now().strftime("%Y年%m月%d日")
         enhanced = f"{description}\n\n" if description else ""
@@ -264,10 +260,7 @@ class MetadataGenerator:
 
     def _generate_fallback_tags(self, news_items: List[Dict[str, Any]]) -> List[str]:
         """フォールバック用タグ生成"""
-        base_tags = [
-            "経済ニュース", "投資", "株式市場", "金融", "経済解説",
-            "マーケット", "経済分析", "ニュース解説"
-        ]
+        base_tags = ["経済ニュース", "投資", "株式市場", "金融", "経済解説", "マーケット", "経済分析", "ニュース解説"]
         for item in news_items:
             title = item.get("title", "")
             keywords = self._extract_keywords(title)
@@ -281,21 +274,38 @@ class MetadataGenerator:
     def _extract_keywords(self, text: str) -> List[str]:
         """テキストからキーワードを抽出"""
         economic_patterns = [
-            r'日経平均', r'TOPIX', r'ダウ', r'ナスダック',
-            r'金利', r'インフレ', r'GDP', r'失業率',
-            r'中央銀行', r'日銀', r'FRB', r'ECB',
-            r'株価', r'為替', r'円安', r'円高',
-            r'企業決算', r'業績', r'売上', r'利益',
-            r'新規上場', r'IPO', r'M&A', r'買収'
+            r"日経平均",
+            r"TOPIX",
+            r"ダウ",
+            r"ナスダック",
+            r"金利",
+            r"インフレ",
+            r"GDP",
+            r"失業率",
+            r"中央銀行",
+            r"日銀",
+            r"FRB",
+            r"ECB",
+            r"株価",
+            r"為替",
+            r"円安",
+            r"円高",
+            r"企業決算",
+            r"業績",
+            r"売上",
+            r"利益",
+            r"新規上場",
+            r"IPO",
+            r"M&A",
+            r"買収",
         ]
         keywords = []
         for pattern in economic_patterns:
             if re.search(pattern, text):
-                keywords.append(pattern.replace(r'\b', '').replace(r'\\', ''))
+                keywords.append(pattern.replace(r"\b", "").replace(r"\\", ""))
         return keywords[:5]
 
-    def _get_fallback_metadata(self, news_items: List[Dict[str, Any]],
-                              mode: str) -> Dict[str, Any]:
+    def _get_fallback_metadata(self, news_items: List[Dict[str, Any]], mode: str) -> Dict[str, Any]:
         """フォールバック用メタデータ"""
         current_date = datetime.now().strftime("%Y年%m月%d日")
         return {
@@ -306,7 +316,9 @@ class MetadataGenerator:
 本日の重要な経済ニュースを専門家が分かりやすく解説します。
 
 📈 今日のトピック：
-""" + "\n".join([f"• {item.get('title', '無題')}" for item in news_items[:3]]) + f"""
+"""
+            + "\n".join([f"• {item.get('title', '無題')}" for item in news_items[:3]])
+            + """
 
 🎯 この動画で学べること：
 • 最新の経済動向と市場への影響
@@ -325,7 +337,7 @@ class MetadataGenerator:
             "estimated_watch_time": "15-30分",
             "generated_at": datetime.now().isoformat(),
             "news_count": len(news_items),
-            "fallback": True
+            "fallback": True,
         }
 
     def create_short_form_metadata(self, topic: str, duration_minutes: int = 1) -> Dict[str, Any]:
@@ -374,22 +386,24 @@ JSON形式で回答してください：
             "video_type": "shorts",
             "estimated_watch_time": "1分",
             "generated_at": datetime.now().isoformat(),
-            "fallback": True
+            "fallback": True,
         }
+
 
 # グローバルインスタンス
 metadata_generator = MetadataGenerator() if cfg.gemini_api_key else None
 
+
 def generate_youtube_metadata(
-                             news_items: List[Dict[str, Any]],
-                             script_content: str = "",
-                             mode: str = "daily") -> Dict[str, Any]:
+    news_items: List[Dict[str, Any]], script_content: str = "", mode: str = "daily"
+) -> Dict[str, Any]:
     """YouTube メタデータ生成の簡易関数"""
     if metadata_generator:
         return metadata_generator.generate_youtube_metadata(news_items, script_content, mode)
     else:
         logger.warning("Metadata generator not available, using fallback")
         return MetadataGenerator()._get_fallback_metadata(news_items, mode)
+
 
 def create_shorts_metadata(topic: str, duration_minutes: int = 1) -> Dict[str, Any]:
     """ショート動画メタデータ生成の簡易関数"""
@@ -398,6 +412,7 @@ def create_shorts_metadata(topic: str, duration_minutes: int = 1) -> Dict[str, A
     else:
         logger.warning("Metadata generator not available, using fallback")
         return MetadataGenerator()._get_fallback_shorts_metadata(topic)
+
 
 if __name__ == "__main__":
     print("Testing metadata generation...")
@@ -408,15 +423,15 @@ if __name__ == "__main__":
                 "summary": "東京株式市場で日経平均株価が前日比1.8%上昇し、3日連続の上昇となった。好調な企業決算と海外投資家の買いが支えとなり、年初来高値を更新した。",
                 "source": "日本経済新聞",
                 "impact_level": "high",
-                "category": "金融"
+                "category": "金融",
             },
             {
                 "title": "中央銀行が政策金利を0.25%引き上げ",
                 "summary": "日本銀行は金融政策決定会合で政策金利を0.25%引き上げることを決定。インフレ抑制を目的とした措置で、市場は事前に織り込んでいた。",
                 "source": "Bloomberg",
                 "impact_level": "high",
-                "category": "政策"
-            }
+                "category": "政策",
+            },
         ]
         try:
             generator = MetadataGenerator()

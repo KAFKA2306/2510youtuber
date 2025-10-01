@@ -1,20 +1,22 @@
-"""
-Google Sheets操作モジュール
+"""Google Sheets操作モジュール
 
 実行ログとプロンプト管理のためのGoogle Sheets操作を提供します。
 """
 
 import json
-import uuid
 import logging
+import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+
 from app.config import cfg
 
 logger = logging.getLogger(__name__)
+
 
 class SheetsManager:
     """Google Sheets操作クラス"""
@@ -32,11 +34,10 @@ class SheetsManager:
                 raise ValueError("Google credentials not configured")
 
             credentials = service_account.Credentials.from_service_account_info(
-                creds_dict,
-                scopes=['https://www.googleapis.com/auth/spreadsheets']
+                creds_dict, scopes=["https://www.googleapis.com/auth/spreadsheets"]
             )
 
-            self.service = build('sheets', 'v4', credentials=credentials)
+            self.service = build("sheets", "v4", credentials=credentials)
             logger.info("Google Sheets connection established")
 
         except Exception as e:
@@ -45,8 +46,8 @@ class SheetsManager:
 
     def _rate_limit_retry(self, func, *args, **kwargs):
         """レート制限対応のリトライ機能付き実行"""
-        import time
         import random
+        import time
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -58,7 +59,7 @@ class SheetsManager:
 
             except HttpError as e:
                 if e.resp.status == 429 and attempt < max_retries - 1:  # Rate limit
-                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    wait_time = (2**attempt) + random.uniform(0, 1)
                     logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
                     time.sleep(wait_time)
                     continue
@@ -81,32 +82,35 @@ class SheetsManager:
 
         Returns:
             生成された run_id
+
         """
         run_id = str(uuid.uuid4())[:8]
         now = datetime.now().isoformat()
 
         # runsシートに新しい行を追加
-        values = [[
-            run_id,           # run_id
-            "processing",     # status
-            now,             # started_at
-            "",              # finished_at
-            "",              # duration_sec
-            mode,            # mode
-            "",              # prompt_a
-            "",              # search_results_json
-            "",              # script_text
-            "",              # audio_urls_json
-            "",              # stt_text
-            "",              # subtitle_srt
-            "",              # video_url
-            "",              # title
-            "",              # description
-            "",              # sources
-            "",              # thumbnail_url
-            "",              # first_comment
-            ""               # error_log
-        ]]
+        values = [
+            [
+                run_id,  # run_id
+                "processing",  # status
+                now,  # started_at
+                "",  # finished_at
+                "",  # duration_sec
+                mode,  # mode
+                "",  # prompt_a
+                "",  # search_results_json
+                "",  # script_text
+                "",  # audio_urls_json
+                "",  # stt_text
+                "",  # subtitle_srt
+                "",  # video_url
+                "",  # title
+                "",  # description
+                "",  # sources
+                "",  # thumbnail_url
+                "",  # first_comment
+                "",  # error_log
+            ]
+        ]
 
         try:
             self._rate_limit_retry(
@@ -114,7 +118,7 @@ class SheetsManager:
                 spreadsheetId=self.sheet_id,
                 range="runs!A:S",
                 valueInputOption="RAW",
-                body={"values": values}
+                body={"values": values},
             ).execute()
 
             logger.info(f"Created new run: {run_id} (mode: {mode})")
@@ -133,16 +137,15 @@ class SheetsManager:
 
         Returns:
             更新成功時True
+
         """
         try:
             # 既存データを取得して対象行を特定
             result = self._rate_limit_retry(
-                self.service.spreadsheets().values().get,
-                spreadsheetId=self.sheet_id,
-                range="runs!A:S"
+                self.service.spreadsheets().values().get, spreadsheetId=self.sheet_id, range="runs!A:S"
             ).execute()
 
-            rows = result.get('values', [])
+            rows = result.get("values", [])
             target_row_index = None
 
             # run_idで対象行を検索
@@ -162,23 +165,23 @@ class SheetsManager:
 
             # フィールドごとに更新
             field_mapping = {
-                'status': 1,
-                'finished_at': 3,
-                'duration_sec': 4,
-                'mode': 5,
-                'prompt_a': 6,
-                'search_results_json': 7,
-                'script_text': 8,
-                'audio_urls_json': 9,
-                'stt_text': 10,
-                'subtitle_srt': 11,
-                'video_url': 12,
-                'title': 13,
-                'description': 14,
-                'sources': 15,
-                'thumbnail_url': 16,
-                'first_comment': 17,
-                'error_log': 18
+                "status": 1,
+                "finished_at": 3,
+                "duration_sec": 4,
+                "mode": 5,
+                "prompt_a": 6,
+                "search_results_json": 7,
+                "script_text": 8,
+                "audio_urls_json": 9,
+                "stt_text": 10,
+                "subtitle_srt": 11,
+                "video_url": 12,
+                "title": 13,
+                "description": 14,
+                "sources": 15,
+                "thumbnail_url": 16,
+                "first_comment": 17,
+                "error_log": 18,
             }
 
             for field, value in fields.items():
@@ -194,7 +197,7 @@ class SheetsManager:
                     current_row[col_index] = str(value)
 
             # 自動で finished_at を設定
-            if fields.get('status') == 'completed' and 'finished_at' not in fields:
+            if fields.get("status") == "completed" and "finished_at" not in fields:
                 current_row[3] = datetime.now().isoformat()
 
             # 更新実行
@@ -204,7 +207,7 @@ class SheetsManager:
                 spreadsheetId=self.sheet_id,
                 range=range_name,
                 valueInputOption="RAW",
-                body={"values": [current_row]}
+                body={"values": [current_row]},
             ).execute()
 
             logger.info(f"Updated run {run_id}: {list(fields.keys())}")
@@ -219,15 +222,14 @@ class SheetsManager:
 
         Returns:
             プロンプトの辞書 {prompt_a: "...", prompt_b: "...", ...}
+
         """
         try:
             result = self._rate_limit_retry(
-                self.service.spreadsheets().values().get,
-                spreadsheetId=self.sheet_id,
-                range="prompts!A1:E2"
+                self.service.spreadsheets().values().get, spreadsheetId=self.sheet_id, range="prompts!A1:E2"
             ).execute()
 
-            rows = result.get('values', [])
+            rows = result.get("values", [])
             if len(rows) >= 2:
                 headers = rows[0]
                 values = rows[1]
@@ -261,7 +263,6 @@ class SheetsManager:
 
 信頼性の高い経済メディア（日経、ロイター、Bloomberg等）からの情報を優先してください。
 """,
-
             "prompt_b": """
 以下のニュース要約をもとに、二人の専門家による対談形式の台本を作成してください：
 
@@ -273,7 +274,6 @@ class SheetsManager:
 - 総時間25-35分程度（約8000-12000文字）
 - 話し言葉調で自然な流れ
 """,
-
             "prompt_c": """
 動画のメタデータを生成してください：
 
@@ -285,7 +285,6 @@ class SheetsManager:
 
 JSON形式で出力してください。
 """,
-
             "prompt_d": """
 この動画を聞いている女の子の立場で、最初のコメントを生成してください：
 
@@ -293,7 +292,7 @@ JSON形式で出力してください。
 - 50-100文字程度
 - 動画の内容に関連した軽妙なコメント
 - 親しみやすい口調
-"""
+""",
         }
 
     def get_recent_runs(self, limit: int = 10) -> List[Dict[str, Any]]:
@@ -304,15 +303,14 @@ JSON形式で出力してください。
 
         Returns:
             実行記録のリスト
+
         """
         try:
             result = self._rate_limit_retry(
-                self.service.spreadsheets().values().get,
-                spreadsheetId=self.sheet_id,
-                range="runs!A:S"
+                self.service.spreadsheets().values().get, spreadsheetId=self.sheet_id, range="runs!A:S"
             ).execute()
 
-            rows = result.get('values', [])
+            rows = result.get("values", [])
             if len(rows) <= 1:  # ヘッダー行のみ
                 return []
 
@@ -341,26 +339,38 @@ JSON形式で出力してください。
 
         Returns:
             セットアップ成功時True
+
         """
         try:
             # シート一覧を取得
-            spreadsheet = self._rate_limit_retry(
-                self.service.spreadsheets().get,
-                spreadsheetId=self.sheet_id
-            ).execute()
+            spreadsheet = self._rate_limit_retry(self.service.spreadsheets().get, spreadsheetId=self.sheet_id).execute()
 
-            existing_sheets = [sheet['properties']['title'] for sheet in spreadsheet['sheets']]
+            existing_sheets = [sheet["properties"]["title"] for sheet in spreadsheet["sheets"]]
 
             # 必要なシートが存在するかチェック
             required_sheets = {
-                'runs': [
-                    'run_id', 'status', 'started_at', 'finished_at', 'duration_sec',
-                    'mode', 'prompt_a', 'search_results_json', 'script_text',
-                    'audio_urls_json', 'stt_text', 'subtitle_srt', 'video_url',
-                    'title', 'description', 'sources', 'thumbnail_url',
-                    'first_comment', 'error_log'
+                "runs": [
+                    "run_id",
+                    "status",
+                    "started_at",
+                    "finished_at",
+                    "duration_sec",
+                    "mode",
+                    "prompt_a",
+                    "search_results_json",
+                    "script_text",
+                    "audio_urls_json",
+                    "stt_text",
+                    "subtitle_srt",
+                    "video_url",
+                    "title",
+                    "description",
+                    "sources",
+                    "thumbnail_url",
+                    "first_comment",
+                    "error_log",
                 ],
-                'prompts': ['prompt_a', 'prompt_b', 'prompt_c', 'prompt_d']
+                "prompts": ["prompt_a", "prompt_b", "prompt_c", "prompt_d"],
             }
 
             for sheet_name, headers in required_sheets.items():
@@ -380,22 +390,13 @@ JSON形式で出力してください。
         Args:
             sheet_name: シート名
             headers: ヘッダー行
+
         """
         # シートを追加
-        request_body = {
-            'requests': [{
-                'addSheet': {
-                    'properties': {
-                        'title': sheet_name
-                    }
-                }
-            }]
-        }
+        request_body = {"requests": [{"addSheet": {"properties": {"title": sheet_name}}}]}
 
         self._rate_limit_retry(
-            self.service.spreadsheets().batchUpdate,
-            spreadsheetId=self.sheet_id,
-            body=request_body
+            self.service.spreadsheets().batchUpdate, spreadsheetId=self.sheet_id, body=request_body
         ).execute()
 
         # ヘッダー行を追加
@@ -404,17 +405,20 @@ JSON形式で出力してください。
             spreadsheetId=self.sheet_id,
             range=f"{sheet_name}!A1",
             valueInputOption="RAW",
-            body={"values": [headers]}
+            body={"values": [headers]},
         ).execute()
 
         logger.info(f"Created sheet '{sheet_name}' with headers")
 
+
 # グローバルインスタンス
 sheets_manager = SheetsManager() if cfg.google_sheet_id else None
+
 
 def get_sheets() -> Optional[SheetsManager]:
     """Sheets管理インスタンスを取得"""
     return sheets_manager
+
 
 # 簡易アクセス関数
 def create_run(mode: str = "daily") -> str:
@@ -424,7 +428,9 @@ def create_run(mode: str = "daily") -> str:
     else:
         # フォールバック: ランダムID生成
         import time
+
         return f"fallback_{int(time.time())}"
+
 
 def update_run(run_id: str, **fields) -> bool:
     """実行記録更新の簡易関数"""
@@ -433,6 +439,7 @@ def update_run(run_id: str, **fields) -> bool:
     else:
         logger.warning(f"Sheets not available, skipping update for {run_id}")
         return False
+
 
 def load_prompts() -> Dict[str, str]:
     """プロンプト読み込みの簡易関数"""

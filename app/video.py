@@ -1,20 +1,22 @@
-"""
-動画生成モジュール
+"""動画生成モジュール
 
 音声ファイル、字幕ファイル、背景画像を組み合わせて最終的な動画を生成します。
 FFmpegを使用して高品質な動画出力を実現します。
 """
 
-import os
 import logging
-import ffmpeg
+import os
 import tempfile
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict
+
+import ffmpeg
 from pydub import AudioSegment
+
 from app.config import cfg
 
 logger = logging.getLogger(__name__)
+
 
 class VideoGenerator:
     """動画生成クラス"""
@@ -30,15 +32,13 @@ class VideoGenerator:
         subtitle_path: str,
         background_image: str = None,
         title: str = "Economic News Analysis",
-        output_path: str = None
+        output_path: str = None,
     ) -> str:
-        """
-        動画を生成
-        """
+        """動画を生成"""
         try:
             self._validate_input_files(audio_path, subtitle_path, background_image)
             if not output_path:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_path = f"video_{timestamp}.{self.output_format}"
 
             bg_image_path = self._prepare_background_image(background_image, title)
@@ -46,13 +46,13 @@ class VideoGenerator:
 
             stream = ffmpeg.input(bg_image_path, loop=1, t=audio_duration)
             audio_stream = ffmpeg.input(audio_path)
-            
+
             stream = ffmpeg.output(
-                stream, 
-                audio_stream, 
-                output_path, 
+                stream,
+                audio_stream,
+                output_path,
                 vf=self._build_subtitle_filter(subtitle_path),
-                **self._get_quality_settings()
+                **self._get_quality_settings(),
             ).overwrite_output()
 
             ffmpeg.run(stream, quiet=True)
@@ -66,14 +66,13 @@ class VideoGenerator:
             logger.error(f"Video generation failed: {e}")
             return self._generate_fallback_video(audio_path, title)
         finally:
-            if 'bg_image_path' in locals() and bg_image_path != background_image:
+            if "bg_image_path" in locals() and bg_image_path != background_image:
                 try:
                     os.remove(bg_image_path)
                 except Exception:
                     pass
 
-    def _validate_input_files(self, audio_path: str, subtitle_path: str,
-                             background_image: str = None):
+    def _validate_input_files(self, audio_path: str, subtitle_path: str, background_image: str = None):
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
         if not os.path.exists(subtitle_path):
@@ -85,18 +84,19 @@ class VideoGenerator:
         except Exception as e:
             raise ValueError(f"Invalid audio file format: {e}")
 
-    def _prepare_background_image(self, background_image: str = None,
-                                 title: str = "News Analysis") -> str:
+    def _prepare_background_image(self, background_image: str = None, title: str = "News Analysis") -> str:
         if background_image and os.path.exists(background_image):
             return background_image
         return self._create_default_background(title)
 
     def _create_default_background(self, title: str) -> str:
         try:
-            from PIL import Image, ImageDraw, ImageFont
             import textwrap
+
+            from PIL import Image, ImageDraw, ImageFont
+
             width, height = 1920, 1080
-            image = Image.new('RGB', (width, height), color=(25, 35, 45))
+            image = Image.new("RGB", (width, height), color=(25, 35, 45))
             draw = ImageDraw.Draw(image)
             try:
                 font_size = 72
@@ -114,15 +114,14 @@ class VideoGenerator:
                 x = (width - text_width) // 2
                 y = (height - text_height) // 2
                 shadow_offset = 3
-                draw.text((x + shadow_offset, y + shadow_offset), wrapped_title,
-                         font=font, fill=(0, 0, 0, 128))
+                draw.text((x + shadow_offset, y + shadow_offset), wrapped_title, font=font, fill=(0, 0, 0, 128))
                 draw.text((x, y), wrapped_title, font=font, fill=(255, 255, 255))
             for y_pos in range(height):
                 alpha = int(255 * (1 - y_pos / height) * 0.3)
-                overlay = Image.new('RGBA', (width, 1), (70, 130, 180, alpha))
+                overlay = Image.new("RGBA", (width, 1), (70, 130, 180, alpha))
                 image.paste(overlay, (0, y_pos), overlay)
-            temp_path = tempfile.mktemp(suffix='.png')
-            image.save(temp_path, 'PNG')
+            temp_path = tempfile.mktemp(suffix=".png")
+            image.save(temp_path, "PNG")
             logger.debug(f"Created default background: {temp_path}")
             return temp_path
         except Exception as e:
@@ -132,9 +131,10 @@ class VideoGenerator:
     def _create_simple_background(self) -> str:
         try:
             from PIL import Image
-            image = Image.new('RGB', (1920, 1080), color=(25, 35, 45))
-            temp_path = tempfile.mktemp(suffix='.png')
-            image.save(temp_path, 'PNG')
+
+            image = Image.new("RGB", (1920, 1080), color=(25, 35, 45))
+            temp_path = tempfile.mktemp(suffix=".png")
+            image.save(temp_path, "PNG")
             return temp_path
         except Exception as e:
             logger.error(f"Failed to create simple background: {e}")
@@ -153,24 +153,18 @@ class VideoGenerator:
             "low": {"preset": "fast", "crf": 28},
             "medium": {"preset": "medium", "crf": 23},
             "high": {"preset": "slow", "crf": 18},
-            "ultra": {"preset": "veryslow", "crf": 15}
+            "ultra": {"preset": "veryslow", "crf": 15},
         }
         settings = quality_presets.get(self.video_quality, quality_presets["medium"])
-        settings.update({
-            "c:a": "aac",
-            "b:a": "128k",
-            "ar": "44100",
-            "pix_fmt": "yuv420p",
-            "movflags": "+faststart"
-        })
+        settings.update({"c:a": "aac", "b:a": "128k", "ar": "44100", "pix_fmt": "yuv420p", "movflags": "+faststart"})
         return settings
 
     def _build_subtitle_filter(self, subtitle_path: str) -> str:
         """字幕フィルタを構築"""
         try:
             # On Windows, paths must be escaped.
-            if os.name == 'nt':
-                subtitle_path = subtitle_path.replace('\\', '\\\\').replace(':', '\\:')
+            if os.name == "nt":
+                subtitle_path = subtitle_path.replace("\\", "\\\\").replace(":", "\\:")
 
             subtitle_style = (
                 f"subtitles={subtitle_path}:force_style='FontName=DejaVu Sans Bold,"
@@ -193,15 +187,15 @@ class VideoGenerator:
     def _get_video_info(self, video_path: str) -> Dict[str, Any]:
         try:
             probe = ffmpeg.probe(video_path)
-            video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+            video_stream = next((stream for stream in probe["streams"] if stream["codec_type"] == "video"), None)
             file_size = os.path.getsize(video_path)
             info = {
                 "file_size_mb": file_size / (1024 * 1024),
                 "file_path": video_path,
                 "format": self.output_format,
-                "duration": float(video_stream.get('duration', 0)),
+                "duration": float(video_stream.get("duration", 0)),
                 "resolution": f"{video_stream.get('width')}x{video_stream.get('height')}",
-                "video_codec": video_stream.get('codec_name')
+                "video_codec": video_stream.get("codec_name"),
             }
             return info
         except Exception as e:
@@ -212,21 +206,16 @@ class VideoGenerator:
         try:
             logger.warning("Generating fallback video...")
             duration = self._get_audio_duration(audio_path)
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_path = f"fallback_video_{timestamp}.{self.output_format}"
-            
-            stream = ffmpeg.input(f"color=c=0x193d5a:size=1920x1080:duration={duration}", f='lavfi')
+
+            stream = ffmpeg.input(f"color=c=0x193d5a:size=1920x1080:duration={duration}", f="lavfi")
             audio_stream = ffmpeg.input(audio_path)
-            
+
             stream = ffmpeg.output(
-                stream, 
-                audio_stream, 
-                output_path, 
-                preset="fast", 
-                crf=28, 
-                **self._get_quality_settings()
+                stream, audio_stream, output_path, preset="fast", crf=28, **self._get_quality_settings()
             ).overwrite_output()
-            
+
             ffmpeg.run(stream, quiet=True)
             logger.info(f"Fallback video generated: {output_path}")
             return output_path
@@ -234,14 +223,16 @@ class VideoGenerator:
             logger.error(f"Fallback video generation error: {e}")
             return None
 
+
 # グローバルインスタンス
 video_generator = VideoGenerator()
 
-def generate_video(audio_path: str, subtitle_path: str,
-                  background_image: str = None, title: str = "Economic News") -> str:
-    return video_generator.generate_video(
-        audio_path, subtitle_path, background_image, title
-    )
+
+def generate_video(
+    audio_path: str, subtitle_path: str, background_image: str = None, title: str = "Economic News"
+) -> str:
+    return video_generator.generate_video(audio_path, subtitle_path, background_image, title)
+
 
 if __name__ == "__main__":
     print("Testing video generation...")

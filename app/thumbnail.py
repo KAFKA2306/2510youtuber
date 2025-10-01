@@ -1,20 +1,18 @@
-"""
-サムネイル生成モジュール
+"""サムネイル生成モジュール
 
 YouTube動画用の魅力的なサムネイル画像を自動生成します。
 視覚的インパクトとクリック率向上を目的とした高品質なサムネイルを作成します。
 """
 
-import os
 import logging
-import tempfile
+import os
 import textwrap
-from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
-from app.config import cfg
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
+
 
 class ThumbnailGenerator:
     """サムネイル生成クラス"""
@@ -26,6 +24,7 @@ class ThumbnailGenerator:
 
         try:
             from PIL import Image, ImageDraw, ImageFont
+
             self.has_pil = True
             logger.info("Thumbnail generator initialized with PIL")
         except ImportError:
@@ -66,7 +65,7 @@ class ThumbnailGenerator:
                 "secondary": (255, 255, 255),
                 "accent": (255, 215, 0),
                 "text": (255, 255, 255),
-                "shadow": (0, 0, 0, 180)
+                "shadow": (0, 0, 0, 180),
             },
             "financial_green": {
                 "background": (15, 45, 25),
@@ -74,7 +73,7 @@ class ThumbnailGenerator:
                 "secondary": (255, 255, 255),
                 "accent": (255, 193, 7),
                 "text": (255, 255, 255),
-                "shadow": (0, 0, 0, 180)
+                "shadow": (0, 0, 0, 180),
             },
             "market_red": {
                 "background": (45, 15, 15),
@@ -82,7 +81,7 @@ class ThumbnailGenerator:
                 "secondary": (255, 255, 255),
                 "accent": (255, 165, 0),
                 "text": (255, 255, 255),
-                "shadow": (0, 0, 0, 180)
+                "shadow": (0, 0, 0, 180),
             },
             "neutral_gray": {
                 "background": (40, 40, 40),
@@ -90,18 +89,19 @@ class ThumbnailGenerator:
                 "secondary": (255, 255, 255),
                 "accent": (0, 191, 255),
                 "text": (255, 255, 255),
-                "shadow": (0, 0, 0, 180)
-            }
+                "shadow": (0, 0, 0, 180),
+            },
         }
 
-    def generate_thumbnail(self,
-                         title: str,
-                         news_items: List[Dict[str, Any]] = None,
-                         mode: str = "daily",
-                         style: str = "economic_blue",
-                         output_path: str = None) -> str:
-        """
-        サムネイル画像を生成
+    def generate_thumbnail(
+        self,
+        title: str,
+        news_items: List[Dict[str, Any]] = None,
+        mode: str = "daily",
+        style: str = "economic_blue",
+        output_path: str = None,
+    ) -> str:
+        """サムネイル画像を生成
 
         Args:
             title: メインタイトルテキスト
@@ -112,20 +112,21 @@ class ThumbnailGenerator:
 
         Returns:
             生成されたサムネイル画像のパス
+
         """
         try:
             if not self.has_pil:
                 return self._generate_fallback_thumbnail(title, output_path)
 
-            from PIL import Image, ImageDraw, ImageFont, ImageFilter
+            from PIL import Image
 
             # 出力パスを決定
             if not output_path:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_path = f"thumbnail_{timestamp}.png"
 
             # 画像を作成
-            image = Image.new('RGB', self.output_size, self.color_schemes[style]["background"])
+            image = Image.new("RGB", self.output_size, self.color_schemes[style]["background"])
 
             # 背景グラデーション/パターンを追加
             image = self._add_background_effects(image, style, mode)
@@ -140,7 +141,7 @@ class ThumbnailGenerator:
             image = self._optimize_image_quality(image)
 
             # 保存
-            image.save(output_path, 'PNG', quality=95)
+            image.save(output_path, "PNG", quality=95)
 
             logger.info(f"Thumbnail generated: {output_path}")
             return output_path
@@ -151,7 +152,7 @@ class ThumbnailGenerator:
 
     def _add_background_effects(self, image, style: str, mode: str):
         """背景エフェクトを追加"""
-        from PIL import Image, ImageDraw, ImageFilter
+        from PIL import ImageDraw
 
         draw = ImageDraw.Draw(image)
         colors = self.color_schemes[style]
@@ -195,30 +196,29 @@ class ThumbnailGenerator:
             if mode == "breaking":
                 # 緊急感のある斜線
                 for i in range(0, width + height, 60):
-                    draw.line([(i, 0), (i - height, height)],
-                             fill=(*colors["accent"], 30), width=3)
+                    draw.line([(i, 0), (i - height, height)], fill=(*colors["accent"], 30), width=3)
             elif mode == "special":
                 # 特集感のある円形
                 center_x, center_y = width // 4, height // 4
                 for radius in range(50, 200, 25):
-                    draw.ellipse([center_x - radius, center_y - radius,
-                                center_x + radius, center_y + radius],
-                               outline=(*colors["primary"], 40), width=2)
+                    draw.ellipse(
+                        [center_x - radius, center_y - radius, center_x + radius, center_y + radius],
+                        outline=(*colors["primary"], 40),
+                        width=2,
+                    )
             else:
                 # 日常的な矩形パターン
                 for i in range(3):
                     x = width - 150 + i * 20
                     y = height - 100 + i * 15
-                    draw.rectangle([x, y, x + 100, y + 60],
-                                 outline=(*colors["primary"], 60), width=2)
+                    draw.rectangle([x, y, x + 100, y + 60], outline=(*colors["primary"], 60), width=2)
 
         except Exception as e:
             logger.warning(f"Failed to add geometric patterns: {e}")
 
-    def _draw_text_elements(self, image, title: str, news_items: List[Dict],
-                           style: str, mode: str):
+    def _draw_text_elements(self, image, title: str, news_items: List[Dict], style: str, mode: str):
         """テキスト要素を描画"""
-        from PIL import ImageDraw, ImageFont
+        from PIL import ImageDraw
 
         draw = ImageDraw.Draw(image)
         colors = self.color_schemes[style]
@@ -274,7 +274,7 @@ class ThumbnailGenerator:
         font = self._get_font(font_size)
 
         # テキストを改行
-        wrapped_lines = textwrap.fill(title, width=15).split('\n')
+        wrapped_lines = textwrap.fill(title, width=15).split("\n")
 
         # 全体の高さを計算
         total_height = len(wrapped_lines) * font_size * 1.2
@@ -294,8 +294,7 @@ class ThumbnailGenerator:
 
             # 影を描画
             shadow_offset = 4 if mode == "breaking" else 3
-            draw.text((x + shadow_offset, y + shadow_offset), line,
-                     font=font, fill=colors["shadow"])
+            draw.text((x + shadow_offset, y + shadow_offset), line, font=font, fill=colors["shadow"])
 
             # メインテキストを描画
             text_color = colors["accent"] if mode == "breaking" else colors["text"]
@@ -313,8 +312,7 @@ class ThumbnailGenerator:
         y = 20
 
         # 背景矩形
-        draw.rectangle([x - 10, y - 5, x + text_width + 10, y + 30],
-                      fill=(*colors["primary"], 180))
+        draw.rectangle([x - 10, y - 5, x + text_width + 10, y + 30], fill=(*colors["primary"], 180))
 
         draw.text((x, y), date_text, font=font, fill=colors["secondary"])
 
@@ -338,8 +336,7 @@ class ThumbnailGenerator:
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
 
-        draw.rounded_rectangle([x, y, x + text_width + 20, y + text_height + 10],
-                              radius=10, fill=badge_color)
+        draw.rounded_rectangle([x, y, x + text_width + 20, y + text_height + 10], radius=10, fill=badge_color)
 
         draw.text((x + 10, y + 5), mode_text, font=font, fill=(255, 255, 255))
 
@@ -361,19 +358,15 @@ class ThumbnailGenerator:
             bbox = draw.textbbox((0, 0), keyword, font=font)
             text_width = bbox[2] - bbox[0]
 
-            draw.rounded_rectangle([x, y_start, x + text_width + 16, y_start + 25],
-                                  radius=5, fill=(*colors["accent"], 150))
+            draw.rounded_rectangle(
+                [x, y_start, x + text_width + 16, y_start + 25], radius=5, fill=(*colors["accent"], 150)
+            )
 
             draw.text((x + 8, y_start + 4), keyword, font=font, fill=colors["text"])
 
     def _get_mode_text(self, mode: str) -> str:
         """モードテキストを取得"""
-        mode_texts = {
-            "daily": "今日のニュース",
-            "special": "特集",
-            "breaking": "緊急",
-            "test": "テスト"
-        }
+        mode_texts = {"daily": "今日のニュース", "special": "特集", "breaking": "緊急", "test": "テスト"}
         return mode_texts.get(mode, "ニュース")
 
     def _extract_thumbnail_keywords(self, news_items: List[Dict]) -> List[str]:
@@ -381,8 +374,18 @@ class ThumbnailGenerator:
         keywords = []
 
         economic_keywords = [
-            "株価", "日経平均", "為替", "円安", "円高", "金利",
-            "インフレ", "GDP", "決算", "企業", "投資", "市場"
+            "株価",
+            "日経平均",
+            "為替",
+            "円安",
+            "円高",
+            "金利",
+            "インフレ",
+            "GDP",
+            "決算",
+            "企業",
+            "投資",
+            "市場",
         ]
 
         for item in news_items:
@@ -425,13 +428,12 @@ class ThumbnailGenerator:
             corner_size = 30
 
             # 左上角
-            draw.polygon([(0, 0), (corner_size, 0), (0, corner_size)],
-                        fill=colors["accent"])
+            draw.polygon([(0, 0), (corner_size, 0), (0, corner_size)], fill=colors["accent"])
 
             # 右下角
-            draw.polygon([(width, height), (width - corner_size, height),
-                         (width, height - corner_size)],
-                        fill=colors["accent"])
+            draw.polygon(
+                [(width, height), (width - corner_size, height), (width, height - corner_size)], fill=colors["accent"]
+            )
 
             # モード別の特別装飾
             if mode == "breaking":
@@ -441,7 +443,7 @@ class ThumbnailGenerator:
                 points = [
                     (cx, cy - triangle_size),
                     (cx - triangle_size, cy + triangle_size),
-                    (cx + triangle_size, cy + triangle_size)
+                    (cx + triangle_size, cy + triangle_size),
                 ]
                 draw.polygon(points, fill=(255, 69, 0))
 
@@ -483,10 +485,10 @@ class ThumbnailGenerator:
             if not self.has_pil:
                 # PILが使えない場合は、テキストファイルで代替
                 if not output_path:
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     output_path = f"thumbnail_fallback_{timestamp}.txt"
 
-                with open(output_path, 'w', encoding='utf-8') as f:
+                with open(output_path, "w", encoding="utf-8") as f:
                     f.write(f"サムネイル画像\n\nタイトル: {title}\n\n")
                     f.write("※ PIL (Python Imaging Library) が利用できないため、\n")
                     f.write("実際の画像ファイルを生成できませんでした。\n")
@@ -495,10 +497,10 @@ class ThumbnailGenerator:
                 logger.warning(f"Generated text fallback thumbnail: {output_path}")
                 return output_path
 
-            from PIL import Image, ImageDraw, ImageFont
+            from PIL import Image, ImageDraw
 
             # シンプルな画像を生成
-            image = Image.new('RGB', self.output_size, (25, 35, 45))
+            image = Image.new("RGB", self.output_size, (25, 35, 45))
             draw = ImageDraw.Draw(image)
 
             # タイトルテキスト
@@ -515,10 +517,10 @@ class ThumbnailGenerator:
 
             # 出力パス決定
             if not output_path:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_path = f"thumbnail_fallback_{timestamp}.png"
 
-            image.save(output_path, 'PNG')
+            image.save(output_path, "PNG")
             logger.info(f"Generated fallback thumbnail: {output_path}")
             return output_path
 
@@ -526,10 +528,9 @@ class ThumbnailGenerator:
             logger.error(f"Fallback thumbnail generation failed: {e}")
             return None
 
-    def create_batch_thumbnails(self,
-                               titles: List[str],
-                               styles: List[str] = None,
-                               modes: List[str] = None) -> List[str]:
+    def create_batch_thumbnails(
+        self, titles: List[str], styles: List[str] = None, modes: List[str] = None
+    ) -> List[str]:
         """バッチでサムネイルを生成"""
         generated_thumbnails = []
 
@@ -538,35 +539,34 @@ class ThumbnailGenerator:
                 style = styles[i] if styles and i < len(styles) else "economic_blue"
                 mode = modes[i] if modes and i < len(modes) else "daily"
 
-                thumbnail_path = self.generate_thumbnail(
-                    title=title,
-                    style=style,
-                    mode=mode
-                )
+                thumbnail_path = self.generate_thumbnail(title=title, style=style, mode=mode)
 
                 if thumbnail_path:
                     generated_thumbnails.append(thumbnail_path)
-                    logger.info(f"Generated thumbnail {i+1}/{len(titles)}")
+                    logger.info(f"Generated thumbnail {i + 1}/{len(titles)}")
 
             except Exception as e:
-                logger.error(f"Failed to generate thumbnail {i+1}: {e}")
+                logger.error(f"Failed to generate thumbnail {i + 1}: {e}")
                 continue
 
         return generated_thumbnails
 
+
 # グローバルインスタンス
 thumbnail_generator = ThumbnailGenerator()
 
-def generate_thumbnail(title: str, news_items: List[Dict[str, Any]] = None,
-                      mode: str = "daily", style: str = "economic_blue") -> str:
+
+def generate_thumbnail(
+    title: str, news_items: List[Dict[str, Any]] = None, mode: str = "daily", style: str = "economic_blue"
+) -> str:
     """サムネイル生成の簡易関数"""
     return thumbnail_generator.generate_thumbnail(title, news_items, mode, style)
 
-def create_batch_thumbnails(titles: List[str],
-                           styles: List[str] = None,
-                           modes: List[str] = None) -> List[str]:
+
+def create_batch_thumbnails(titles: List[str], styles: List[str] = None, modes: List[str] = None) -> List[str]:
     """バッチサムネイル生成の簡易関数"""
     return thumbnail_generator.create_batch_thumbnails(titles, styles, modes)
+
 
 if __name__ == "__main__":
     # テスト実行
@@ -578,28 +578,17 @@ if __name__ == "__main__":
     print(f"Available fonts: {list(generator.font_paths.keys())}")
 
     # テスト用データ
-    test_titles = [
-        "日経平均が年初来高値更新",
-        "中央銀行が緊急利上げ決定",
-        "米中貿易摩擦が市場に影響"
-    ]
+    test_titles = ["日経平均が年初来高値更新", "中央銀行が緊急利上げ決定", "米中貿易摩擦が市場に影響"]
 
     test_news = [
-        {
-            "title": "日経平均株価が3日連続上昇",
-            "summary": "好調な企業決算が支援材料となった",
-            "impact_level": "high"
-        }
+        {"title": "日経平均株価が3日連続上昇", "summary": "好調な企業決算が支援材料となった", "impact_level": "high"}
     ]
 
     try:
         # 単一サムネイル生成テスト
         print("\n=== 単一サムネイル生成テスト ===")
         thumbnail_path = generator.generate_thumbnail(
-            title=test_titles[0],
-            news_items=test_news,
-            mode="daily",
-            style="economic_blue"
+            title=test_titles[0], news_items=test_news, mode="daily", style="economic_blue"
         )
 
         if thumbnail_path:
@@ -610,11 +599,7 @@ if __name__ == "__main__":
 
         # 緊急モードテスト
         print("\n=== 緊急モードサムネイルテスト ===")
-        breaking_path = generator.generate_thumbnail(
-            title="緊急：金利急上昇",
-            mode="breaking",
-            style="market_red"
-        )
+        breaking_path = generator.generate_thumbnail(title="緊急：金利急上昇", mode="breaking", style="market_red")
         if breaking_path:
             print(f"Generated breaking thumbnail: {breaking_path}")
 
@@ -623,7 +608,7 @@ if __name__ == "__main__":
         batch_paths = generator.create_batch_thumbnails(
             titles=test_titles,
             styles=["economic_blue", "financial_green", "market_red"],
-            modes=["daily", "special", "breaking"]
+            modes=["daily", "special", "breaking"],
         )
         print(f"Generated {len(batch_paths)} thumbnails in batch")
 

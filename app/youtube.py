@@ -1,35 +1,34 @@
-"""
-YouTube操作モジュール
+"""YouTube操作モジュール
 
 YouTube Data API v3を使用して動画のアップロード、
 メタデータ設定、公開管理を行います。
 """
 
-import os
-import logging
 import json
+import logging
+import os
 import pickle
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Any, Dict, List
+
 import httplib2
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-from googleapiclient.errors import HttpError
 from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaFileUpload
+
 from app.config import cfg
 
 logger = logging.getLogger(__name__)
+
 
 class YouTubeManager:
     """YouTube API管理クラス"""
 
     # OAuth 2.0 スコープ
-    SCOPES = [
-        'https://www.googleapis.com/auth/youtube.upload',
-        'https://www.googleapis.com/auth/youtube'
-    ]
+    SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube"]
 
     def __init__(self):
         self.service = None
@@ -41,7 +40,9 @@ class YouTubeManager:
         """YouTube API サービスを初期化"""
         try:
             if not self.client_secrets:
-                raise ValueError("YouTube client secrets not configured")
+                raise ValueError(
+                    "YouTube client secrets not configured or invalid. Please check YOUTUBE_CLIENT_SECRET environment variable."
+                )
 
             # 認証情報を取得
             self.credentials = self._get_authenticated_credentials()
@@ -50,7 +51,7 @@ class YouTubeManager:
                 raise ValueError("Failed to obtain YouTube credentials")
 
             # YouTube API サービスを構築
-            self.service = build('youtube', 'v3', credentials=self.credentials)
+            self.service = build("youtube", "v3", credentials=self.credentials)
 
             logger.info("YouTube API service initialized")
 
@@ -61,11 +62,11 @@ class YouTubeManager:
     def _get_authenticated_credentials(self) -> Credentials:
         """認証済み認証情報を取得"""
         creds = None
-        token_file = 'token.pickle'
+        token_file = "token.pickle"
 
         # 既存のトークンファイルをチェック
         if os.path.exists(token_file):
-            with open(token_file, 'rb') as token:
+            with open(token_file, "rb") as token:
                 creds = pickle.load(token)
 
         # 認証情報が無効または存在しない場合
@@ -84,7 +85,7 @@ class YouTubeManager:
 
             # 認証情報を保存
             if creds:
-                with open(token_file, 'wb') as token:
+                with open(token_file, "wb") as token:
                     pickle.dump(creds, token)
 
         return creds
@@ -94,20 +95,18 @@ class YouTubeManager:
         try:
             # クライアント設定を準備
             if isinstance(self.client_secrets, str):
-                if self.client_secrets.startswith('{'):
+                if self.client_secrets.startswith("{"):
                     # JSON文字列の場合
                     client_config = json.loads(self.client_secrets)
                 else:
                     # ファイルパスの場合
-                    with open(self.client_secrets, 'r') as f:
+                    with open(self.client_secrets, "r") as f:
                         client_config = json.load(f)
             else:
                 client_config = self.client_secrets
 
             # OAuth フローを作成
-            flow = InstalledAppFlow.from_client_config(
-                client_config, self.SCOPES
-            )
+            flow = InstalledAppFlow.from_client_config(client_config, self.SCOPES)
 
             # ローカルサーバーで認証実行
             creds = flow.run_local_server(port=0)
@@ -119,13 +118,10 @@ class YouTubeManager:
             logger.error(f"OAuth flow failed: {e}")
             return None
 
-    def upload_video(self,
-                    video_path: str,
-                    metadata: Dict[str, Any],
-                    thumbnail_path: str = None,
-                    privacy_status: str = "private") -> Dict[str, Any]:
-        """
-        動画をYouTubeにアップロード
+    def upload_video(
+        self, video_path: str, metadata: Dict[str, Any], thumbnail_path: str = None, privacy_status: str = "private"
+    ) -> Dict[str, Any]:
+        """動画をYouTubeにアップロード
 
         Args:
             video_path: 動画ファイルのパス
@@ -135,6 +131,7 @@ class YouTubeManager:
 
         Returns:
             アップロード結果の情報
+
         """
         try:
             if not os.path.exists(video_path):
@@ -151,14 +148,12 @@ class YouTubeManager:
             media = MediaFileUpload(
                 video_path,
                 chunksize=-1,  # 一括アップロード
-                resumable=True
+                resumable=True,
             )
 
             # アップロードリクエストを作成
             insert_request = self.service.videos().insert(
-                part=','.join(upload_info.keys()),
-                body=upload_info,
-                media_body=media
+                part=",".join(upload_info.keys()), body=upload_info, media_body=media
             )
 
             # アップロード実行
@@ -167,7 +162,7 @@ class YouTubeManager:
             if not video_response:
                 raise Exception("Video upload failed")
 
-            video_id = video_response.get('id')
+            video_id = video_response.get("id")
             logger.info(f"Video uploaded successfully: {video_id}")
 
             # サムネイルをアップロード
@@ -177,37 +172,33 @@ class YouTubeManager:
 
             # 結果を整理
             result = {
-                'video_id': video_id,
-                'title': upload_info['snippet']['title'],
-                'description': upload_info['snippet']['description'],
-                'video_url': f"https://www.youtube.com/watch?v={video_id}",
-                'privacy_status': privacy_status,
-                'uploaded_at': datetime.now().isoformat(),
-                'file_size': file_size,
-                'thumbnail_uploaded': thumbnail_result is not None
+                "video_id": video_id,
+                "title": upload_info["snippet"]["title"],
+                "description": upload_info["snippet"]["description"],
+                "video_url": f"https://www.youtube.com/watch?v={video_id}",
+                "privacy_status": privacy_status,
+                "uploaded_at": datetime.now().isoformat(),
+                "file_size": file_size,
+                "thumbnail_uploaded": thumbnail_result is not None,
             }
 
             if thumbnail_result:
-                result['thumbnail_result'] = thumbnail_result
+                result["thumbnail_result"] = thumbnail_result
 
             return result
 
         except Exception as e:
             logger.error(f"Video upload failed: {e}")
-            return {
-                'error': str(e),
-                'video_path': video_path,
-                'upload_failed_at': datetime.now().isoformat()
-            }
+            return {"error": str(e), "video_path": video_path, "upload_failed_at": datetime.now().isoformat()}
 
     def _prepare_upload_metadata(self, metadata: Dict[str, Any], privacy_status: str) -> Dict[str, Any]:
         """アップロード用メタデータを準備"""
         # タイトルと説明文を準備
-        title = str(metadata.get('title', 'Untitled Video'))[:100]  # YouTube制限
-        description = str(metadata.get('description', ''))[:5000]  # YouTube制限
+        title = str(metadata.get("title", "Untitled Video"))[:100]  # YouTube制限
+        description = str(metadata.get("description", ""))[:5000]  # YouTube制限
 
         # タグを準備
-        tags = metadata.get('tags', [])
+        tags = metadata.get("tags", [])
         if isinstance(tags, list):
             # タグの長さ制限とクリーニング
             clean_tags = []
@@ -218,19 +209,14 @@ class YouTubeManager:
             tags = clean_tags
 
         # カテゴリIDを取得
-        category_id = self._get_category_id(metadata.get('category', 'News & Politics'))
+        category_id = self._get_category_id(metadata.get("category", "News & Politics"))
 
         upload_body = {
-            'snippet': {
-                'title': title,
-                'description': description,
-                'tags': tags,
-                'categoryId': category_id
+            "snippet": {"title": title, "description": description, "tags": tags, "categoryId": category_id},
+            "status": {
+                "privacyStatus": privacy_status,
+                "selfDeclaredMadeForKids": False,  # 子供向けコンテンツではない
             },
-            'status': {
-                'privacyStatus': privacy_status,
-                'selfDeclaredMadeForKids': False  # 子供向けコンテンツではない
-            }
         }
 
         return upload_body
@@ -238,29 +224,25 @@ class YouTubeManager:
     def _get_category_id(self, category_name: str) -> str:
         """カテゴリ名からYouTubeカテゴリIDを取得"""
         category_mapping = {
-            'News & Politics': '25',
-            'Education': '27',
-            'Business': '25',  # News & Politics に分類
-            'Finance': '25',   # News & Politics に分類
-            'Economics': '25', # News & Politics に分類
-            'Entertainment': '24',
-            'Technology': '28',
-            'Science': '28'
+            "News & Politics": "25",
+            "Education": "27",
+            "Business": "25",  # News & Politics に分類
+            "Finance": "25",  # News & Politics に分類
+            "Economics": "25",  # News & Politics に分類
+            "Entertainment": "24",
+            "Technology": "28",
+            "Science": "28",
         }
 
-        return category_mapping.get(category_name, '25')  # デフォルト: News & Politics
+        return category_mapping.get(category_name, "25")  # デフォルト: News & Politics
 
     def _execute_upload(self, insert_request) -> Dict[str, Any]:
         """アップロードを実行（リトライ機能付き）"""
-        import time
         import random
+        import time
 
         max_retries = 3
-        retriable_exceptions = (
-            httplib2.HttpLib2Error,
-            IOError,
-            HttpError
-        )
+        retriable_exceptions = (httplib2.HttpLib2Error, IOError, HttpError)
 
         for retry in range(max_retries):
             try:
@@ -270,7 +252,7 @@ class YouTubeManager:
             except HttpError as e:
                 if e.resp.status in [500, 502, 503, 504]:
                     # サーバーエラーの場合はリトライ
-                    wait_time = (2 ** retry) + random.uniform(0, 1)
+                    wait_time = (2**retry) + random.uniform(0, 1)
                     logger.warning(f"Server error {e.resp.status}, retrying in {wait_time:.2f}s...")
                     time.sleep(wait_time)
                     continue
@@ -280,7 +262,7 @@ class YouTubeManager:
                     raise
 
             except retriable_exceptions as e:
-                wait_time = (2 ** retry) + random.uniform(0, 1)
+                wait_time = (2**retry) + random.uniform(0, 1)
                 logger.warning(f"Retriable error, waiting {wait_time:.2f}s: {e}")
                 time.sleep(wait_time)
                 continue
@@ -294,140 +276,105 @@ class YouTubeManager:
     def _upload_thumbnail(self, video_id: str, thumbnail_path: str) -> Dict[str, Any]:
         """サムネイル画像をアップロード"""
         try:
-            self.service.thumbnails().set(
-                videoId=video_id,
-                media_body=MediaFileUpload(thumbnail_path)
-            ).execute()
+            self.service.thumbnails().set(videoId=video_id, media_body=MediaFileUpload(thumbnail_path)).execute()
 
             logger.info(f"Thumbnail uploaded for video: {video_id}")
-            return {
-                'uploaded': True,
-                'thumbnail_path': thumbnail_path,
-                'uploaded_at': datetime.now().isoformat()
-            }
+            return {"uploaded": True, "thumbnail_path": thumbnail_path, "uploaded_at": datetime.now().isoformat()}
 
         except Exception as e:
             logger.error(f"Thumbnail upload failed for {video_id}: {e}")
-            return {
-                'uploaded': False,
-                'error': str(e),
-                'thumbnail_path': thumbnail_path
-            }
+            return {"uploaded": False, "error": str(e), "thumbnail_path": thumbnail_path}
 
     def update_video(self, video_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         """動画情報を更新"""
         try:
             # 現在の動画情報を取得
-            current_video = self.service.videos().list(
-                part='snippet,status',
-                id=video_id
-            ).execute()
+            current_video = self.service.videos().list(part="snippet,status", id=video_id).execute()
 
-            if not current_video.get('items'):
+            if not current_video.get("items"):
                 raise ValueError(f"Video not found: {video_id}")
 
-            video_info = current_video['items'][0]
+            video_info = current_video["items"][0]
 
             # 更新データを準備
-            update_body = {
-                'id': video_id,
-                'snippet': video_info['snippet'],
-                'status': video_info['status']
-            }
+            update_body = {"id": video_id, "snippet": video_info["snippet"], "status": video_info["status"]}
 
             # 更新項目を適用
-            if 'title' in updates:
-                update_body['snippet']['title'] = str(updates['title'])[:100]
+            if "title" in updates:
+                update_body["snippet"]["title"] = str(updates["title"])[:100]
 
-            if 'description' in updates:
-                update_body['snippet']['description'] = str(updates['description'])[:5000]
+            if "description" in updates:
+                update_body["snippet"]["description"] = str(updates["description"])[:5000]
 
-            if 'tags' in updates:
-                update_body['snippet']['tags'] = updates['tags'][:30]
+            if "tags" in updates:
+                update_body["snippet"]["tags"] = updates["tags"][:30]
 
-            if 'privacy_status' in updates:
-                update_body['status']['privacyStatus'] = updates['privacy_status']
+            if "privacy_status" in updates:
+                update_body["status"]["privacyStatus"] = updates["privacy_status"]
 
             # 更新実行
-            response = self.service.videos().update(
-                part='snippet,status',
-                body=update_body
-            ).execute()
+            response = self.service.videos().update(part="snippet,status", body=update_body).execute()
 
             logger.info(f"Video updated: {video_id}")
-            return {
-                'updated': True,
-                'video_id': video_id,
-                'updated_at': datetime.now().isoformat()
-            }
+            return {"updated": True, "video_id": video_id, "updated_at": datetime.now().isoformat()}
 
         except Exception as e:
             logger.error(f"Video update failed for {video_id}: {e}")
-            return {
-                'updated': False,
-                'error': str(e),
-                'video_id': video_id
-            }
+            return {"updated": False, "error": str(e), "video_id": video_id}
 
     def get_video_info(self, video_id: str) -> Dict[str, Any]:
         """動画情報を取得"""
         try:
-            response = self.service.videos().list(
-                part='snippet,status,statistics',
-                id=video_id
-            ).execute()
+            response = self.service.videos().list(part="snippet,status,statistics", id=video_id).execute()
 
-            if not response.get('items'):
+            if not response.get("items"):
                 raise ValueError(f"Video not found: {video_id}")
 
-            video_data = response['items'][0]
+            video_data = response["items"][0]
 
             video_info = {
-                'video_id': video_id,
-                'title': video_data['snippet']['title'],
-                'description': video_data['snippet']['description'],
-                'published_at': video_data['snippet']['publishedAt'],
-                'privacy_status': video_data['status']['privacyStatus'],
-                'view_count': int(video_data['statistics'].get('viewCount', 0)),
-                'like_count': int(video_data['statistics'].get('likeCount', 0)),
-                'comment_count': int(video_data['statistics'].get('commentCount', 0)),
-                'video_url': f"https://www.youtube.com/watch?v={video_id}"
+                "video_id": video_id,
+                "title": video_data["snippet"]["title"],
+                "description": video_data["snippet"]["description"],
+                "published_at": video_data["snippet"]["publishedAt"],
+                "privacy_status": video_data["status"]["privacyStatus"],
+                "view_count": int(video_data["statistics"].get("viewCount", 0)),
+                "like_count": int(video_data["statistics"].get("likeCount", 0)),
+                "comment_count": int(video_data["statistics"].get("commentCount", 0)),
+                "video_url": f"https://www.youtube.com/watch?v={video_id}",
             }
 
             return video_info
 
         except Exception as e:
             logger.error(f"Failed to get video info for {video_id}: {e}")
-            return {'error': str(e), 'video_id': video_id}
+            return {"error": str(e), "video_id": video_id}
 
     def list_channel_videos(self, max_results: int = 50) -> List[Dict[str, Any]]:
         """チャンネルの動画一覧を取得"""
         try:
             # チャンネル情報を取得
-            channel_response = self.service.channels().list(
-                part='contentDetails',
-                mine=True
-            ).execute()
+            channel_response = self.service.channels().list(part="contentDetails", mine=True).execute()
 
-            if not channel_response.get('items'):
+            if not channel_response.get("items"):
                 raise ValueError("No channel found for authenticated user")
 
-            uploads_playlist_id = channel_response['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+            uploads_playlist_id = channel_response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
 
             # アップロード動画一覧を取得
-            playlist_response = self.service.playlistItems().list(
-                part='snippet',
-                playlistId=uploads_playlist_id,
-                maxResults=max_results
-            ).execute()
+            playlist_response = (
+                self.service.playlistItems()
+                .list(part="snippet", playlistId=uploads_playlist_id, maxResults=max_results)
+                .execute()
+            )
 
             videos = []
-            for item in playlist_response.get('items', []):
+            for item in playlist_response.get("items", []):
                 video_info = {
-                    'video_id': item['snippet']['resourceId']['videoId'],
-                    'title': item['snippet']['title'],
-                    'published_at': item['snippet']['publishedAt'],
-                    'video_url': f"https://www.youtube.com/watch?v={item['snippet']['resourceId']['videoId']}"
+                    "video_id": item["snippet"]["resourceId"]["videoId"],
+                    "title": item["snippet"]["title"],
+                    "published_at": item["snippet"]["publishedAt"],
+                    "video_url": f"https://www.youtube.com/watch?v={item['snippet']['resourceId']['videoId']}",
                 }
                 videos.append(video_info)
 
@@ -442,35 +389,24 @@ class YouTubeManager:
         """動画の公開スケジュールを設定"""
         try:
             # ISO形式の時刻文字列に変換
-            scheduled_time = publish_time.isoformat() + 'Z'
+            scheduled_time = publish_time.isoformat() + "Z"
 
             update_body = {
-                'id': video_id,
-                'status': {
-                    'privacyStatus': 'private',  # スケジュール設定時はprivate
-                    'publishAt': scheduled_time
-                }
+                "id": video_id,
+                "status": {
+                    "privacyStatus": "private",  # スケジュール設定時はprivate
+                    "publishAt": scheduled_time,
+                },
             }
 
-            response = self.service.videos().update(
-                part='status',
-                body=update_body
-            ).execute()
+            response = self.service.videos().update(part="status", body=update_body).execute()
 
             logger.info(f"Video scheduled for {publish_time}: {video_id}")
-            return {
-                'scheduled': True,
-                'video_id': video_id,
-                'publish_time': scheduled_time
-            }
+            return {"scheduled": True, "video_id": video_id, "publish_time": scheduled_time}
 
         except Exception as e:
             logger.error(f"Failed to schedule video {video_id}: {e}")
-            return {
-                'scheduled': False,
-                'error': str(e),
-                'video_id': video_id
-            }
+            return {"scheduled": False, "error": str(e), "video_id": video_id}
 
     def get_upload_quota(self) -> Dict[str, Any]:
         """アップロード制限情報を取得"""
@@ -478,30 +414,34 @@ class YouTubeManager:
             # YouTube APIの制限情報を取得
             # 実際の制限は動的に変更されるため、推定値を返す
             quota_info = {
-                'daily_upload_limit_mb': 128 * 1024,  # 128GB (推定)
-                'max_video_length_hours': 12,
-                'max_file_size_mb': 256 * 1024,  # 256GB (推定)
-                'estimated_remaining_quota': 'Unknown',  # APIでは正確な残量は取得できない
-                'reset_time': 'Daily at midnight PT'
+                "daily_upload_limit_mb": 128 * 1024,  # 128GB (推定)
+                "max_video_length_hours": 12,
+                "max_file_size_mb": 256 * 1024,  # 256GB (推定)
+                "estimated_remaining_quota": "Unknown",  # APIでは正確な残量は取得できない
+                "reset_time": "Daily at midnight PT",
             }
 
             return quota_info
 
         except Exception as e:
             logger.error(f"Failed to get upload quota: {e}")
-            return {'error': str(e)}
+            return {"error": str(e)}
+
 
 # グローバルインスタンス
 youtube_manager = YouTubeManager() if cfg.youtube_client_secret else None
 
-def upload_video(video_path: str, metadata: Dict[str, Any],
-                thumbnail_path: str = None, privacy_status: str = "private") -> Dict[str, Any]:
+
+def upload_video(
+    video_path: str, metadata: Dict[str, Any], thumbnail_path: str = None, privacy_status: str = "private"
+) -> Dict[str, Any]:
     """動画アップロードの簡易関数"""
     if youtube_manager:
         return youtube_manager.upload_video(video_path, metadata, thumbnail_path, privacy_status)
     else:
         logger.warning("YouTube manager not available")
-        return {'error': 'YouTube manager not configured'}
+        return {"error": "YouTube manager not configured"}
+
 
 def update_video(video_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     """動画更新の簡易関数"""
@@ -509,7 +449,8 @@ def update_video(video_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         return youtube_manager.update_video(video_id, updates)
     else:
         logger.warning("YouTube manager not available")
-        return {'error': 'YouTube manager not configured'}
+        return {"error": "YouTube manager not configured"}
+
 
 def get_video_info(video_id: str) -> Dict[str, Any]:
     """動画情報取得の簡易関数"""
@@ -517,7 +458,8 @@ def get_video_info(video_id: str) -> Dict[str, Any]:
         return youtube_manager.get_video_info(video_id)
     else:
         logger.warning("YouTube manager not available")
-        return {'error': 'YouTube manager not configured'}
+        return {"error": "YouTube manager not configured"}
+
 
 if __name__ == "__main__":
     # テスト実行
@@ -544,13 +486,13 @@ if __name__ == "__main__":
 
             # テスト用メタデータ
             test_metadata = {
-                'title': 'テスト動画 - 経済ニュース解説',
-                'description': 'これはテスト用の動画アップロードです。\n\n#テスト #経済ニュース',
-                'tags': ['テスト', '経済ニュース', '解説'],
-                'category': 'News & Politics'
+                "title": "テスト動画 - 経済ニュース解説",
+                "description": "これはテスト用の動画アップロードです。\n\n#テスト #経済ニュース",
+                "tags": ["テスト", "経済ニュース", "解説"],
+                "category": "News & Politics",
             }
 
-            print(f"\n=== Test Metadata ===")
+            print("\n=== Test Metadata ===")
             print(f"Title: {test_metadata['title']}")
             print(f"Tags: {test_metadata['tags']}")
 
@@ -564,7 +506,7 @@ if __name__ == "__main__":
                     break
 
             if test_video_path:
-                print(f"\n=== Test Video Upload (DRY RUN) ===")
+                print("\n=== Test Video Upload (DRY RUN) ===")
                 print(f"Would upload: {test_video_path}")
                 file_size = os.path.getsize(test_video_path)
                 print(f"File size: {file_size} bytes")

@@ -1,5 +1,4 @@
-"""
-YouTube Automation System
+"""YouTube Automation System.
 
 AIを活用したYouTube動画自動生成・投稿システム
 """

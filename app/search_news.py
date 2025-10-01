@@ -1,5 +1,4 @@
-"""
-ニュース収集モジュール
+"""ニュース収集モジュール
 
 Perplexity AIを使用して最新の経済ニュースを収集・要約します。
 """
@@ -7,12 +6,15 @@ Perplexity AIを使用して最新の経済ニュースを収集・要約しま�
 import json
 import logging
 import re
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, List
+
 import httpx
+
 from app.config import cfg
 
 logger = logging.getLogger(__name__)
+
 
 class NewsCollector:
     """ニュース収集クラス"""
@@ -26,8 +28,7 @@ class NewsCollector:
             logger.info("NewsCollector initialized for Perplexity")
 
     def collect_news(self, prompt_a: str, mode: str = "daily") -> List[Dict[str, Any]]:
-        """
-        ニュースを収集・要約
+        """ニュースを収集・要約
 
         Args:
             prompt_a: ニュース収集用プロンプト
@@ -35,6 +36,7 @@ class NewsCollector:
 
         Returns:
             ニュース項目のリスト
+
         """
         try:
             adjusted_prompt = self._adjust_prompt_for_mode(prompt_a, mode)
@@ -69,7 +71,7 @@ class NewsCollector:
 - 項目数は2-3件
 - 確実に存在する情報源
 - 短時間で処理可能な内容
-"""
+""",
         }
 
         adjustment = mode_adjustments.get(mode, "")
@@ -105,8 +107,8 @@ class NewsCollector:
 
     def _call_perplexity_with_retry(self, prompt: str, max_retries: int = 3) -> str:
         """リトライ機能付きPerplexity API呼び出し"""
-        import time
         import random
+        import time
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -115,9 +117,12 @@ class NewsCollector:
         payload = {
             "model": "llama-3-sonar-large-32k-online",
             "messages": [
-                {"role": "system", "content": "You are an expert financial news analyst. Provide answers in JSON format as requested."},
-                {"role": "user", "content": prompt}
-            ]
+                {
+                    "role": "system",
+                    "content": "You are an expert financial news analyst. Provide answers in JSON format as requested.",
+                },
+                {"role": "user", "content": prompt},
+            ],
         }
 
         for attempt in range(max_retries):
@@ -126,12 +131,12 @@ class NewsCollector:
                     response = client.post(self.api_url, json=payload, headers=headers, timeout=120.0)
                     response.raise_for_status()
                     data = response.json()
-                    content = data['choices'][0]['message']['content']
+                    content = data["choices"][0]["message"]["content"]
                     logger.debug(f"Perplexity response length: {len(content)}")
                     return content
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429 and attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    wait_time = (2**attempt) + random.uniform(0, 1)
                     logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
                     time.sleep(wait_time)
                     continue
@@ -152,13 +157,13 @@ class NewsCollector:
         """Perplexity応答からニュースデータを抽出"""
         try:
             # JSON部分を抽出
-            match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
+            match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
             if match:
                 json_str = match.group(1)
             else:
                 # フォールバックとして、最初と最後の[]を探す
-                start = response.find('[')
-                end = response.rfind(']') + 1
+                start = response.find("[")
+                end = response.rfind("]") + 1
                 if start != -1 and end != 0:
                     json_str = response[start:end]
                 else:
@@ -181,7 +186,7 @@ class NewsCollector:
             try:
                 required_fields = ["title", "url", "summary", "source"]
                 if not all(field in item and item[field] for field in required_fields):
-                    logger.warning(f"Skipping invalid news item: missing required fields")
+                    logger.warning("Skipping invalid news item: missing required fields")
                     continue
 
                 url = item.get("url", "")
@@ -197,7 +202,7 @@ class NewsCollector:
                     "source": str(item["source"]),
                     "impact_level": item.get("impact_level", "medium"),
                     "category": item.get("category", "経済"),
-                    "collected_at": datetime.now().isoformat()
+                    "collected_at": datetime.now().isoformat(),
                 }
                 validated.append(validated_item)
 
@@ -218,20 +223,22 @@ class NewsCollector:
                 "source": "システム",
                 "impact_level": "high",
                 "category": "システム",
-                "collected_at": current_time
+                "collected_at": current_time,
             }
         ]
         if mode == "test":
-            fallback_news.append({
-                "title": "テスト用ニュース項目",
-                "url": "https://example.com/test",
-                "summary": "これはテスト実行用のダミーニュースです。実際の運用では実在のニュースに置き換えられます。",
-                "key_points": ["テストデータ", "ダミー情報", "実運用時は削除"],
-                "source": "テストシステム",
-                "impact_level": "low",
-                "category": "テスト",
-                "collected_at": current_time
-            })
+            fallback_news.append(
+                {
+                    "title": "テスト用ニュース項目",
+                    "url": "https://example.com/test",
+                    "summary": "これはテスト実行用のダミーニュースです。実際の運用では実在のニュースに置き換えられます。",
+                    "key_points": ["テストデータ", "ダミー情報", "実運用時は削除"],
+                    "source": "テストシステム",
+                    "impact_level": "low",
+                    "category": "テスト",
+                    "collected_at": current_time,
+                }
+            )
         return fallback_news
 
     def search_specific_topic(self, topic: str, num_items: int = 3) -> List[Dict[str, Any]]:
@@ -262,8 +269,10 @@ JSON形式で回答してください：
             logger.error(f"Failed to search topic '{topic}': {e}")
             return self._get_fallback_news("special")
 
+
 # グローバルインスタンス
 news_collector = NewsCollector() if cfg.perplexity_api_key else None
+
 
 def collect_news(prompt_a: str, mode: str = "daily") -> List[Dict[str, Any]]:
     """ニュース収集の簡易関数"""
@@ -273,6 +282,7 @@ def collect_news(prompt_a: str, mode: str = "daily") -> List[Dict[str, Any]]:
         logger.warning("News collector not available, using fallback")
         return NewsCollector()._get_fallback_news(mode)
 
+
 def search_topic(topic: str, num_items: int = 3) -> List[Dict[str, Any]]:
     """トピック検索の簡易関数"""
     if news_collector:
@@ -280,6 +290,7 @@ def search_topic(topic: str, num_items: int = 3) -> List[Dict[str, Any]]:
     else:
         logger.warning("News collector not available, using fallback")
         return NewsCollector()._get_fallback_news("special")
+
 
 if __name__ == "__main__":
     print("Testing news collection...")

@@ -1,20 +1,22 @@
-"""
-音声認識（STT）モジュール
+"""音声認識（STT）モジュール
 
 ElevenLabs STTを使用して音声ファイルから正確なタイムスタンプ付きテキストを生成します。
 字幕生成の精度向上のために設計されています。
 """
 
-import os
 import logging
+import os
 import tempfile
-from typing import List, Dict, Any, Optional
 from datetime import datetime
-from pydub import AudioSegment
+from typing import Any, Dict, List
+
 from elevenlabs.client import ElevenLabs
+from pydub import AudioSegment
+
 from app.config import cfg
 
 logger = logging.getLogger(__name__)
+
 
 class STTManager:
     """音声認識管理クラス"""
@@ -28,12 +30,10 @@ class STTManager:
             self.client = ElevenLabs(api_key=self.api_key)
             logger.info("STT Manager initialized")
 
-    def transcribe_audio(self, audio_path: str,
-                        language: str = "ja",
-                        model: str = "eleven_multilingual_v2") -> List[Dict[str, Any]]:
-        """
-        音声ファイルを文字起こし
-        """
+    def transcribe_audio(
+        self, audio_path: str, language: str = "ja", model: str = "eleven_multilingual_v2"
+    ) -> List[Dict[str, Any]]:
+        """音声ファイルを文字起こし"""
         if not self.client:
             logger.error("STT client not initialized")
             return self._generate_fallback_transcription(audio_path)
@@ -54,7 +54,7 @@ class STTManager:
             logger.error(f"Audio transcription failed: {e}")
             return self._generate_fallback_transcription(audio_path)
         finally:
-            if 'processed_audio_path' in locals() and processed_audio_path != audio_path:
+            if "processed_audio_path" in locals() and processed_audio_path != audio_path:
                 try:
                     os.remove(processed_audio_path)
                 except Exception:
@@ -67,7 +67,7 @@ class STTManager:
             audio = audio.set_frame_rate(16000)
             audio = audio.set_channels(1)
             audio = audio.normalize()
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
                 temp_path = temp_file.name
             audio.export(temp_path, format="wav")
             logger.debug(f"Preprocessed audio saved to: {temp_path}")
@@ -86,7 +86,7 @@ class STTManager:
                         "word": word_data.get("word", ""),
                         "start": float(word_data.get("start", 0)),
                         "end": float(word_data.get("end", 0)),
-                        "confidence": float(word_data.get("confidence", 1.0))
+                        "confidence": float(word_data.get("confidence", 1.0)),
                     }
                     words.append(word_info)
             elif "text" in result:
@@ -106,12 +106,9 @@ class STTManager:
         current_time = 0.0
         for word in words:
             word_duration = max(0.2, len(word) * 0.05 + avg_word_duration)
-            estimated_words.append({
-                "word": word,
-                "start": current_time,
-                "end": current_time + word_duration,
-                "confidence": 0.5
-            })
+            estimated_words.append(
+                {"word": word, "start": current_time, "end": current_time + word_duration, "confidence": 0.5}
+            )
             current_time += word_duration + 0.1
         return estimated_words
 
@@ -130,12 +127,9 @@ class STTManager:
                     continue
                 if not word or len(word) > 50:
                     continue
-                validated_words.append({
-                    "word": word,
-                    "start": start_time,
-                    "end": end_time,
-                    "confidence": min(1.0, max(0.0, confidence))
-                })
+                validated_words.append(
+                    {"word": word, "start": start_time, "end": end_time, "confidence": min(1.0, max(0.0, confidence))}
+                )
             except (ValueError, TypeError) as e:
                 logger.debug(f"Skipping invalid word data: {e}")
                 continue
@@ -153,20 +147,14 @@ class STTManager:
             for i, word in enumerate(words):
                 start_time = i * word_duration
                 end_time = (i + 1) * word_duration
-                fallback_words.append({
-                    "word": word,
-                    "start": start_time,
-                    "end": end_time,
-                    "confidence": 0.1
-                })
+                fallback_words.append({"word": word, "start": start_time, "end": end_time, "confidence": 0.1})
             logger.warning(f"Generated fallback transcription with {len(fallback_words)} words")
             return fallback_words
         except Exception as e:
             logger.error(f"Fallback transcription generation failed: {e}")
             return []
 
-    def split_audio_for_stt(self, audio_path: str,
-                           max_duration_minutes: int = 10) -> List[str]:
+    def split_audio_for_stt(self, audio_path: str, max_duration_minutes: int = 10) -> List[str]:
         """長い音声ファイルをSTT用に分割"""
         try:
             audio = AudioSegment.from_file(audio_path)
@@ -180,7 +168,7 @@ class STTManager:
                 end_ms = min(start_ms + max_duration_ms, duration_ms)
                 chunk = audio[start_ms:end_ms]
                 chunk_filename = f"temp/audio_chunk_{chunk_count}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                os.makedirs('temp', exist_ok=True)
+                os.makedirs("temp", exist_ok=True)
                 chunk.export(chunk_filename, format="wav")
                 chunks.append(chunk_filename)
                 chunk_count += 1
@@ -223,8 +211,10 @@ class STTManager:
             logger.error(f"Long audio transcription failed: {e}")
             return self._generate_fallback_transcription(audio_path)
 
+
 # グローバルインスタンス
 stt_manager = STTManager()
+
 
 def transcribe_audio(audio_path: str, language: str = "ja") -> List[Dict[str, Any]]:
     """音声転写の簡易関数"""
@@ -234,6 +224,7 @@ def transcribe_audio(audio_path: str, language: str = "ja") -> List[Dict[str, An
         logger.warning("STT not available, using fallback")
         return stt_manager._generate_fallback_transcription(audio_path)
 
+
 def transcribe_long_audio(audio_path: str) -> List[Dict[str, Any]]:
     """長い音声転写の簡易関数"""
     if stt_manager.api_key:
@@ -242,14 +233,11 @@ def transcribe_long_audio(audio_path: str) -> List[Dict[str, Any]]:
         logger.warning("STT not available, using fallback")
         return stt_manager._generate_fallback_transcription(audio_path)
 
+
 if __name__ == "__main__":
     print("Testing STT functionality...")
     if stt_manager.api_key:
-        test_audio_paths = [
-            "test_audio.wav",
-            "sample.mp3",
-            "output_audio.wav"
-        ]
+        test_audio_paths = ["test_audio.wav", "sample.mp3", "output_audio.wav"]
         for test_path in test_audio_paths:
             if os.path.exists(test_path):
                 print(f"\nTesting with: {test_path}")
@@ -260,7 +248,9 @@ if __name__ == "__main__":
                     words = stt_manager.transcribe_audio(test_path)
                     print(f"Transcribed {len(words)} words:")
                     for word in words[:5]:
-                        print(f"  '{word['word']}' [{word['start']:.2f}s-{word['end']:.2f}s] (conf: {word['confidence']:.2f})")
+                        print(
+                            f"  '{word['word']}' [{word['start']:.2f}s-{word['end']:.2f}s] (conf: {word['confidence']:.2f})"
+                        )
                     if len(words) > 5:
                         print("  ...")
                 except Exception as e:

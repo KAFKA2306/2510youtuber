@@ -1,17 +1,19 @@
-"""
-台本生成モジュール
+"""台本生成モジュール
 
 ニュース要約から対談形式の台本を生成します。
 """
 
 import logging
 import re
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, List
+
 import google.generativeai as genai
+
 from app.config import cfg
 
 logger = logging.getLogger(__name__)
+
 
 class ScriptGenerator:
     """台本生成クラス"""
@@ -27,18 +29,17 @@ class ScriptGenerator:
                 raise ValueError("Gemini API key not configured")
 
             genai.configure(api_key=cfg.gemini_api_key)
-            self.client = genai.GenerativeModel('gemini-1.5-flash')
+            self.client = genai.GenerativeModel("gemini-1.5-flash")
             logger.info("Script generator initialized with Gemini")
 
         except Exception as e:
             logger.error(f"Failed to initialize script generator: {e}")
             raise
 
-    def generate_dialogue(self, news_items: List[Dict[str, Any]],
-                         prompt_b: str,
-                         target_duration_minutes: int = 30) -> str:
-        """
-        ニュース項目から対談台本を生成
+    def generate_dialogue(
+        self, news_items: List[Dict[str, Any]], prompt_b: str, target_duration_minutes: int = 30
+    ) -> str:
+        """ニュース項目から対談台本を生成
 
         Args:
             news_items: ニュース項目のリスト
@@ -47,12 +48,11 @@ class ScriptGenerator:
 
         Returns:
             対談形式の台本テキスト
+
         """
         try:
             news_summary = self._format_news_for_script(news_items)
-            full_prompt = self._build_script_prompt(
-                news_summary, prompt_b, target_duration_minutes
-            )
+            full_prompt = self._build_script_prompt(news_summary, prompt_b, target_duration_minutes)
             script = self._call_gemini_for_script(full_prompt)
             cleaned_script = self._clean_script(script)
 
@@ -72,25 +72,23 @@ class ScriptGenerator:
         formatted_sections = []
         for i, item in enumerate(news_items, 1):
             section = f"""
-【ニュース{i}】{item.get('title', '無題')}
-出典: {item.get('source', '不明')} ({item.get('url', '')})
-影響度: {item.get('impact_level', 'medium')}
-カテゴリ: {item.get('category', '経済')}
+【ニュース{i}】{item.get("title", "無題")}
+出典: {item.get("source", "不明")} ({item.get("url", "")})
+影響度: {item.get("impact_level", "medium")}
+カテゴリ: {item.get("category", "経済")}
 
 要約:
-{item.get('summary', '')}
+{item.get("summary", "")}
 
 重要ポイント:
 """
-            key_points = item.get('key_points', [])
+            key_points = item.get("key_points", [])
             for point in key_points:
                 section += f"- {point}\n"
             formatted_sections.append(section)
         return "\n".join(formatted_sections)
 
-    def _build_script_prompt(self, news_summary: str,
-                           base_prompt: str,
-                           target_duration: int) -> str:
+    def _build_script_prompt(self, news_summary: str, base_prompt: str, target_duration: int) -> str:
         """台本生成用の詳細プロンプトを構築"""
         target_chars = target_duration * 300
         full_prompt = f"""
@@ -123,7 +121,7 @@ class ScriptGenerator:
 4. ニュース3解説（5-7分）: 簡潔な解説
 5. 全体まとめ（3-5分）: 今日のポイント整理
 
-現在の日時: {datetime.now().strftime('%Y年%m月%d日 %H時')}
+現在の日時: {datetime.now().strftime("%Y年%m月%d日 %H時")}
 
 上記の要件に従って、自然で情報価値の高い対談台本を作成してください。
 """
@@ -131,8 +129,8 @@ class ScriptGenerator:
 
     def _call_gemini_for_script(self, prompt: str, max_retries: int = 3) -> str:
         """台本生成用Gemini API呼び出し"""
-        import time
         import random
+        import time
 
         for attempt in range(max_retries):
             try:
@@ -142,7 +140,7 @@ class ScriptGenerator:
                 return content
             except Exception as e:
                 if "rate_limit" in str(e).lower() and attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    wait_time = (2**attempt) + random.uniform(0, 1)
                     logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
                     time.sleep(wait_time)
                     continue
@@ -158,16 +156,16 @@ class ScriptGenerator:
         """台本テキストのクリーニング"""
         script = raw_script.strip()
         patterns_to_remove = [
-            r'^.*?以下.*?台本.*?[:：]\s*',
-            r'^.*?対談.*?[:：]\s*',
-            r'^.*?スクリプト.*?[:：]\s*',
+            r"^.*?以下.*?台本.*?[:：]\s*",
+            r"^.*?対談.*?[:：]\s*",
+            r"^.*?スクリプト.*?[:：]\s*",
         ]
         for pattern in patterns_to_remove:
-            script = re.sub(pattern, '', script, flags=re.IGNORECASE | re.MULTILINE)
-        script = re.sub(r'田中[氏さん]*[:：]', '田中:', script)
-        script = re.sub(r'鈴木[氏さん]*[:：]', '鈴木:', script)
-        script = re.sub(r'\n\s*\n\s*\n+', '\n\n', script)
-        script = re.sub(r'[^\w\s\n\r！？。、：（）「」『』【】\-\+\*\/\%\$\&\#\.]+', '', script)
+            script = re.sub(pattern, "", script, flags=re.IGNORECASE | re.MULTILINE)
+        script = re.sub(r"田中[氏さん]*[:：]", "田中:", script)
+        script = re.sub(r"鈴木[氏さん]*[:：]", "鈴木:", script)
+        script = re.sub(r"\n\s*\n\s*\n+", "\n\n", script)
+        script = re.sub(r"[^\w\s\n\r！？。、：（）「」『』【】\-\+\*\/\%\$\&\#\.]+", "", script)
         return script.strip()
 
     def _validate_script_quality(self, script: str, target_duration: int) -> bool:
@@ -178,8 +176,8 @@ class ScriptGenerator:
             if not (min_chars <= len(script) <= max_chars):
                 logger.warning(f"Script length {len(script)} not in range {min_chars}-{max_chars}")
                 return False
-            tanaka_lines = len(re.findall(r'^田中:', script, re.MULTILINE))
-            suzuki_lines = len(re.findall(r'^鈴木:', script, re.MULTILINE))
+            tanaka_lines = len(re.findall(r"^田中:", script, re.MULTILINE))
+            suzuki_lines = len(re.findall(r"^鈴木:", script, re.MULTILINE))
             if tanaka_lines < 5 or suzuki_lines < 5:
                 logger.warning(f"Insufficient dialogue lines: 田中={tanaka_lines}, 鈴木={suzuki_lines}")
                 return False
@@ -190,9 +188,9 @@ class ScriptGenerator:
                 logger.warning(f"Unbalanced dialogue ratio: {line_ratio}")
                 return False
             required_elements = [
-                r'(今日|本日)',
-                r'(によると|報道|発表)',
-                r'(パーセント|％|\d+%)',
+                r"(今日|本日)",
+                r"(によると|報道|発表)",
+                r"(パーセント|％|\d+%)",
             ]
             missing_elements = []
             for element in required_elements:
@@ -209,7 +207,7 @@ class ScriptGenerator:
 
     def _get_fallback_script(self, news_items: List[Dict[str, Any]]) -> str:
         """フォールバック用の基本台本"""
-        current_date = datetime.now().strftime('%Y年%m月%d日')
+        current_date = datetime.now().strftime("%Y年%m月%d日")
         script = f"""田中: 皆さん、こんにちは。{current_date}の経済ニュース分析をお届けします。今日は私、田中と、
 
 鈴木: 金融アナリストの鈴木がお送りします。今日は重要なニュースがいくつか入ってきていますね。
@@ -217,9 +215,9 @@ class ScriptGenerator:
 田中: そうですね。では早速、今日のトピックを見ていきましょう。
 """
         for i, item in enumerate(news_items, 1):
-            title = item.get('title', f'ニュース{i}')
-            summary = item.get('summary', 'システムエラーにより詳細を取得できませんでした。')
-            source = item.get('source', '情報源不明')
+            title = item.get("title", f"ニュース{i}")
+            summary = item.get("summary", "システムエラーにより詳細を取得できませんでした。")
+            source = item.get("source", "情報源不明")
             script += f"""
 田中: {i}番目のニュースです。{title}について、{source}からの報道です。
 
@@ -262,18 +260,22 @@ class ScriptGenerator:
             return self._clean_script(response)
         except Exception as e:
             logger.error(f"Failed to generate short script for '{topic}': {e}")
-            return self._get_fallback_script([{
-                'title': topic,
-                'summary': f'{topic}に関する詳細な情報をお届けする予定でしたが、システムエラーが発生しました。',
-                'source': 'システム'
-            }])
+            return self._get_fallback_script(
+                [
+                    {
+                        "title": topic,
+                        "summary": f"{topic}に関する詳細な情報をお届けする予定でしたが、システムエラーが発生しました。",
+                        "source": "システム",
+                    }
+                ]
+            )
+
 
 # グローバルインスタンス
 script_generator = ScriptGenerator() if cfg.gemini_api_key else None
 
-def generate_dialogue(news_items: List[Dict[str, Any]],
-                     prompt_b: str,
-                     target_duration: int = 30) -> str:
+
+def generate_dialogue(news_items: List[Dict[str, Any]], prompt_b: str, target_duration: int = 30) -> str:
     """台本生成の簡易関数"""
     if script_generator:
         return script_generator.generate_dialogue(news_items, prompt_b, target_duration)
@@ -281,40 +283,40 @@ def generate_dialogue(news_items: List[Dict[str, Any]],
         logger.warning("Script generator not available, using fallback")
         return ScriptGenerator()._get_fallback_script(news_items)
 
+
 def generate_short_script(topic: str, duration_minutes: int = 10) -> str:
     """短尺台本生成の簡易関数"""
     if script_generator:
         return script_generator.generate_short_script(topic, duration_minutes)
     else:
         logger.warning("Script generator not available, using fallback")
-        return ScriptGenerator()._get_fallback_script([{
-            'title': topic,
-            'summary': f'{topic}について',
-            'source': 'システム'
-        }])
+        return ScriptGenerator()._get_fallback_script(
+            [{"title": topic, "summary": f"{topic}について", "source": "システム"}]
+        )
+
 
 if __name__ == "__main__":
     print("Testing script generation...")
     if cfg.gemini_api_key:
         test_news = [
             {
-                'title': '日経平均株価が年初来高値を更新',
-                'summary': '東京株式市場で日経平均株価が前日比2.1%上昇し、年初来高値を更新した。好調な企業決算と海外投資家の買いが支えとなった。',
-                'source': '日本経済新聞',
-                'url': 'https://example.com/news1',
-                'key_points': ['年初来高値更新', '2.1%上昇', '好調な企業決算'],
-                'impact_level': 'high',
-                'category': '金融'
+                "title": "日経平均株価が年初来高値を更新",
+                "summary": "東京株式市場で日経平均株価が前日比2.1%上昇し、年初来高値を更新した。好調な企業決算と海外投資家の買いが支えとなった。",
+                "source": "日本経済新聞",
+                "url": "https://example.com/news1",
+                "key_points": ["年初来高値更新", "2.1%上昇", "好調な企業決算"],
+                "impact_level": "high",
+                "category": "金融",
             },
             {
-                'title': '新興企業の資金調達が過去最高に',
-                'summary': 'スタートアップ企業による資金調達額が第3四半期で過去最高の1兆円を突破。AI関連企業への投資が特に活発。',
-                'source': 'TechCrunch Japan',
-                'url': 'https://example.com/news2',
-                'key_points': ['資金調達額過去最高', '1兆円突破', 'AI関連投資活発'],
-                'impact_level': 'medium',
-                'category': '企業'
-            }
+                "title": "新興企業の資金調達が過去最高に",
+                "summary": "スタートアップ企業による資金調達額が第3四半期で過去最高の1兆円を突破。AI関連企業への投資が特に活発。",
+                "source": "TechCrunch Japan",
+                "url": "https://example.com/news2",
+                "key_points": ["資金調達額過去最高", "1兆円突破", "AI関連投資活発"],
+                "impact_level": "medium",
+                "category": "企業",
+            },
         ]
         try:
             generator = ScriptGenerator()
