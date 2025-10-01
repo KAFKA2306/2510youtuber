@@ -1,9 +1,9 @@
-"
+"""""
 メタデータ生成モジュール
 
 YouTube動画のタイトル、説明文、タグ、カテゴリを自動生成します。
 SEO最適化と視聴者エンゲージメント向上を目的とした高品質なメタデータを作成します。
-"
+"""
 
 import re
 import json
@@ -36,7 +36,8 @@ class MetadataGenerator:
             logger.error(f"Failed to initialize metadata generator: {e}")
             raise
 
-    def generate_youtube_metadata(self,
+    def generate_youtube_metadata(
+                                 self,
                                  news_items: List[Dict[str, Any]],
                                  script_content: str = "",
                                  mode: str = "daily") -> Dict[str, Any]:
@@ -74,7 +75,7 @@ class MetadataGenerator:
 {news_summary}
 
 【台本抜粋】
-{script_content[:500] if script_content else "台本データなし"}}...
+{script_content[:500] if script_content else "台本データなし"}...
 
 【要件】
 1. タイトル: 50文字以内、クリック率向上を意識
@@ -202,7 +203,7 @@ class MetadataGenerator:
             validated["category"] = str(metadata.get("category", "News & Politics"))
             validated["thumbnail_text"] = str(metadata.get("thumbnail_text", "経済ニュース"))
             validated["seo_keywords"] = metadata.get("seo_keywords", [])
-            validated["target_audience"] = str(metadata.get("target_audience", "経済に関心のある視聴者")),
+            validated["target_audience"] = str(metadata.get("target_audience", "経済に関心のある視聴者"))
             validated["estimated_watch_time"] = str(metadata.get("estimated_watch_time", "15-30分"))
             validated["generated_at"] = datetime.now().isoformat()
             validated["news_count"] = len(news_items)
@@ -305,7 +306,7 @@ class MetadataGenerator:
 本日の重要な経済ニュースを専門家が分かりやすく解説します。
 
 📈 今日のトピック：
-""" + "\n".join([f"• {item.get('title', '無題')}" for item in news_items[:3]]) + """
+""" + "\n".join([f"• {item.get('title', '無題')}" for item in news_items[:3]]) + f"""
 
 🎯 この動画で学べること：
 • 最新の経済動向と市場への影響
@@ -379,7 +380,8 @@ JSON形式で回答してください：
 # グローバルインスタンス
 metadata_generator = MetadataGenerator() if cfg.gemini_api_key else None
 
-def generate_youtube_metadata(news_items: List[Dict[str, Any]],
+def generate_youtube_metadata(
+                             news_items: List[Dict[str, Any]],
                              script_content: str = "",
                              mode: str = "daily") -> Dict[str, Any]:
     """YouTube メタデータ生成の簡易関数"""

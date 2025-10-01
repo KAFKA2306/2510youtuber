@@ -128,6 +128,16 @@ class Config:
         """TTSチャンクサイズ（文字数）"""
         return int(os.getenv('TTS_CHUNK_SIZE', '1500'))
 
+    @property
+    def ffmpeg_path(self) -> str:
+        """FFmpeg実行パス"""
+        return os.getenv('FFMPEG_PATH', 'ffmpeg')
+
+    @property
+    def video_quality(self) -> str:
+        """動画品質"""
+        return os.getenv('VIDEO_QUALITY', 'high')
+
     def _setup_logging(self):
         """ログ設定"""
         log_level = getattr(logging, self.log_level.upper(), logging.INFO)
