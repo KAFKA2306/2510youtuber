@@ -343,6 +343,240 @@ python -c "import pydub; print('Pydub OK')"
    - システムにFFmpegがインストールされているか確認
    - PATHが正しく設定されているか確認
 
+## 自動実行の設定（ローカル環境）
+
+### 概要
+
+YouTube動画の自動生成・アップロードを毎日定時実行するシステムです。
+
+### セットアップ方法
+
+#### 方法1: Systemd Timer（推奨 - Linux）
+
+**1. サービスとタイマーをインストール:**
+```bash
+sudo cp systemd/youtube-automation.service /etc/systemd/system/
+sudo cp systemd/youtube-automation.timer /etc/systemd/system/
+```
+
+**2. Systemdをリロード:**
+```bash
+sudo systemctl daemon-reload
+```
+
+**3. タイマーを有効化して起動:**
+```bash
+sudo systemctl enable --now youtube-automation.timer
+```
+
+**4. 状態確認:**
+```bash
+# タイマーの状態確認
+sudo systemctl status youtube-automation.timer
+
+# 次回実行時刻の確認
+sudo systemctl list-timers --all | grep youtube
+```
+
+**5. ログ確認:**
+```bash
+# Systemdログ
+journalctl -u youtube-automation.service -f
+
+# アプリケーションログ
+tail -f logs/systemd.log
+tail -f logs/daily_run_*.log
+```
+
+**6. 手動実行（テスト）:**
+```bash
+sudo systemctl start youtube-automation.service
+```
+
+#### 方法2: Cron（代替方法）
+
+**1. Crontabを編集:**
+```bash
+crontab -e
+```
+
+**2. 毎日9時に実行する設定を追加:**
+```cron
+# 毎日9:00 AMに実行
+0 9 * * * /home/kafka/projects/youtuber/run_daily.sh >> /home/kafka/projects/youtuber/logs/cron.log 2>&1
+```
+
+**3. Crontabを確認:**
+```bash
+crontab -l
+```
+
+**Cron時刻の書式:**
+```
+分 時 日 月 曜日 コマンド
+0  9  *  *  *    実行するコマンド
+
+例:
+0 9 * * *     # 毎日9:00
+0 */6 * * *   # 6時間ごと
+0 9 * * 1     # 毎週月曜9:00
+0 9 1 * *     # 毎月1日9:00
+```
+
+#### 方法3: 手動実行
+
+**シェルスクリプトから:**
+```bash
+./run_daily.sh
+```
+
+**Pythonから直接:**
+```bash
+source .venv/bin/activate
+python3 -m app.main daily
+```
+
+### 実行時刻の変更
+
+#### Systemdの場合
+
+`/etc/systemd/system/youtube-automation.timer` を編集:
+```ini
+[Timer]
+# 毎日9:00に実行
+OnCalendar=*-*-* 09:00:00
+
+# 他の例:
+# OnCalendar=*-*-* 06:00:00  # 毎日6:00
+# OnCalendar=Mon *-*-* 09:00:00  # 毎週月曜9:00
+# OnCalendar=*-*-01 09:00:00  # 毎月1日9:00
+```
+
+変更後は再読み込み:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart youtube-automation.timer
+```
+
+#### Cronの場合
+
+`crontab -e` で時刻を編集してください。
+
+### ログとモニタリング
+
+**ログファイルの場所:**
+- 日次実行ログ: `logs/daily_run_YYYYMMDD_HHMMSS.log`
+- Systemdログ: `logs/systemd.log`
+- Systemdエラーログ: `logs/systemd-error.log`
+- アプリケーションログ: `logs/app.log`
+- Cronログ: `logs/cron.log`（Cron使用時）
+
+**最終実行結果の確認:**
+```bash
+# Systemdの場合
+sudo systemctl status youtube-automation.service
+
+# ログから確認
+tail -n 100 logs/daily_run_*.log | grep -E "(Starting|completed|failed)"
+```
+
+**Discord通知:**
+
+`.env`で`DISCORD_WEBHOOK_URL`を設定すると、実行結果が自動通知されます：
+- ✅ 成功: 動画URL、実行時間、生成ファイル数
+- ❌ 失敗: エラー内容、失敗したステップ
+
+### トラブルシューティング
+
+#### サービスが起動しない
+
+```bash
+# サービスログを確認
+journalctl -u youtube-automation.service -n 50
+
+# 手動でテスト実行
+./run_daily.sh
+```
+
+**よくある原因:**
+- 仮想環境のパスが間違っている
+- `.env`ファイルが見つからない
+- 実行権限がない: `chmod +x run_daily.sh`
+
+#### タイマーがトリガーされない
+
+```bash
+# タイマーがアクティブか確認
+sudo systemctl list-timers --all | grep youtube
+
+# タイマーの状態確認
+sudo systemctl status youtube-automation.timer
+```
+
+**確認事項:**
+- タイマーが有効化されているか: `sudo systemctl enable youtube-automation.timer`
+- 時刻設定が正しいか: `/etc/systemd/system/youtube-automation.timer`
+
+#### 仮想環境のエラー
+
+```bash
+# 仮想環境を再作成
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+#### 権限エラー
+
+```bash
+# ログディレクトリの権限確認
+ls -ld logs/
+chmod 755 logs/
+
+# スクリプトの実行権限確認
+chmod +x run_daily.sh
+```
+
+### 自動化の無効化
+
+#### Systemdの場合
+
+```bash
+# タイマーを停止して無効化
+sudo systemctl stop youtube-automation.timer
+sudo systemctl disable youtube-automation.timer
+
+# サービスファイルを削除（完全に削除する場合）
+sudo rm /etc/systemd/system/youtube-automation.{service,timer}
+sudo systemctl daemon-reload
+```
+
+#### Cronの場合
+
+```bash
+# Crontabを編集して該当行を削除またはコメントアウト
+crontab -e
+# 行頭に # を追加: # 0 9 * * * /home/kafka/projects/youtuber/run_daily.sh
+```
+
+### セキュリティ注意事項
+
+**重要:**
+- `.env`ファイルのパーミッションを制限: `chmod 600 .env`
+- `.env`ファイルは絶対にGitにコミットしない
+- APIキーが露出した場合は即座にローテーション
+- ログファイルを定期的にレビュー
+- `token.pickle`（YouTube認証）もGitにコミットしない
+
+**推奨設定:**
+```bash
+# 機密ファイルの権限設定
+chmod 600 .env
+chmod 600 token.pickle
+chmod 600 secret/*.json
+chmod 700 secret/
+```
+
 ### 次のステップ
 
 環境構築が完了したら、[実装ガイド](./implementation.md)に進んでください。
