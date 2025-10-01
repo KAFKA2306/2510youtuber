@@ -43,7 +43,6 @@ class STTManager:
             with open(processed_audio_path, "rb") as audio_file:
                 response = self.client.speech_to_text.convert(
                     audio_file,
-                    language=language,
                     timestamp_granularities=["word"],
                 )
             words = self._process_transcription_result(response.dict())

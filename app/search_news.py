@@ -115,7 +115,7 @@ class NewsCollector:
             "Content-Type": "application/json",
         }
         payload = {
-            "model": "llama-3-sonar-small-32k-online",
+            "model": "llama-3-sonar-small-128k-online",
             "messages": [
                 {
                     "role": "system",
