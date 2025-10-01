@@ -9,10 +9,10 @@ from datetime import datetime
 
 from flask import Flask, jsonify, render_template_string, request
 
-from config import cfg
-from discord import discord_notifier
-from main import workflow
-from sheets import sheets_manager
+from .config import cfg
+from .discord import discord_notifier
+from .main import workflow
+from .sheets import sheets_manager
 
 app = Flask(__name__)
 

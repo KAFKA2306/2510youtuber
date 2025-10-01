@@ -16,7 +16,8 @@ from elevenlabs import Voice, VoiceSettings
 from elevenlabs.client import AsyncElevenLabs
 from pydub import AudioSegment
 
-from config import cfg
+from .config import cfg
+from .tts_fallback import tts_fallback_manager
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class TTSManager:
     def __init__(self):
         self.api_key = cfg.elevenlabs_api_key
         self.client = None
-        self.max_concurrent = cfg.max_concurrent_tts
+        self.max_concurrent = 2  # Directly set to 2 to handle ElevenLabs rate limit
         self.chunk_size = cfg.tts_chunk_size
 
         if not self.api_key:
@@ -35,6 +36,29 @@ class TTSManager:
         else:
             self.client = AsyncElevenLabs(api_key=self.api_key)
             logger.info("TTS Manager initialized with ElevenLabs")
+
+    async def _elevenlabs_synthesize_logic(self, text: str, output_path: str, voice_config: Dict[str, Any]) -> bool:
+        """ElevenLabsによる実際の音声合成ロジック"""
+        if not self.client:
+            raise Exception("ElevenLabs client not initialized")
+        try:
+            audio_stream = self.client.text_to_speech.convert(
+                text=text,
+                voice_id=voice_config["voice_id"],
+                model_id="eleven_multilingual_v2",
+            )
+
+            audio_bytes = b""
+            async for chunk in audio_stream:
+                audio_bytes += chunk
+
+            with open(output_path, "wb") as f:
+                f.write(audio_bytes)
+            return True
+
+        except Exception as e:
+            logger.error(f"ElevenLabs TTS API call failed: {e}")
+            return False
 
     def split_text_for_tts(self, text: str) -> List[Dict[str, Any]]:
         """テキストをTTS用チャンクに分割"""
@@ -121,51 +145,6 @@ class TTSManager:
         }
         return voice_configs.get(speaker, voice_configs["田中"])
 
-    async def synthesize_chunk(self, chunk: Dict[str, Any]) -> Optional[str]:
-        """単一チャンクの音声合成"""
-        try:
-            audio_data = await self._call_elevenlabs_tts(text=chunk["text"], voice_config=chunk["voice_config"])
-            if audio_data:
-                output_path = self._save_audio_chunk(chunk["id"], audio_data)
-                logger.debug(f"Generated audio for chunk {chunk['id']}: {output_path}")
-                return output_path
-            else:
-                logger.warning(f"Failed to generate audio for chunk {chunk['id']}")
-                return None
-        except Exception as e:
-            logger.error(f"Error synthesizing chunk {chunk['id']}: {e}")
-            return None
-
-    async def _call_elevenlabs_tts(self, text: str, voice_config: Dict[str, Any]) -> Optional[bytes]:
-        """ElevenLabs TTS APIを呼び出し"""
-        if not self.client:
-            return None
-        try:
-            audio_stream = self.client.text_to_speech.convert(
-                text=text,
-                voice_id=voice_config["voice_id"],
-                model_id="eleven_multilingual_v2",
-            )
-
-            audio_bytes = b""
-            async for chunk in audio_stream:
-                audio_bytes += chunk
-            return audio_bytes
-
-        except Exception as e:
-            logger.error(f"ElevenLabs TTS API call failed: {e}")
-            return None
-
-    def _save_audio_chunk(self, chunk_id: str, audio_data: bytes) -> str:
-        """音声チャンクを一時ファイルに保存"""
-        os.makedirs("temp", exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_hash = hashlib.md5(chunk_id.encode()).hexdigest()[:8]
-        filename = f"temp/tts_{timestamp}_{file_hash}.mp3"
-        with open(filename, "wb") as f:
-            f.write(audio_data)
-        return filename
-
     async def synthesize_script(self, script_text: str, target_voice: str = "neutral") -> List[str]:
         """台本全体を音声合成"""
         try:
@@ -177,51 +156,71 @@ class TTSManager:
             logger.info(f"Starting TTS for {len(chunks)} chunks with max_concurrent={self.max_concurrent}")
             semaphore = asyncio.Semaphore(self.max_concurrent)
 
-            async def limited_synthesis(chunk):
-                async with semaphore:
-                    return await self.synthesize_chunk(chunk)
+            audio_paths = []
+            for chunk in chunks:
+                output_path = f"temp/tts_chunk_{chunk['id']}.mp3"
+                elevenlabs_synthesizer_func = None
+                if self.client:
+                    async def elevenlabs_wrapper(text, path, vc=chunk["voice_config"]):
+                        return await self._elevenlabs_synthesize_logic(text, path, vc)
+                    elevenlabs_synthesizer_func = elevenlabs_wrapper
 
-            tasks = [limited_synthesis(chunk) for chunk in chunks]
-            audio_paths = await asyncio.gather(*tasks, return_exceptions=True)
+                success = await tts_fallback_manager.synthesize_with_fallback(
+                    chunk["text"],
+                    output_path,
+                    elevenlabs_synthesizer=elevenlabs_synthesizer_func
+                )
+                if success:
+                    audio_paths.append(output_path)
+                else:
+                    logger.error(f"Failed to synthesize chunk {chunk['id']} with all fallbacks.")
 
-            valid_paths = []
-            for i, path in enumerate(audio_paths):
-                if isinstance(path, Exception):
-                    logger.error(f"Chunk {i} failed: {path}")
-                elif path:
-                    valid_paths.append(path)
-
-            if not valid_paths:
+            if not audio_paths:
                 logger.error("No audio chunks were successfully generated")
-                return self._generate_fallback_audio(script_text)
+                return []
 
-            combined_path = self._combine_audio_files(valid_paths, chunks)
-            self._cleanup_temp_files(valid_paths)
+            combined_path = self._combine_audio_files(audio_paths, chunks)
+            self._cleanup_temp_files(audio_paths)
             logger.info(f"TTS completed: {combined_path}")
             return [combined_path]
 
         except Exception as e:
             logger.error(f"Script synthesis failed: {e}")
-            return self._generate_fallback_audio(script_text)
+            return []
 
     def _combine_audio_files(self, audio_paths: List[str], chunks: List[Dict[str, Any]]) -> str:
         """音声ファイルを結合"""
         try:
             combined = AudioSegment.empty()
-            path_chunk_map = {chunks[i]["id"]: audio_paths[i] for i in range(min(len(chunks), len(audio_paths)))}
+            # Create a map from chunk_id to its original order for sorting
+            chunk_order_map = {chunk["id"]: chunk["order"] for chunk in chunks}
+            
+            # Create a map from output_path to chunk_id to link paths back to original chunks
+            # This assumes audio_paths are generated in the order of chunks, or we need a more robust mapping
+            # For now, let's assume audio_paths correspond to chunks in order of successful synthesis
+            
+            # Re-sort audio_paths based on original chunk order
+            sorted_audio_paths_with_chunks = []
+            for path in audio_paths:
+                # Extract chunk_id from path (e.g., temp/tts_chunk_田中_0_0.mp3 -> 田中_0_0)
+                chunk_id_match = re.search(r'tts_chunk_(.+?)\.mp3', path)
+                if chunk_id_match:
+                    chunk_id = chunk_id_match.group(1)
+                    if chunk_id in chunk_order_map:
+                        sorted_audio_paths_with_chunks.append((chunk_order_map[chunk_id], path))
+            
+            sorted_audio_paths_with_chunks.sort(key=lambda x: x[0])
+            sorted_audio_paths = [path for order, path in sorted_audio_paths_with_chunks]
 
-            for chunk in sorted(chunks, key=lambda x: x["order"]):
-                chunk_id = chunk["id"]
-                if chunk_id in path_chunk_map:
-                    path = path_chunk_map[chunk_id]
-                    if os.path.exists(path):
-                        try:
-                            segment = AudioSegment.from_file(path, format="mp3")
-                            combined += segment
-                            if len(combined) > 0:
-                                combined += AudioSegment.silent(duration=300)
-                        except Exception as e:
-                            logger.warning(f"Failed to process audio file {path}: {e}")
+            for path in sorted_audio_paths:
+                if os.path.exists(path):
+                    try:
+                        segment = AudioSegment.from_file(path, format="mp3")
+                        combined += segment
+                        if len(combined) > 0:
+                            combined += AudioSegment.silent(duration=300) # Add a small pause between chunks
+                    except Exception as e:
+                        logger.warning(f"Failed to process audio file {path}: {e}")
 
             output_path = f"output_audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
             combined.export(output_path, format="wav")
@@ -246,20 +245,6 @@ class TTSManager:
                     os.remove(path)
             except Exception as e:
                 logger.warning(f"Failed to cleanup temp file {path}: {e}")
-
-    def _generate_fallback_audio(self, script_text: str) -> List[str]:
-        """フォールバック用の無音音声を生成"""
-        try:
-            estimated_duration_ms = len(script_text) * 100
-            duration_ms = max(5000, min(estimated_duration_ms, 3600000))
-            silence = AudioSegment.silent(duration=duration_ms)
-            fallback_path = f"fallback_silence_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-            silence.export(fallback_path, format="wav")
-            logger.warning(f"Generated fallback silence audio: {fallback_path} ({duration_ms}ms)")
-            return [fallback_path]
-        except Exception as e:
-            logger.error(f"Fallback audio generation failed: {e}")
-            return []
 
     def get_audio_info(self, audio_path: str) -> Dict[str, Any]:
         """音声ファイルの情報を取得"""

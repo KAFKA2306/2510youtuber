@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 
 import httpx
 
-from config import cfg
+from .config import cfg
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +115,7 @@ class NewsCollector:
             "Content-Type": "application/json",
         }
         payload = {
-            "model": "llama-3-sonar-small-online",
+            "model": "sonar",
             "messages": [
                 {
                     "role": "system",

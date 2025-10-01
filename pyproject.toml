@@ -25,7 +25,16 @@ dependencies = [
     "psutil==5.9.6",
     "gunicorn==21.2.0",
     "flask==3.0.0",
+    "SpeechRecognition",
+    "pyttsx3",
+    "openai-whisper",
+    "gtts",
+    "coqui-tts",
+    "openai",
 ]
+
+[tool.setuptools.packages]
+find = { where = ["app"] }
 
 [tool.ruff]
 # Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.

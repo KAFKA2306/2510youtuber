@@ -1,9 +1,3 @@
-"""音声認識（STT）モジュール
-
-ElevenLabs STTを使用して音声ファイルから正確なタイムスタンプ付きテキストを生成します。
-字幕生成の精度向上のために設計されています。
-"""
-
 import logging
 import os
 import tempfile
@@ -13,7 +7,8 @@ from typing import Any, Dict, List
 from elevenlabs.client import ElevenLabs
 from pydub import AudioSegment
 
-from config import cfg
+from .config import cfg
+from .stt_fallback import stt_fallback_manager
 
 logger = logging.getLogger(__name__)
 
@@ -30,33 +25,33 @@ class STTManager:
             self.client = ElevenLabs(api_key=self.api_key)
             logger.info("STT Manager initialized")
 
-    def transcribe_audio(
-        self, audio_path: str, language: str = "ja"
-    ) -> List[Dict[str, Any]]:
-        """音声ファイルを文字起こし"""
+    def _elevenlabs_transcribe_logic(self, audio_path: str) -> List[Dict[str, Any]]:
+        """ElevenLabsによる実際の文字起こしロジック"""
         if not self.client:
-            logger.error("STT client not initialized")
-            return self._generate_fallback_transcription(audio_path)
+            raise Exception("ElevenLabs client not initialized")
 
+        processed_audio_path = self._preprocess_audio(audio_path)
         try:
-            processed_audio_path = self._preprocess_audio(audio_path)
             with open(processed_audio_path, "rb") as audio_file:
                 response = self.client.speech_to_text.convert(
                     file=audio_file,
                     model_id="scribe_v1"
                 )
             words = self._process_transcription_result(response.dict())
-            logger.info(f"Transcribed {len(words)} words from {audio_path}")
+            logger.info(f"ElevenLabs transcribed {len(words)} words from {audio_path}")
             return words
-        except Exception as e:
-            logger.error(f"Audio transcription failed: {e}")
-            return self._generate_fallback_transcription(audio_path)
         finally:
-            if "processed_audio_path" in locals() and processed_audio_path != audio_path:
+            if processed_audio_path != audio_path:
                 try:
                     os.remove(processed_audio_path)
                 except Exception:
                     pass
+
+    def transcribe_audio(
+        self, audio_path: str, language: str = "ja"
+    ) -> List[Dict[str, Any]]:
+        """音声ファイルを文字起こし（フォールバック付き）"""
+        return stt_fallback_manager.transcribe_with_fallback(audio_path)
 
     def _preprocess_audio(self, audio_path: str) -> str:
         """音声ファイルの前処理"""
@@ -134,25 +129,6 @@ class STTManager:
                 continue
         return validated_words
 
-    def _generate_fallback_transcription(self, audio_path: str) -> List[Dict[str, Any]]:
-        """フォールバック用の転写データを生成"""
-        try:
-            audio = AudioSegment.from_file(audio_path)
-            duration_sec = len(audio) / 1000.0
-            fallback_words = []
-            dummy_text = "音声認識に失敗しました。手動での確認が必要です。"
-            words = dummy_text.split()
-            word_duration = duration_sec / len(words) if words else 1.0
-            for i, word in enumerate(words):
-                start_time = i * word_duration
-                end_time = (i + 1) * word_duration
-                fallback_words.append({"word": word, "start": start_time, "end": end_time, "confidence": 0.1})
-            logger.warning(f"Generated fallback transcription with {len(fallback_words)} words")
-            return fallback_words
-        except Exception as e:
-            logger.error(f"Fallback transcription generation failed: {e}")
-            return []
-
     def split_audio_for_stt(self, audio_path: str, max_duration_minutes: int = 10) -> List[str]:
         """長い音声ファイルをSTT用に分割"""
         try:
@@ -185,6 +161,7 @@ class STTManager:
             time_offset = 0.0
             for chunk_path in chunk_paths:
                 try:
+                    # Use the fallback manager for each chunk
                     chunk_words = self.transcribe_audio(chunk_path)
                     for word in chunk_words:
                         word["start"] += time_offset
@@ -208,7 +185,7 @@ class STTManager:
             return all_words
         except Exception as e:
             logger.error(f"Long audio transcription failed: {e}")
-            return self._generate_fallback_transcription(audio_path)
+            return stt_fallback_manager.stt_fallback_manager._generate_fallback_transcription(audio_path)
 
 
 # グローバルインスタンス
@@ -217,20 +194,12 @@ stt_manager = STTManager()
 
 def transcribe_audio(audio_path: str, language: str = "ja") -> List[Dict[str, Any]]:
     """音声転写の簡易関数"""
-    if stt_manager.api_key:
-        return stt_manager.transcribe_audio(audio_path, language)
-    else:
-        logger.warning("STT not available, using fallback")
-        return stt_manager._generate_fallback_transcription(audio_path)
+    return stt_manager.transcribe_audio(audio_path, language)
 
 
 def transcribe_long_audio(audio_path: str) -> List[Dict[str, Any]]:
     """長い音声転写の簡易関数"""
-    if stt_manager.api_key:
-        return stt_manager.transcribe_long_audio(audio_path)
-    else:
-        logger.warning("STT not available, using fallback")
-        return stt_manager._generate_fallback_transcription(audio_path)
+    return stt_manager.transcribe_long_audio(audio_path)
 
 
 if __name__ == "__main__":
@@ -262,7 +231,8 @@ if __name__ == "__main__":
 
     print("\nTesting fallback functionality...")
     try:
-        fallback_words = stt_manager._generate_fallback_transcription("dummy.wav")
+        # This will now use the fallback manager's fallback
+        fallback_words = stt_fallback_manager.stt_fallback_manager._generate_fallback_transcription("dummy.wav")
         print(f"Fallback generated {len(fallback_words)} words")
     except Exception as e:
         print(f"Fallback test failed: {e}")
