@@ -1,0 +1,95 @@
+# Environment variables
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*example*
+*copy*
+*md
+*.txt
+
+# Generated content
+output/
+work/
+temp_*
+
+# Audio/Video files
+*.mp4
+*.mp3
+*.wav
+*.avi
+*.mov
+
+# Image files (except assets)
+*.jpg
+*.png
+*.jpeg
+*.gif
+!assets/**
+
+# Credentials
+credentials.json
+token.pickle
+client_secret.json
+service-account-key.json
+secret/probable-setup-435816-r8-96a2fbb8608e.json
+*secret*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Backup files
+*.bak
+*.backup
+
+# Refarence
+ref/Auto-YouTube/
+ref/YouTube-Automation-Bot/
+ref/gemini-youtube-automation/
