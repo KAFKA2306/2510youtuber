@@ -57,21 +57,32 @@ class ScriptGenerator:
             raise
 
     def generate_dialogue(
-        self, news_items: List[Dict[str, Any]], prompt_b: str, target_duration_minutes: int = 30,
-        use_quality_check: bool = True
+        self, news_items: List[Dict[str, Any]], prompt_b: str = None, target_duration_minutes: int = 8,
+        use_quality_check: bool = True, use_enhanced_template: bool = True
     ) -> str:
         """ニュース項目から対談台本を生成
 
         Args:
             news_items: ニュース項目のリスト
-            prompt_b: 台本生成用プロンプト
-            target_duration_minutes: 目標動画長（分）
+            prompt_b: 台本生成用プロンプト（Noneの場合は強化テンプレート使用）
+            target_duration_minutes: 目標動画長（分、デフォルト8分に変更）
             use_quality_check: 3段階品質チェックを使用するか
+            use_enhanced_template: 強化テンプレート（kafkaスタイル）を使用するか
 
         Returns:
             対談形式の台本テキスト
 
         """
+        # 強化テンプレートの使用
+        if use_enhanced_template and prompt_b is None:
+            try:
+                from .script_templates import create_enhanced_prompt
+                prompt_b = create_enhanced_prompt(news_items, target_duration_minutes)
+                logger.info("Using enhanced template (kafka analysis style + YouTube best practices)")
+            except ImportError:
+                logger.warning("Enhanced template not available, using default prompt")
+                if prompt_b is None:
+                    prompt_b = self._get_default_prompt()
         # 3段階品質チェックを使用（有効な場合）
         if use_quality_check and HAS_QUALITY_CHECK:
             logger.info("Using 3-stage quality check system")
