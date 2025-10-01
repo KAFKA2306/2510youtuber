@@ -2,6 +2,8 @@
 
 YouTube動画用の魅力的なサムネイル画像を自動生成します。
 視覚的インパクトとクリック率向上を目的とした高品質なサムネイルを作成します。
+
+注: より高品質なサムネイル生成には thumbnail_pro.py を使用してください。
 """
 
 import logging
@@ -12,6 +14,15 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
+
+# プロ品質サムネイル生成モジュールをインポート
+try:
+    from .thumbnail_pro import generate_pro_thumbnail as _generate_pro_thumbnail
+    HAS_PRO_MODULE = True
+    logger.info("Pro thumbnail module available")
+except ImportError:
+    HAS_PRO_MODULE = False
+    logger.warning("Pro thumbnail module not available, using standard generator")
 
 
 class ThumbnailGenerator:
@@ -618,7 +629,16 @@ thumbnail_generator = ThumbnailGenerator()
 def generate_thumbnail(
     title: str, news_items: List[Dict[str, Any]] = None, mode: str = "daily", style: str = "economic_blue"
 ) -> str:
-    """サムネイル生成の簡易関数"""
+    """サムネイル生成の簡易関数（プロモジュール優先）"""
+    # プロ品質モジュールが利用可能な場合はそちらを使用
+    if HAS_PRO_MODULE:
+        try:
+            logger.info("Using pro thumbnail generator for higher CTR")
+            return _generate_pro_thumbnail(title, news_items, mode)
+        except Exception as e:
+            logger.warning(f"Pro thumbnail generation failed, falling back to standard: {e}")
+
+    # 標準モジュールを使用
     return thumbnail_generator.generate_thumbnail(title, news_items, mode, style)
 
 

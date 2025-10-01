@@ -9,15 +9,27 @@ import hashlib
 import logging
 import os
 import re
+import subprocess
 from datetime import datetime
+from io import BytesIO
 from typing import Any, Dict, List, Optional
 
+import pyttsx3
+import requests
 from elevenlabs import Voice, VoiceSettings
 from elevenlabs.client import AsyncElevenLabs
+from gtts import gTTS
 from pydub import AudioSegment
 
 from .config import cfg
-from .tts_fallback import tts_fallback_manager
+
+# Conditional import for openai
+try:
+    import openai
+    from openai import OpenAI
+except ImportError:
+    openai = None
+    OpenAI = None
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +42,20 @@ class TTSManager:
         self.client = None
         self.max_concurrent = 2  # Directly set to 2 to handle ElevenLabs rate limit
         self.chunk_size = cfg.tts_chunk_size
+        self.voicevox_port = cfg.tts_voicevox_port
+        self.voicevox_speaker = cfg.tts_voicevox_speaker
+        self.pyttsx3_engine = None
+        self.openai_client = None
 
         if not self.api_key:
             logger.warning("No ElevenLabs API key configured")
         else:
             self.client = AsyncElevenLabs(api_key=self.api_key)
             logger.info("TTS Manager initialized with ElevenLabs")
+
+        # Initialize OpenAI client if available
+        if openai and os.getenv('OPENAI_API_KEY'):
+            self.openai_client = OpenAI()
 
     async def _elevenlabs_synthesize_logic(self, text: str, output_path: str, voice_config: Dict[str, Any]) -> bool:
         """ElevenLabsによる実際の音声合成ロジック"""

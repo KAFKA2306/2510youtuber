@@ -90,48 +90,89 @@ class VideoGenerator:
         return self._create_default_background(title)
 
     def _create_default_background(self, title: str) -> str:
-        """デフォルト背景を作成（日本語対応）"""
+        """プロ品質の動的背景を作成（投資系YouTuber品質）"""
         try:
             import textwrap
-
-            from PIL import Image, ImageDraw, ImageFont
+            from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
             width, height = 1920, 1080
-            image = Image.new("RGB", (width, height), color=(25, 35, 45))
+
+            # 深い青のグラデーション背景（金融・投資のプロフェッショナル感）
+            image = Image.new("RGB", (width, height), color=(10, 20, 35))
             draw = ImageDraw.Draw(image)
 
-            # 日本語フォントを取得
-            font_size = 72
-            font = self._get_japanese_font_for_background(font_size)
+            # 3段階のグラデーション（上部暗→中央→下部明）
+            for y_pos in range(height):
+                # より滑らかな3段階グラデーション
+                ratio = y_pos / height
+                if ratio < 0.3:
+                    # 上部: 深い青
+                    r = int(10 + (20 - 10) * (ratio / 0.3))
+                    g = int(20 + (35 - 20) * (ratio / 0.3))
+                    b = int(35 + (50 - 35) * (ratio / 0.3))
+                elif ratio < 0.7:
+                    # 中央: 標準青
+                    r = int(20 + (15 - 20) * ((ratio - 0.3) / 0.4))
+                    g = int(35 + (45 - 35) * ((ratio - 0.3) / 0.4))
+                    b = int(50 + (70 - 50) * ((ratio - 0.3) / 0.4))
+                else:
+                    # 下部: やや明るい青（字幕スペース）
+                    r = int(15 + (25 - 15) * ((ratio - 0.7) / 0.3))
+                    g = int(45 + (60 - 45) * ((ratio - 0.7) / 0.3))
+                    b = int(70 + (85 - 70) * ((ratio - 0.7) / 0.3))
+                draw.line([(0, y_pos), (width, y_pos)], fill=(r, g, b))
 
+            # 装飾的な幾何学パターン（左上・右下）
+            overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+            overlay_draw = ImageDraw.Draw(overlay)
+
+            # 左上の円形パターン（アクセント）
+            overlay_draw.ellipse([(-100, -100), (400, 400)], fill=(0, 120, 215, 30))
+            overlay_draw.ellipse([(-50, -50), (350, 350)], fill=(0, 150, 255, 20))
+
+            # 右下の円形パターン
+            overlay_draw.ellipse([(width - 400, height - 400), (width + 100, height + 100)], fill=(255, 215, 0, 25))
+            overlay_draw.ellipse([(width - 350, height - 350), (width + 50, height + 50)], fill=(255, 193, 7, 15))
+
+            # グリッドライン（プロフェッショナル感）
+            for i in range(0, width, 100):
+                overlay_draw.line([(i, 0), (i, height)], fill=(255, 255, 255, 3), width=1)
+            for i in range(0, height, 100):
+                overlay_draw.line([(0, i), (width, i)], fill=(255, 255, 255, 3), width=1)
+
+            image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+
+            # タイトルテキスト（上部中央）
+            font = self._get_japanese_font_for_background(64)
             if font:
-                # 日本語の場合、適切な文字数で改行
-                wrapped_title = textwrap.fill(title, width=15)  # 20 -> 15 (日本語対応)
+                # タイトルを短く整形
+                wrapped_title = textwrap.fill(title, width=20)
+
+                # テキストのバウンディングボックス
                 bbox = draw.textbbox((0, 0), wrapped_title, font=font)
                 text_width = bbox[2] - bbox[0]
                 text_height = bbox[3] - bbox[1]
                 x = (width - text_width) // 2
-                y = (height - text_height) // 2
+                y = 150  # 上部に配置
 
-                # 影を描画（視認性向上）
-                shadow_offset = 4
-                draw.text((x + shadow_offset, y + shadow_offset), wrapped_title, font=font, fill=(0, 0, 0))
+                # 影（複数層で深さを出す）
+                for offset in [8, 6, 4, 2]:
+                    alpha_val = 255 - (offset * 30)
+                    draw.text((x + offset, y + offset), wrapped_title, font=font, fill=(0, 0, 0, alpha_val))
 
-                # メインテキスト
+                # メインテキスト（白）
                 draw.text((x, y), wrapped_title, font=font, fill=(255, 255, 255))
 
-            # グラデーション背景
-            for y_pos in range(height):
-                alpha = int(255 * (1 - y_pos / height) * 0.3)
-                overlay = Image.new("RGBA", (width, 1), (70, 130, 180, alpha))
-                image.paste(overlay, (0, y_pos), overlay)
+                # アクセントライン（タイトル下）
+                line_y = y + text_height + 20
+                draw.rectangle([x, line_y, x + text_width, line_y + 5], fill=(255, 215, 0))
 
             temp_path = tempfile.mktemp(suffix=".png")
-            image.save(temp_path, "PNG")
-            logger.debug(f"Created default background with Japanese font: {temp_path}")
+            image.save(temp_path, "PNG", quality=95)
+            logger.info(f"Created professional background with dynamic elements: {temp_path}")
             return temp_path
         except Exception as e:
-            logger.warning(f"Failed to create default background: {e}")
+            logger.warning(f"Failed to create professional background: {e}")
             return self._create_simple_background()
 
     def _get_japanese_font_for_background(self, size: int):
@@ -194,38 +235,45 @@ class VideoGenerator:
         return settings
 
     def _build_subtitle_filter(self, subtitle_path: str) -> str:
-        """字幕フィルタを構築（日本語対応、視認性向上）"""
+        """字幕フィルタを構築（プロYouTuber品質、見切れ防止）"""
         try:
             # On Windows, paths must be escaped.
             if os.name == "nt":
                 subtitle_path = subtitle_path.replace("\\", "\\\\").replace(":", "\\:")
 
-            # 日本語フォントを優先的に使用
+            # 日本語フォントを優先的に使用（太字優先）
             japanese_fonts = [
+                "Noto Sans CJK JP Bold",  # 最も読みやすい
+                "Yu Gothic Bold",  # Windows/Mac 太字
+                "Hiragino Sans W6",  # macOS 太字
                 "IPAGothic",  # IPA ゴシック (Linux)
-                "IPA Gothic",
-                "Noto Sans CJK JP",  # Noto Sans 日本語
-                "Meiryo",  # Windows
-                "Hiragino Sans",  # macOS
-                "Yu Gothic",  # Windows/Mac
+                "Meiryo Bold",  # Windows 太字
                 "MS Gothic",  # Windows
             ]
 
             # 利用可能な日本語フォントを検索
             font_name = self._find_available_font(japanese_fonts)
 
+            # プロYouTuber品質の字幕スタイル
+            # - 大きなフォントサイズ（モバイル視聴対応）
+            # - 黄色テキスト（視認性最高）
+            # - 極太アウトライン（見切れ防止）
+            # - 安全マージン（画面端から十分離す）
             subtitle_style = (
                 f"subtitles={subtitle_path}:force_style='FontName={font_name},"
-                f"FontSize=32,"  # 視認性向上: 24 -> 32
-                f"PrimaryColour=&H00FFFFFF,"  # 白
+                f"FontSize=48,"  # 32 -> 48 (モバイル対応、大きく)
+                f"PrimaryColour=&H00FFFF00,"  # 黄色（YouTubeスタンダード）
                 f"OutlineColour=&H00000000,"  # 黒アウトライン
-                f"BackColour=&H80000000,"  # 半透明黒背景
-                f"BorderStyle=3,"  # ボックス背景
-                f"Outline=3,"  # 太いアウトライン
-                f"Shadow=1,"  # 影を追加
+                f"BackColour=&HC0000000,"  # 濃い半透明黒背景
+                f"BorderStyle=4,"  # 4=ボックス背景+アウトライン（最強視認性）
+                f"Outline=5,"  # 3 -> 5（極太アウトライン）
+                f"Shadow=2,"  # 1 -> 2（強い影）
                 f"Alignment=2,"  # 下部中央
-                f"MarginV=60,"  # 下部マージン
-                f"Bold=1'"  # 太字
+                f"MarginV=100,"  # 60 -> 100（見切れ防止、安全マージン）
+                f"MarginL=80,"  # 左右マージン追加
+                f"MarginR=80,"  # 左右マージン追加
+                f"Bold=1,"  # 太字
+                f"Spacing=0'"  # 文字間隔
             )
 
             logger.info(f"Using subtitle font: {font_name}")

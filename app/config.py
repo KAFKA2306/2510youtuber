@@ -133,6 +133,43 @@ class Config:
         return int(os.getenv("TTS_CHUNK_SIZE", "1500"))
 
     @property
+    def tts_voice_configs(self) -> dict:
+        """TTS音声設定（話者ごとの設定）."""
+        return {
+            "田中": {
+                "voice_id": os.getenv("TTS_VOICE_TANAKA", "8PfKHL4nZToWC3pbz9U9"),
+                "stability": float(os.getenv("TTS_VOICE_TANAKA_STABILITY", "0.5")),
+                "similarity_boost": float(os.getenv("TTS_VOICE_TANAKA_SIMILARITY", "0.75")),
+                "style": float(os.getenv("TTS_VOICE_TANAKA_STYLE", "0.1")),
+                "use_speaker_boost": os.getenv("TTS_VOICE_TANAKA_BOOST", "true").lower() == "true",
+            },
+            "鈴木": {
+                "voice_id": os.getenv("TTS_VOICE_SUZUKI", "8PfKHL4nZToWC3pbz9U9"),
+                "stability": float(os.getenv("TTS_VOICE_SUZUKI_STABILITY", "0.4")),
+                "similarity_boost": float(os.getenv("TTS_VOICE_SUZUKI_SIMILARITY", "0.8")),
+                "style": float(os.getenv("TTS_VOICE_SUZUKI_STYLE", "0.2")),
+                "use_speaker_boost": os.getenv("TTS_VOICE_SUZUKI_BOOST", "true").lower() == "true",
+            },
+            "ナレーター": {
+                "voice_id": os.getenv("TTS_VOICE_NARRATOR", "pNInz6obpgDQGcFmaJgB"),
+                "stability": float(os.getenv("TTS_VOICE_NARRATOR_STABILITY", "0.6")),
+                "similarity_boost": float(os.getenv("TTS_VOICE_NARRATOR_SIMILARITY", "0.7")),
+                "style": float(os.getenv("TTS_VOICE_NARRATOR_STYLE", "0.0")),
+                "use_speaker_boost": os.getenv("TTS_VOICE_NARRATOR_BOOST", "true").lower() == "true",
+            },
+        }
+
+    @property
+    def tts_voicevox_port(self) -> int:
+        """VOICEVOX Nemoのポート番号."""
+        return int(os.getenv("TTS_VOICEVOX_PORT", "50121"))
+
+    @property
+    def tts_voicevox_speaker(self) -> int:
+        """VOICEVOX話者ID."""
+        return int(os.getenv("TTS_VOICEVOX_SPEAKER", "1"))
+
+    @property
     def ffmpeg_path(self) -> str:
         """FFmpeg実行パス."""
         return os.getenv("FFMPEG_PATH", "ffmpeg")
