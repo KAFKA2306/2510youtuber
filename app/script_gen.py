@@ -162,22 +162,50 @@ class ScriptGenerator:
         return full_prompt
 
     def _call_gemini_for_script(self, prompt: str, max_retries: int = 3) -> str:
-        """台本生成用Gemini API呼び出し"""
+        """台本生成用Gemini API呼び出し（タイムアウト対策付き）"""
         import random
         import time
 
         for attempt in range(max_retries):
             try:
-                response = self.client.generate_content(prompt)
+                # リクエストタイムアウトを設定（120秒）
+                generation_config = genai.GenerationConfig(
+                    temperature=0.9,
+                    top_p=0.95,
+                    top_k=40,
+                    max_output_tokens=8192,  # 最大トークン数を制限
+                )
+
+                response = self.client.generate_content(
+                    prompt,
+                    generation_config=generation_config,
+                    request_options={"timeout": 120}  # 120秒タイムアウト
+                )
                 content = response.text
                 logger.debug(f"Generated script length: {len(content)}")
                 return content
             except Exception as e:
-                if "rate_limit" in str(e).lower() and attempt < max_retries - 1:
+                error_str = str(e).lower()
+
+                # 504 Deadline Exceeded エラーの特別処理
+                if "504" in error_str or "deadline exceeded" in error_str or "timeout" in error_str:
+                    if attempt < max_retries - 1:
+                        wait_time = 5 + (attempt * 3)  # 5秒、8秒、11秒...
+                        logger.warning(f"API timeout (504), retrying in {wait_time}s (attempt {attempt+1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error("API timeout after all retries, returning fallback")
+                        raise Exception("API timeout after all retries")
+
+                # Rate limit エラー処理
+                if "rate_limit" in error_str and attempt < max_retries - 1:
                     wait_time = (2**attempt) + random.uniform(0, 1)
                     logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
                     time.sleep(wait_time)
                     continue
+
+                # その他のエラー
                 if attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 3
                     logger.warning(f"Script generation error, retrying in {wait_time}s: {e}")

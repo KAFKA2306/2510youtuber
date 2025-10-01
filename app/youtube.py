@@ -292,10 +292,35 @@ class YouTubeManager:
     def _upload_thumbnail(self, video_id: str, thumbnail_path: str) -> Dict[str, Any]:
         """サムネイル画像をアップロード"""
         try:
-            self.service.thumbnails().set(videoId=video_id, media_body=MediaFileUpload(thumbnail_path)).execute()
+            # サムネイルのアップロード
+            request = self.service.thumbnails().set(
+                videoId=video_id, media_body=MediaFileUpload(thumbnail_path, mimetype="image/png")
+            )
+            response = request.execute()
 
             logger.info(f"Thumbnail uploaded for video: {video_id}")
             return {"uploaded": True, "thumbnail_path": thumbnail_path, "uploaded_at": datetime.now().isoformat()}
+
+        except HttpError as e:
+            error_detail = str(e)
+
+            # 権限エラーの場合は警告のみ（動画自体はアップロード済み）
+            if e.resp.status == 403 and ("forbidden" in error_detail.lower() or "not be properly authorized" in error_detail):
+                logger.warning(
+                    f"Thumbnail upload not authorized for video {video_id}. "
+                    f"This may be due to OAuth scope limitations. Video upload was successful. "
+                    f"You can manually set the thumbnail in YouTube Studio."
+                )
+                return {
+                    "uploaded": False,
+                    "skipped": True,
+                    "reason": "authorization_insufficient",
+                    "error": "OAuth scope may not include thumbnail permissions",
+                    "thumbnail_path": thumbnail_path,
+                }
+
+            logger.error(f"Thumbnail upload failed for {video_id}: {e}")
+            return {"uploaded": False, "error": str(e), "thumbnail_path": thumbnail_path}
 
         except Exception as e:
             logger.error(f"Thumbnail upload failed for {video_id}: {e}")

@@ -15,19 +15,19 @@ class STTFallbackManager:
         self.recognizer = sr.Recognizer()
         
     def transcribe_with_fallback(self, audio_path: str) -> List[Dict[str, Any]]:
-        """複数の方法で音声認識を試行"""
-        
-        # Method 1: ElevenLabs (Primary)
-        try:
-            # Assuming ElevenLabs transcription logic is handled externally or passed in
-            # For now, this will be a placeholder or call to the original ElevenLabs STT
-            # This method needs to be integrated with the existing ElevenLabs STTManager
-            self.logger.info("Attempting transcription with ElevenLabs (primary)")
-            # This part will be filled in when integrating with app/stt.py
-            # For now, we'll just raise an exception to force fallback
-            raise Exception("ElevenLabs STT not directly called here, handled by main STTManager")
-        except Exception as e:
-            self.logger.warning(f"ElevenLabs failed: {e}")
+        """複数の方法で音声認識を試行
+
+        Args:
+            audio_path: 音声ファイルのパス
+
+        Returns:
+            単語レベルのタイムスタンプ付きデータ
+        """
+
+        # Method 1: ElevenLabs (Primary) - handled externally by STTManager
+        # ElevenLabs is the primary method but handled by the main STTManager
+        # Skip it here as this is called from STTManager which already tried it
+        self.logger.info("Starting fallback transcription methods")
             
         # Method 2: OpenAI Whisper Local
         try:

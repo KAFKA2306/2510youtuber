@@ -193,6 +193,43 @@ class DiscordNotifier:
 
         return self.notify(message=message, level="info", title="⏳ 進捗", fields=fields)
 
+    def notify_status(
+        self, run_id: str, status: str, duration: Optional[int] = None, error: Optional[str] = None
+    ) -> bool:
+        """詳細ステータス通知
+
+        Args:
+            run_id: 実行ID
+            status: ステータス (started/completed/error)
+            duration: 処理時間（秒）
+            error: エラーメッセージ
+
+        Returns:
+            送信成功時True
+
+        """
+        if status == "started":
+            message = f"🚀 実行開始 (ID: {run_id})"
+            level = "info"
+            fields = {"実行ID": run_id, "開始時刻": time.strftime("%Y-%m-%d %H:%M:%S")}
+        elif status == "completed":
+            duration_str = f"{duration}秒" if duration else "不明"
+            message = f"✅ 実行完了 (ID: {run_id}, 処理時間: {duration_str})"
+            level = "success"
+            fields = {"実行ID": run_id, "処理時間": duration_str, "完了時刻": time.strftime("%Y-%m-%d %H:%M:%S")}
+        elif status == "error":
+            message = f"❌ 実行失敗 (ID: {run_id})"
+            level = "error"
+            fields = {"実行ID": run_id, "エラー時刻": time.strftime("%Y-%m-%d %H:%M:%S")}
+            if error:
+                fields["エラー"] = error[:200] + "..." if len(error) > 200 else error
+        else:
+            message = f"状態更新: {status} (ID: {run_id})"
+            level = "info"
+            fields = {"実行ID": run_id, "ステータス": status}
+
+        return self.notify(message=message, level=level, fields=fields)
+
     def notify_api_quota_warning(self, api_name: str, usage_info: str) -> bool:
         """API使用量警告通知
 

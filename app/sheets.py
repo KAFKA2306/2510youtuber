@@ -195,7 +195,16 @@ class SheetsManager:
                     elif value is None:
                         value = ""
 
-                    current_row[col_index] = str(value)
+                    str_value = str(value)
+                    # Google Sheets cell limit is 50,000 characters
+                    # 安全のため48000文字に制限し、トランケートメッセージを追加
+                    max_chars = 48000
+                    if len(str_value) > max_chars:
+                        truncate_msg = f"\n\n[TRUNCATED: Original length was {len(str_value)} characters]"
+                        str_value = str_value[: max_chars - len(truncate_msg)] + truncate_msg
+                        logger.warning(f"Field '{field}' truncated from {len(str(value))} to {len(str_value)} characters")
+
+                    current_row[col_index] = str_value
 
             # 自動で finished_at を設定
             if fields.get("status") == "completed" and "finished_at" not in fields:

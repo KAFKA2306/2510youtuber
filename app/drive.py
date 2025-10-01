@@ -77,7 +77,7 @@ class DriveManager:
     def upload_file(
         self, file_path: str, folder_id: str = None, custom_name: str = None, make_public: bool = True
     ) -> Dict[str, Any]:
-        """ファイルをGoogle Driveにアップロード"""
+        """ファイルをGoogle Driveにアップロード（ストレージクォータエラー時はローカル保存のみ）"""
         try:
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"File not found: {file_path}")
@@ -124,8 +124,23 @@ class DriveManager:
             return upload_info
 
         except Exception as e:
-            logger.error(f"File upload failed: {e}")
-            return self._get_upload_error_info(file_path, str(e))
+            error_str = str(e)
+            logger.error(f"File upload failed: {error_str}")
+
+            # ストレージクォータエラーの場合は警告のみでスキップ
+            if "storageQuotaExceeded" in error_str or "Service Accounts do not have storage quota" in error_str:
+                logger.warning(f"Skipping Drive upload due to storage quota limitation (file: {file_name})")
+                # エラーではなく、スキップ情報として返す
+                return {
+                    "skipped": True,
+                    "reason": "storage_quota_exceeded",
+                    "file_path": file_path,
+                    "file_name": file_name,
+                    "file_size": file_size,
+                    "message": "File not uploaded to Drive due to service account storage limitation. Use shared drive or local backup.",
+                }
+
+            return self._get_upload_error_info(file_path, error_str)
 
     def _get_mime_type(self, file_path: str) -> str:
         import mimetypes
@@ -180,7 +195,7 @@ class DriveManager:
                 upload_results["video_link"] = video_result.get("web_view_link")
 
                 # Save local backup
-                if local_dir and video_result.get("error"):
+                if local_dir and (video_result.get("error") or video_result.get("skipped")):
                     self._save_local_copy(video_path, local_dir, "video.mp4")
 
             if thumbnail_path and os.path.exists(thumbnail_path):
@@ -193,7 +208,7 @@ class DriveManager:
                 upload_results["thumbnail_file_id"] = thumbnail_result.get("file_id")
 
                 # Save local backup
-                if local_dir and thumbnail_result.get("error"):
+                if local_dir and (thumbnail_result.get("error") or thumbnail_result.get("skipped")):
                     self._save_local_copy(thumbnail_path, local_dir, "thumbnail.png")
 
             if subtitle_path and os.path.exists(subtitle_path):
@@ -206,7 +221,7 @@ class DriveManager:
                 upload_results["subtitle_file_id"] = subtitle_result.get("file_id")
 
                 # Save local backup
-                if local_dir and subtitle_result.get("error"):
+                if local_dir and (subtitle_result.get("error") or subtitle_result.get("skipped")):
                     self._save_local_copy(subtitle_path, local_dir, "subtitles.srt")
 
             if metadata:
@@ -218,7 +233,7 @@ class DriveManager:
                     upload_results["uploaded_files"].append({"type": "metadata", "result": metadata_result})
 
                     # Save local backup
-                    if local_dir and metadata_result.get("error"):
+                    if local_dir and (metadata_result.get("error") or metadata_result.get("skipped")):
                         self._save_local_copy(metadata_path, local_dir, "metadata.json")
 
                     try:

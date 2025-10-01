@@ -18,16 +18,17 @@ services:
   - type: cron
     name: youtuber-daily
     env: python
-    plan: starter
-    schedule: "0 9 * * 1-5"  # 平日9:00 JST
+    runtime: python-3.11
+    plan: standard  # メモリとCPUを確保
+    schedule: "0 6 * * *"  # 毎日午前6時（UTC）= 日本時間15時
+    timeout: 1800  # 30分
     buildCommand: |
-      pip install --upgrade pip
+      apt-get update && \
+      apt-get install -y ffmpeg fonts-ipafont-gothic fonts-ipafont-mincho && \
+      pip install --upgrade pip setuptools wheel && \
       pip install -r requirements.txt
-    startCommand: |
-      python -m app.main daily
+    startCommand: "python app/main.py daily"
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11
       - fromGroup: youtuber-secrets
 
   - type: cron
@@ -56,19 +57,21 @@ services:
 envVarGroups:
   - name: youtuber-secrets
     envVars:
-      # AI APIs
-      - key: ANTHROPIC_API_KEY
-        sync: false
+      # AI APIs（必須）
       - key: GEMINI_API_KEY
         sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: PERPLEXITY_API_KEY
+        sync: false
+
+      # 複数APIキー（推奨 - 高可用性のため）
       - key: GEMINI_API_KEY_2
         sync: false
       - key: GEMINI_API_KEY_3
         sync: false
-      - key: ELEVENLABS_API_KEY
-        sync: false
 
-      # Google Services
+      # Google Services（必須）
       - key: GOOGLE_APPLICATION_CREDENTIALS
         sync: false
       - key: GOOGLE_SHEET_ID
@@ -78,18 +81,20 @@ envVarGroups:
       - key: YOUTUBE_CLIENT_SECRET
         sync: false
 
-      # Notifications
+      # 通知（推奨）
       - key: DISCORD_WEBHOOK_URL
         sync: false
 
-      # App Settings
-      - key: DEBUG
-        value: "false"
-      - key: LOG_LEVEL
-        value: "INFO"
+      # 品質設定（オプション）
+      - key: USE_THREE_STAGE_QUALITY_CHECK
+        value: "true"
+      - key: QUALITY_CHECK_THRESHOLD
+        value: "7.0"
+
+      # パフォーマンス設定（オプション）
       - key: MAX_VIDEO_DURATION_MINUTES
         value: "30"
-      - key: MAX_CONCURRENT_TTS
-        value: "2"
-      - key: TTS_CHUNK_SIZE
-        value: "1000"
+      - key: VIDEO_QUALITY
+        value: "high"
+      - key: DEBUG
+        value: "false"
