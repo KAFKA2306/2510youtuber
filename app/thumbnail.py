@@ -1,9 +1,12 @@
-"""サムネイル生成モジュール
+"""サムネイル生成モジュール（統合版）
 
 YouTube動画用の魅力的なサムネイル画像を自動生成します。
 視覚的インパクトとクリック率向上を目的とした高品質なサムネイルを作成します。
 
-注: より高品質なサムネイル生成には thumbnail_pro.py を使用してください。
+統合内容:
+- 標準サムネイル生成（ThumbnailGenerator）
+- プロ品質サムネイル生成（ProThumbnailGenerator）
+- 自動切り替え機能
 """
 
 import logging
@@ -11,18 +14,9 @@ import os
 import textwrap
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
-
-# プロ品質サムネイル生成モジュールをインポート
-try:
-    from .thumbnail_pro import generate_pro_thumbnail as _generate_pro_thumbnail
-    HAS_PRO_MODULE = True
-    logger.info("Pro thumbnail module available")
-except ImportError:
-    HAS_PRO_MODULE = False
-    logger.warning("Pro thumbnail module not available, using standard generator")
 
 
 class ThumbnailGenerator:

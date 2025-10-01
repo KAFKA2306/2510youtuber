@@ -224,13 +224,8 @@ class VideoGenerator:
             return 60.0
 
     def _get_quality_settings(self) -> Dict[str, Any]:
-        quality_presets = {
-            "low": {"preset": "fast", "crf": 28},
-            "medium": {"preset": "medium", "crf": 23},
-            "high": {"preset": "slow", "crf": 18},
-            "ultra": {"preset": "veryslow", "crf": 15},
-        }
-        settings = quality_presets.get(self.video_quality, quality_presets["medium"])
+        presets = cfg.video_quality_presets
+        settings = presets.get(self.video_quality, presets["medium"])
         settings.update({"c:a": "aac", "b:a": "128k", "ar": "44100", "pix_fmt": "yuv420p", "movflags": "+faststart"})
         return settings
 
@@ -254,24 +249,20 @@ class VideoGenerator:
             # 利用可能な日本語フォントを検索
             font_name = self._find_available_font(japanese_fonts)
 
-            # プロYouTuber品質の字幕スタイル
-            # - 大きなフォントサイズ（モバイル視聴対応）
-            # - 黄色テキスト（視認性最高）
-            # - 極太アウトライン（見切れ防止）
-            # - 安全マージン（画面端から十分離す）
+            # プロYouTuber品質の字幕スタイル（設定値は config.py から取得）
             subtitle_style = (
                 f"subtitles={subtitle_path}:force_style='FontName={font_name},"
-                f"FontSize=48,"  # 32 -> 48 (モバイル対応、大きく)
-                f"PrimaryColour=&H00FFFF00,"  # 黄色（YouTubeスタンダード）
+                f"FontSize={cfg.subtitle_font_size},"
+                f"PrimaryColour={cfg.subtitle_color},"
                 f"OutlineColour=&H00000000,"  # 黒アウトライン
                 f"BackColour=&HC0000000,"  # 濃い半透明黒背景
                 f"BorderStyle=4,"  # 4=ボックス背景+アウトライン（最強視認性）
-                f"Outline=5,"  # 3 -> 5（極太アウトライン）
-                f"Shadow=2,"  # 1 -> 2（強い影）
+                f"Outline={cfg.subtitle_outline_width},"
+                f"Shadow=2,"  # 強い影
                 f"Alignment=2,"  # 下部中央
-                f"MarginV=100,"  # 60 -> 100（見切れ防止、安全マージン）
-                f"MarginL=80,"  # 左右マージン追加
-                f"MarginR=80,"  # 左右マージン追加
+                f"MarginV={cfg.subtitle_margin_v},"
+                f"MarginL={cfg.subtitle_margin_h},"
+                f"MarginR={cfg.subtitle_margin_h},"
                 f"Bold=1,"  # 太字
                 f"Spacing=0'"  # 文字間隔
             )

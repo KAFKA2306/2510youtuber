@@ -117,6 +117,46 @@ class Config:
         """ログレベル."""
         return os.getenv("LOG_LEVEL", "INFO")
 
+    # ===== 動画・字幕設定 =====
+    @property
+    def video_resolution(self) -> tuple:
+        """動画解像度 (width, height)."""
+        width = int(os.getenv("VIDEO_WIDTH", "1920"))
+        height = int(os.getenv("VIDEO_HEIGHT", "1080"))
+        return (width, height)
+
+    @property
+    def thumbnail_resolution(self) -> tuple:
+        """サムネイル解像度 (width, height)."""
+        width = int(os.getenv("THUMBNAIL_WIDTH", "1280"))
+        height = int(os.getenv("THUMBNAIL_HEIGHT", "720"))
+        return (width, height)
+
+    @property
+    def subtitle_font_size(self) -> int:
+        """字幕フォントサイズ."""
+        return int(os.getenv("SUBTITLE_FONT_SIZE", "48"))
+
+    @property
+    def subtitle_color(self) -> str:
+        """字幕カラー (ASS形式: &H00BBGGRR)."""
+        return os.getenv("SUBTITLE_COLOR", "&H00FFFF00")  # 黄色
+
+    @property
+    def subtitle_outline_width(self) -> int:
+        """字幕アウトライン幅."""
+        return int(os.getenv("SUBTITLE_OUTLINE", "5"))
+
+    @property
+    def subtitle_margin_v(self) -> int:
+        """字幕下部マージン."""
+        return int(os.getenv("SUBTITLE_MARGIN_V", "100"))
+
+    @property
+    def subtitle_margin_h(self) -> int:
+        """字幕左右マージン."""
+        return int(os.getenv("SUBTITLE_MARGIN_H", "80"))
+
     @property
     def max_video_duration_minutes(self) -> int:
         """最大動画長（分）."""
@@ -178,6 +218,46 @@ class Config:
     def video_quality(self) -> str:
         """動画品質."""
         return os.getenv("VIDEO_QUALITY", "high")
+
+    @property
+    def video_quality_presets(self) -> dict:
+        """動画品質プリセット設定."""
+        return {
+            "low": {"preset": "fast", "crf": 28},
+            "medium": {"preset": "medium", "crf": 23},
+            "high": {"preset": "slow", "crf": 18},
+            "ultra": {"preset": "veryslow", "crf": 15},
+        }
+
+    @property
+    def background_colors(self) -> dict:
+        """背景カラースキーム."""
+        return {
+            "daily": {
+                "base": (10, 20, 35),
+                "gradient_top": (10, 20, 35),
+                "gradient_mid": (15, 45, 70),
+                "gradient_bottom": (25, 60, 85),
+                "accent_primary": (0, 120, 215),
+                "accent_gold": (255, 215, 0),
+            },
+            "special": {
+                "base": (30, 5, 5),
+                "gradient_top": (30, 5, 5),
+                "gradient_mid": (50, 15, 15),
+                "gradient_bottom": (80, 20, 20),
+                "accent_primary": (255, 50, 50),
+                "accent_gold": (255, 215, 0),
+            },
+            "breaking": {
+                "base": (5, 30, 5),
+                "gradient_top": (5, 30, 5),
+                "gradient_mid": (15, 60, 15),
+                "gradient_bottom": (20, 80, 20),
+                "accent_primary": (0, 180, 80),
+                "accent_gold": (255, 193, 7),
+            },
+        }
 
     @property
     def local_output_dir(self) -> str:
