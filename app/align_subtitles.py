@@ -181,7 +181,7 @@ class SubtitleAligner:
                 best_end_index = end_index
 
         if best_match:
-            logger.debug(f"Found match with {best_score}% similarity: '{sentence[:30]}...'")
+            logger.debug(f"Found match with {best_score}% similarity: '{sentence[:30]}...'\n")
             return best_match, best_end_index
         else:
             # マッチングに失敗した場合、推定で進める
@@ -404,6 +404,12 @@ def align_script_with_stt(script_text: str, stt_words: List[Dict[str, Any]]) -> 
 def to_srt_format(subtitles: List[Dict[str, Any]]) -> str:
     """SRT変換の簡易関数"""
     return subtitle_aligner.to_srt_format(subtitles)
+
+def export_srt(subtitles: List[Dict[str, Any]], output_path: str):
+    """SRTファイルを出力"""
+    srt_content = to_srt_format(subtitles)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(srt_content)
 
 def to_vtt_format(subtitles: List[Dict[str, Any]]) -> str:
     """VTT変換の簡易関数"""
