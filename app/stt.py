@@ -43,7 +43,7 @@ class STTManager:
             with open(processed_audio_path, "rb") as audio_file:
                 response = self.client.speech_to_text.convert(
                     file=audio_file,
-                    model_id="eleven_multilingual_v2"
+                    model_id="scribe_v1"
                 )
             words = self._process_transcription_result(response.dict())
             logger.info(f"Transcribed {len(words)} words from {audio_path}")
