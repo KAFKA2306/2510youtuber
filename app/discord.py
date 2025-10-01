@@ -73,14 +73,14 @@ class DiscordNotifier:
 
             # 追加フィールドがある場合
             if fields:
-                slack_fields = []
+                discord_fields = []
                 for key, value in fields.items():
-                    slack_fields.append({
+                    discord_fields.append({
                         "title": key,
                         "value": str(value),
                         "short": True
                     })
-                payload["attachments"][0]["fields"] = slack_fields
+                payload["attachments"][0]["fields"] = discord_fields
 
             # Discord送信
             response = httpx.post(
@@ -337,27 +337,27 @@ discord_notifier = DiscordNotifier()
 # 簡易アクセス関数
 def notify(message: str, level: str = "info") -> bool:
     """基本通知の簡易関数"""
-    return slack_notifier.notify(message, level)
+    return discord_notifier.notify(message, level)
 
 def notify_run_start(run_id: str, mode: str) -> bool:
     """実行開始通知の簡易関数"""
-    return slack_notifier.notify_run_start(run_id, mode)
+    return discord_notifier.notify_run_start(run_id, mode)
 
 def notify_run_success(run_id: str, duration_sec: int,
                       video_url: Optional[str] = None,
                       title: Optional[str] = None) -> bool:
     """実行成功通知の簡易関数"""
-    return slack_notifier.notify_run_success(run_id, duration_sec, video_url, title)
+    return discord_notifier.notify_run_success(run_id, duration_sec, video_url, title)
 
 def notify_run_error(run_id: str, error_message: str,
                     step: Optional[str] = None) -> bool:
     """実行エラー通知の簡易関数"""
-    return slack_notifier.notify_run_error(run_id, error_message, step)
+    return discord_notifier.notify_run_error(run_id, error_message, step)
 
 def notify_step_progress(run_id: str, step_name: str,
                         progress: Optional[str] = None) -> bool:
     """ステップ進捗通知の簡易関数"""
-    return slack_notifier.notify_step_progress(run_id, step_name, progress)
+    return discord_notifier.notify_step_progress(run_id, step_name, progress)
 
 if __name__ == "__main__":
     # テスト実行
@@ -365,11 +365,11 @@ if __name__ == "__main__":
 
     # 設定チェック
     print(f"Discord enabled: {discord_notifier.enabled}")
-    if slack_notifier.enabled:
-        print(f"Webhook URL configured: {bool(slack_notifier.webhook_url)}")
+    if discord_notifier.enabled:
+        print(f"Webhook URL configured: {bool(discord_notifier.webhook_url)}")
 
         # テスト通知送信
-        result = slack_notifier.test_notification()
+        result = discord_notifier.test_notification()
         print(f"Test notification result: {result}")
     else:
         print("Discord not configured, skipping test")
