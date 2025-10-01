@@ -52,6 +52,7 @@ tmp/
 *copy*
 *md
 *.lock
+*txt
 
 # Generated content
 output/
