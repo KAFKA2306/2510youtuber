@@ -115,7 +115,7 @@ class NewsCollector:
             "Content-Type": "application/json",
         }
         payload = {
-            "model": "sonar-small-online",
+            "model": "sonar-medium-online",
             "messages": [
                 {
                     "role": "system",

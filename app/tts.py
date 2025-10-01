@@ -107,11 +107,11 @@ class TTSManager:
         # These are example Voice IDs. Replace with your actual ElevenLabs Voice IDs.
         voice_configs = {
             "田中": {
-                "voice_id": "8EkOjt4xTPGMclNlh1pk",  # Example: Adam
+                "voice_id": "8PfKHL4nZToWC3pbz9U9",  # Example: Adam
                 "settings": VoiceSettings(stability=0.5, similarity_boost=0.75, style=0.1, use_speaker_boost=True),
             },
             "鈴木": {
-                "voice_id": "8EkOjt4xTPGMclNlh1pk",  # Example: Rachel
+                "voice_id": "8PfKHL4nZToWC3pbz9U9",  # Example: Rachel
                 "settings": VoiceSettings(stability=0.4, similarity_boost=0.8, style=0.2, use_speaker_boost=True),
             },
             "ナレーター": {
