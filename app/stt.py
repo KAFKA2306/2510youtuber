@@ -31,7 +31,7 @@ class STTManager:
             logger.info("STT Manager initialized")
 
     def transcribe_audio(
-        self, audio_path: str, language: str = "ja", model: str = "eleven_multilingual_v2"
+        self, audio_path: str, language: str = "ja"
     ) -> List[Dict[str, Any]]:
         """音声ファイルを文字起こし"""
         if not self.client:
@@ -78,6 +78,7 @@ class STTManager:
         """転写結果を処理して標準形式に変換"""
         words = []
         try:
+            logger.debug(f"STT API response: {result}")
             if "words" in result:
                 for word_data in result["words"]:
                     word_info = {

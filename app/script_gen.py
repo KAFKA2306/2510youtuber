@@ -29,7 +29,7 @@ class ScriptGenerator:
                 raise ValueError("Gemini API key not configured")
 
             genai.configure(api_key=cfg.gemini_api_key)
-            self.client = genai.GenerativeModel("gemini-2.0-flash")
+            self.client = genai.GenerativeModel("models/gemini-2.5-flash")
             logger.info("Script generator initialized with Gemini")
 
         except Exception as e:

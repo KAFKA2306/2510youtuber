@@ -5,6 +5,7 @@
 
 import logging
 import time
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 import httpx
@@ -63,13 +64,13 @@ class DiscordNotifier:
 
             # 基本ペイロード
             payload = {
-                "attachments": [
+                "embeds": [
                     {
-                        "color": color,
+                        "color": int(color.replace("#", ""), 16),
                         "title": f"{icon} {title}",
-                        "text": message,
-                        "footer": "YouTube Automation System",
-                        "ts": int(time.time()),
+                        "description": message,
+                        "footer": {"text": "YouTube Automation System"},
+                        "timestamp": datetime.fromtimestamp(time.time()).isoformat(),
                     }
                 ]
             }
@@ -78,8 +79,8 @@ class DiscordNotifier:
             if fields:
                 discord_fields = []
                 for key, value in fields.items():
-                    discord_fields.append({"title": key, "value": str(value), "short": True})
-                payload["attachments"][0]["fields"] = discord_fields
+                    discord_fields.append({"name": key, "value": str(value), "inline": True})
+                payload["embeds"][0]["fields"] = discord_fields
 
             # Discord送信
             response = httpx.post(self.webhook_url, json=payload, timeout=10.0)
