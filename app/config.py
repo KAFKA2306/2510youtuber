@@ -22,9 +22,9 @@ class Config:
 
     # ===== AI APIs =====
     @property
-    def anthropic_api_key(self) -> str:
-        """Anthropic API キー"""
-        return os.getenv('ANTHROPIC_API_KEY', '')
+    def perplexity_api_key(self) -> str:
+        """Perplexity API キー"""
+        return os.getenv('PERPLEXITY_API_KEY', '')
 
     @property
     def gemini_api_key(self) -> str:
@@ -143,7 +143,7 @@ class Config:
     def _validate_required_vars(self):
         """必須環境変数のチェック"""
         required_vars = [
-            'ANTHROPIC_API_KEY',
+            'PERPLEXITY_API_KEY',
             'GEMINI_API_KEY',
             'ELEVENLABS_API_KEY',
             'GOOGLE_SHEET_ID',
@@ -164,7 +164,7 @@ class Config:
 
         # 各APIキーの存在チェック
         apis = {
-            'Anthropic': self.anthropic_api_key,
+            'Perplexity': self.perplexity_api_key,
             'Gemini': self.gemini_api_key,
             'ElevenLabs': self.elevenlabs_api_key,
             'Google Sheets': self.google_sheet_id,
@@ -175,7 +175,7 @@ class Config:
         for api_name, api_value in apis.items():
             results[api_name] = {
                 'configured': bool(api_value),
-                'key_preview': f"{'*' * 10}{api_value[-10:] if len(api_value) > 10 else api_value}" if api_value else None
+                'key_preview': f"{ '*' * 10}{api_value[-10:] if len(api_value) > 10 else api_value}" if api_value else None
             }
 
         # Google認証の詳細チェック
@@ -220,8 +220,7 @@ def debug_config():
         if result.get('client_id'):
             print(f"  Client: {result['client_id']}")
 
-    print(f"
-Other settings:")
+    print(f"\nOther settings:")
     print(f"  Debug mode: {cfg.debug}")
     print(f"  Log level: {cfg.log_level}")
     print(f"  Max video duration: {cfg.max_video_duration_minutes} min")

@@ -166,11 +166,14 @@ class VideoGenerator:
         return settings
 
     def _build_subtitle_filter(self, subtitle_path: str) -> str:
+        """字幕フィルタを構築"""
         try:
-            escaped_path = subtitle_path.replace("\", "\\\\").replace(":", "\\:")
+            # On Windows, paths must be escaped.
+            if os.name == 'nt':
+                subtitle_path = subtitle_path.replace('\\', '\\\\').replace(':', '\\:')
+
             subtitle_style = (
-                f"subtitles='{escaped_path}'"
-                f":force_style='FontName=DejaVu Sans Bold, "
+                f"subtitles={subtitle_path}:force_style='FontName=DejaVu Sans Bold,"
                 f"FontSize=24,"
                 f"PrimaryColour=&H00ffffff,"
                 f"OutlineColour=&H00000000,"
@@ -180,7 +183,9 @@ class VideoGenerator:
                 f"Alignment=2,"
                 f"MarginV=80'"
             )
+
             return subtitle_style
+
         except Exception as e:
             logger.warning(f"Failed to build subtitle filter: {e}")
             return None
