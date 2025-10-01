@@ -42,7 +42,7 @@ class STTManager:
             processed_audio_path = self._preprocess_audio(audio_path)
             with open(processed_audio_path, "rb") as audio_file:
                 response = self.client.speech_to_text.convert(
-                    audio=audio_file,
+                    audio_file,
                     model=model,
                     language=language,
                     timestamp_granularities=["word"],

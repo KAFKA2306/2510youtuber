@@ -141,14 +141,14 @@ class TTSManager:
         if not self.client:
             return None
         try:
-            audio_stream = await self.client.generate(
+            audio_stream = await self.client.text_to_speech.convert(
                 text=text,
-                voice=Voice(voice_id=voice_config["voice_id"], settings=voice_config["settings"]),
-                model="eleven_multilingual_v2",
+                voice_id=voice_config["voice_id"],
+                model_id="eleven_multilingual_v2",
             )
 
             audio_bytes = b""
-            async for chunk in audio_stream:
+            for chunk in audio_stream:
                 audio_bytes += chunk
             return audio_bytes
 
