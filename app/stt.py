@@ -44,8 +44,8 @@ class STTManager:
             if processed_audio_path != audio_path:
                 try:
                     os.remove(processed_audio_path)
-                except Exception:
-                    pass
+                except (OSError, FileNotFoundError) as e:
+                    logger.debug(f"Could not remove temporary file {processed_audio_path}: {e}")
 
     def transcribe_audio(
         self, audio_path: str, language: str = "ja"
@@ -179,8 +179,8 @@ class STTManager:
                     if chunk_path != audio_path:
                         try:
                             os.remove(chunk_path)
-                        except Exception:
-                            pass
+                        except (OSError, FileNotFoundError) as e:
+                            logger.debug(f"Could not remove chunk file {chunk_path}: {e}")
             logger.info(f"Transcribed long audio: {len(all_words)} total words")
             return all_words
         except Exception as e:

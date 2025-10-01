@@ -238,8 +238,8 @@ class DriveManager:
 
                     try:
                         os.remove(metadata_path)
-                    except Exception:
-                        pass
+                    except (OSError, FileNotFoundError) as e:
+                        logger.debug(f"Could not remove metadata file {metadata_path}: {e}")
 
             upload_results["package_folder_link"] = self._get_folder_link(package_folder_id)
             upload_results["upload_completed_at"] = datetime.now().isoformat()

@@ -69,8 +69,8 @@ class VideoGenerator:
             if "bg_image_path" in locals() and bg_image_path != background_image:
                 try:
                     os.remove(bg_image_path)
-                except Exception:
-                    pass
+                except (OSError, FileNotFoundError) as e:
+                    logger.debug(f"Could not remove background image {bg_image_path}: {e}")
 
     def _validate_input_files(self, audio_path: str, subtitle_path: str, background_image: str = None):
         if not os.path.exists(audio_path):
@@ -158,7 +158,8 @@ class VideoGenerator:
         # フォールバック
         try:
             return ImageFont.load_default()
-        except Exception:
+        except (OSError, IOError) as e:
+            logger.warning(f"Could not load default font: {e}")
             return None
 
     def _create_simple_background(self) -> str:
@@ -249,7 +250,8 @@ class VideoGenerator:
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     return font_name
-            except Exception:
+            except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
+                logger.debug(f"Font search failed for {font_name}: {e}")
                 continue
 
         # フォールバック: デフォルト

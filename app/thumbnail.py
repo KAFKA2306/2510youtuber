@@ -463,14 +463,15 @@ class ThumbnailGenerator:
         for font_name, font_path in self.font_paths.items():
             try:
                 return ImageFont.truetype(font_path, size)
-            except Exception:
+            except (OSError, IOError):
                 continue
 
         # フォールバック: デフォルトフォント
         try:
             logger.warning("Using default font as fallback")
             return ImageFont.load_default()
-        except Exception:
+        except (OSError, IOError) as e:
+            logger.error(f"Could not load any font: {e}")
             return None
 
     def _add_decorative_elements(self, image, style: str, mode: str):
