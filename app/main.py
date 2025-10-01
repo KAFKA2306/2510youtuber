@@ -107,7 +107,7 @@ class YouTubeWorkflow:
                 step8_result,
                 step9_result,
                 step10_result,
-                execution_time,
+                execution_time=execution_time,
             )
 
             await self._notify_workflow_success(result)
