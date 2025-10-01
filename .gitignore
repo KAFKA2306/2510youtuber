@@ -110,3 +110,6 @@ output/
 *.wav
 *.srt
 *.png
+
+
+!docs/setup.md
