@@ -141,7 +141,11 @@ class NewsCollector:
                     time.sleep(wait_time)
                     continue
                 else:
-                    logger.error(f"Perplexity API error: {e}")
+                    logger.error(
+                        f"Perplexity API error: {e}\n"
+                        f"URL: {e.request.url}\n"
+                        f"Response: {e.response.text}"
+                    )
                     raise
             except Exception as e:
                 if attempt < max_retries - 1:

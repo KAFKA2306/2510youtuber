@@ -88,6 +88,13 @@ class DiscordNotifier:
             logger.debug(f"Discord notification sent: {level} - {message[:50]}...")
             return True
 
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Failed to send Discord notification due to a client or server error: {e}\n"
+                f"URL: {e.request.url}\n"
+                f"Response: {e.response.text}"
+            )
+            return False
         except Exception as e:
             logger.error(f"Failed to send Discord notification: {e}")
             return False

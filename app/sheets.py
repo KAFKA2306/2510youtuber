@@ -39,6 +39,7 @@ class SheetsManager:
 
             self.service = build("sheets", "v4", credentials=credentials)
             logger.info("Google Sheets connection established")
+            self.setup_sheets()
 
         except Exception as e:
             logger.error(f"Failed to connect to Google Sheets: {e}")

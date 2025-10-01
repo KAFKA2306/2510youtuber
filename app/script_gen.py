@@ -275,10 +275,14 @@ class ScriptGenerator:
 script_generator = ScriptGenerator() if cfg.gemini_api_key else None
 
 
-def generate_dialogue(news_items: List[Dict[str, Any]], prompt_b: str, target_duration: int = 30) -> str:
+def generate_dialogue(
+    news_items: List[Dict[str, Any]], prompt_b: str, target_duration_minutes: int = 30
+) -> str:
     """台本生成の簡易関数"""
     if script_generator:
-        return script_generator.generate_dialogue(news_items, prompt_b, target_duration)
+        return script_generator.generate_dialogue(
+            news_items, prompt_b, target_duration_minutes
+        )
     else:
         logger.warning("Script generator not available, using fallback")
         return ScriptGenerator()._get_fallback_script(news_items)
