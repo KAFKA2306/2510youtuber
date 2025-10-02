@@ -416,3 +416,36 @@ def get_gemini_client(
 def get_perplexity_client(model: str = "sonar", **kwargs) -> PerplexityClient:
     """Perplexity Clientを取得（簡易関数）"""
     return PerplexityClient(model=model, **kwargs)
+
+
+# ===================================
+# CrewAI用LangChainラッパー
+# ===================================
+
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    def get_crewai_gemini_llm(
+        model: str = "gemini-pro",
+        temperature: float = 0.7,
+        **kwargs
+    ):
+        """CrewAI用のGemini LLM（Google AI Studio経由・無料枠対応）
+
+        Vertex AIではなくGoogle AI Studio APIを使用するため課金不要
+        """
+        api_key = settings.gemini_api_key
+        return ChatGoogleGenerativeAI(
+            model=model,
+            google_api_key=api_key,
+            temperature=temperature,
+            convert_system_message_to_human=True,
+            **kwargs
+        )
+except ImportError:
+    logger.warning("langchain_google_genai not installed. CrewAI Gemini LLM unavailable.")
+
+    def get_crewai_gemini_llm(model: str = "gemini-pro", temperature: float = 0.7, **kwargs):
+        """Fallback: GeminiClientを返す"""
+        logger.warning("Using fallback GeminiClient instead of LangChain wrapper")
+        return get_gemini_client(model=model, temperature=temperature, **kwargs)

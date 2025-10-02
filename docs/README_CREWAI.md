@@ -6,7 +6,7 @@
 
 ```bash
 # サンプルニュースでCrewAIをテスト
-python3 test_crewai_flow.py
+uv run python3 test_crewai_flow.py
 ```
 
 これにより、3つのサンプル経済ニュースから8分間の台本が生成されます。
@@ -15,7 +15,7 @@ python3 test_crewai_flow.py
 
 ```bash
 # 完全ワークフロー（ニュース収集→台本生成→動画作成）
-python3 app/main.py
+uv run python3 -m app.main
 ```
 
 ---
