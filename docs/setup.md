@@ -9,8 +9,11 @@
 ### 必要なアカウント
 
 - [ ] **Perplexity**: ニュース収集用
+  - 🆕 **推奨**: 複数アカウント（Rate limit対策・自動ローテーション）
+- [ ] **NewsAPI.org**: Perplexityフォールバック用（無料100リクエスト/日）🆕
 - [ ] **Google Cloud**: Gemini API・Sheets・Drive・YouTube Data API用
   - ⚠️ **重要**: Vertex AI APIまたは直接のGemini API（CrewAI用）
+  - 🆕 **推奨**: 複数Geminiキー（Rate limit対策・自動ローテーション）
 - [ ] **ElevenLabs**: TTS（音声合成）用
 - [ ] **Pexels**: 無料ストック映像API用 🆕
 - [ ] **Pixabay**: 無料ストック映像API用（オプション）🆕
@@ -32,6 +35,40 @@
 2. アカウント作成・ログイン
 3. Settings -> API Keysセクションで新しいキーを生成
 4. **メモ**: `PERPLEXITY_API_KEY=pplx-...`
+
+#### 🆕 複数キー設定（Rate limit対策）
+
+**推奨**: 3つのキーを用意すると安定性が向上します
+
+1. 追加アカウントを作成（または複数キーを発行）
+2. `.env`に追加:
+   ```bash
+   PERPLEXITY_API_KEY=pplx-key1
+   PERPLEXITY_API_KEY_2=pplx-key2
+   PERPLEXITY_API_KEY_3=pplx-key3
+   ```
+
+**動作**:
+- Rate limit検知時に自動的に次のキーに切り替え
+- 成功率ベースで最適なキーを選択
+- 連続5回失敗したキーは10分間休止
+
+### 1.1 NewsAPI.org（フォールバック）🆕
+
+**Perplexityのバックアップとして設定推奨**
+
+1. [NewsAPI.org](https://newsapi.org/register)にアクセス
+2. 無料アカウント作成（クレジットカード不要）
+3. APIキーをコピー
+4. **メモ**: `NEWSAPI_API_KEY=your_key`
+
+**無料枠**:
+- 100リクエスト/日
+- 開発用途は十分
+
+**動作**:
+- Perplexity全失敗時に自動的にNewsAPIへフォールバック
+- 日本語ニュースを自動収集
 
 ### 2. Google Cloud Platform
 
@@ -318,15 +355,26 @@ uv run python test_upload.py
 # Perplexity（ニュース収集）
 PERPLEXITY_API_KEY=pplx-...
 
+# 🆕 API Key Rotation（複数キー設定で自動ローテーション）
+# Perplexity 複数キー（Rate limit対策）
+PERPLEXITY_API_KEY_2=pplx-...
+PERPLEXITY_API_KEY_3=pplx-...
+
 # Gemini API（台本生成・CrewAI）
 GEMINI_API_KEY=AIza...
 
-# ElevenLabs（音声合成）
-ELEVENLABS_API_KEY=sk_...
-
-# オプション：複数APIキー（並列処理用）
+# Gemini 複数キー（Rate limit対策・自動ローテーション）
 GEMINI_API_KEY_2=AIza...
 GEMINI_API_KEY_3=AIza...
+GEMINI_API_KEY_4=AIza...
+GEMINI_API_KEY_5=AIza...
+
+# 🆕 NewsAPI.org（Perplexityフォールバック - 無料100リクエスト/日）
+# 取得先: https://newsapi.org/register
+NEWSAPI_API_KEY=your_newsapi_key
+
+# ElevenLabs（音声合成）
+ELEVENLABS_API_KEY=sk_...
 
 # ===== Stock Footage APIs（無料・無制限） =====
 # Pexels API（プロフェッショナルなB-roll映像）
