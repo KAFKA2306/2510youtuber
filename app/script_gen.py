@@ -73,16 +73,12 @@ class ScriptGenerator:
             対談形式の台本テキスト
 
         """
-        # 強化テンプレートの使用
+        # 強化テンプレートの使用 (disabled - script_templates removed)
         if use_enhanced_template and prompt_b is None:
-            try:
-                from .script_templates import create_enhanced_prompt
-                prompt_b = create_enhanced_prompt(news_items, target_duration_minutes)
-                logger.info("Using enhanced template (kafka analysis style + YouTube best practices)")
-            except ImportError:
-                logger.warning("Enhanced template not available, using default prompt")
-                if prompt_b is None:
-                    prompt_b = self._get_default_prompt()
+            logger.warning("Enhanced template disabled (script_templates module removed)")
+            use_enhanced_template = False
+            if prompt_b is None:
+                prompt_b = self._get_default_prompt()
         # 3段階品質チェックを使用（有効な場合）
         if use_quality_check and HAS_QUALITY_CHECK:
             logger.info("Using 3-stage quality check system")

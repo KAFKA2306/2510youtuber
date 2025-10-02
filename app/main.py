@@ -201,8 +201,8 @@ class YouTubeWorkflow:
             if not script_content or len(script_content) < 100:
                 raise Exception("Generated script too short or empty")
 
-            # Debug: Log first 500 chars of script to verify format
-            logger.debug(f"Script preview (first 500 chars): {script_content[:500]}")
+            # Debug: Log first 1000 chars of script to verify format
+            logger.info(f"Script preview (first 1000 chars): {script_content[:1000]}")
 
             script_path = FileUtils.get_temp_file(prefix="script_", suffix=".txt")
             with open(script_path, "w", encoding="utf-8") as f:

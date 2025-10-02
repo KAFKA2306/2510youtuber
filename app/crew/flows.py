@@ -171,7 +171,16 @@ class WOWScriptFlow:
             final_script = parsed_data.get('final_script', crew_output_str)
 
             logger.info(f"Successfully parsed CrewAI JSON output, script length: {len(final_script)}")
-            logger.debug(f"First 500 chars of parsed script: {final_script[:500]}")
+            logger.info(f"First 800 chars of parsed script: {final_script[:800]}")
+
+            # Verify script has speaker format (田中:, 鈴木:, ナレーター:)
+            import re
+            speaker_pattern = r'^(田中|鈴木|ナレーター|司会)[:：]\s*'
+            has_speakers = bool(re.search(speaker_pattern, final_script, re.MULTILINE))
+
+            if not has_speakers:
+                logger.warning("Script does not have proper speaker format (田中:, 鈴木:, etc.), TTS will fail")
+                logger.warning("This indicates CrewAI did not follow the output format instructions")
 
             result = {
                 'success': True,
