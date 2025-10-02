@@ -1,15 +1,20 @@
 # 環境構築とセットアップガイド
 
+## 🎉 Phase 1完了: CrewAI統合済み
+
+このシステムは**WOW Script Creation Crew**を搭載しています。7つのAIエージェントが協力して、視聴維持率50%+を目指す高品質な台本を自動生成します。
+
 ## 事前準備チェックリスト
 
 ### 必要なアカウント
 
 - [ ] **Perplexity**: ニュース収集用
-- [ ] **Google Cloud**: Gemini TTS・Sheets・Drive・YouTube Data API用
-- [ ] **ElevenLabs**: STT（音声認識）用
+- [ ] **Google Cloud**: Gemini API・Sheets・Drive・YouTube Data API用
+  - ⚠️ **重要**: Vertex AI APIまたは直接のGemini API（CrewAI用）
+- [ ] **ElevenLabs**: TTS（音声合成）用
 - [ ] **Discord**: 運用通知用（Webhook URL）
-- [ ] **Render**: 実行基盤（Cronジョブ）用
-- [ ] **GitHub**: コード管理・自動デプロイ用
+- [ ] **Render**: 実行基盤（Cronジョブ）用（オプション）
+- [ ] **GitHub**: コード管理・自動デプロイ用（オプション）
 
 ### 技術要件
 
@@ -28,11 +33,84 @@
 
 ### 2. Google Cloud Platform
 
-#### Gemini API
+#### Gemini API（CrewAI統合対応）
+
+**CrewAI WOW Script Creation Crewを使用するには、以下のいずれかが必要です:**
+
+##### オプションA: Google AI Studio（推奨・簡単）
 
 1. [Google AI Studio](https://makersuite.google.com/)にアクセス
 2. 新しいAPIキーを作成
 3. **メモ**: `GEMINI_API_KEY=AIza...`
+
+**利点**:
+- セットアップが簡単
+- すぐに使える
+- 無料枠が大きい
+
+**注意**:
+- 一部の最新モデル（gemini-2.0-flash-exp等）はVertex AI経由でのみ利用可能な場合があります
+
+##### オプションB: Vertex AI API（本番環境推奨）
+
+**必要な手順**:
+
+1. **Google Cloud Consoleでプロジェクト作成**
+   ```
+   https://console.cloud.google.com/
+   ```
+
+2. **Vertex AI APIを有効化**
+   ```
+   https://console.cloud.google.com/apis/library/aiplatform.googleapis.com
+   ```
+   - プロジェクトを選択
+   - 「APIを有効にする」をクリック
+
+3. **サービスアカウント認証設定**
+   - 既存のサービスアカウントにVertex AI権限を追加
+   - または新規サービスアカウント作成
+   - 必要な権限: `Vertex AI User`
+
+4. **.envファイルに追加**
+   ```env
+   GOOGLE_APPLICATION_CREDENTIALS=secret/probable-setup-435816-r8-96a2fbb8608e.json
+   GEMINI_API_KEY=AIza...  # Google AI Studio のキーも併用可能
+   ```
+
+**利点**:
+- 最新モデルへのアクセス
+- エンタープライズグレードのSLA
+- 高度な管理・監視機能
+
+**現在のエラーと解決方法**:
+
+テスト実行時に以下のエラーが出た場合:
+```
+Vertex AI API has not been used in project probable-setup-435816-r8
+```
+
+**解決策**:
+1. 上記のVertex AI APIを有効化
+2. または、直接Gemini APIを使用するよう設定変更（下記参照）
+
+##### CrewAI設定の切り替え
+
+**Vertex AIを使わない場合（簡易設定）**:
+
+`app/config_prompts/prompts/agents.yaml` を編集:
+```yaml
+agents:
+  deep_news_analyzer:
+    model: gemini-pro  # gemini-2.0-flash-exp から変更
+    # ...
+```
+
+または環境変数で制御:
+```env
+# CrewAIを一時的に無効化（従来の3段階チェック使用）
+USE_CREWAI_SCRIPT_GENERATION=false
+```
 
 #### Google Services（Sheets, Drive, YouTube）
 
@@ -194,29 +272,61 @@ uv run python test_upload.py
 ### .env ファイルテンプレート
 
 ```bash
-# Perplexity
+# ===== AI APIs =====
+# Perplexity（ニュース収集）
 PERPLEXITY_API_KEY=pplx-...
 
-# Google Cloud
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+# Gemini API（台本生成・CrewAI）
 GEMINI_API_KEY=AIza...
-GOOGLE_SHEET_ID=1ABC...
-GOOGLE_DRIVE_FOLDER_ID=1DEF...
 
-# YouTube
-YOUTUBE_CLIENT_SECRET=/path/to/client_secret.json
-# または JSON 文字列を直接設定 (推奨: ファイルパス)
-# YOUTUBE_CLIENT_SECRET='{"web": {"client_id": "...", "client_secret": "...", ...}}'
-
-# ElevenLabs
-ELEVENLABS_API_KEY=...
-
-# Discord
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# ElevenLabs（音声合成）
+ELEVENLABS_API_KEY=sk_...
 
 # オプション：複数APIキー（並列処理用）
 GEMINI_API_KEY_2=AIza...
 GEMINI_API_KEY_3=AIza...
+
+# ===== Google Cloud Services =====
+# サービスアカウント認証（Sheets, Drive, Vertex AI）
+GOOGLE_APPLICATION_CREDENTIALS=secret/service-account-key.json
+
+# Google Sheets（実行履歴・プロンプト管理）
+GOOGLE_SHEET_ID=1ABC...
+
+# Google Drive（動画バックアップ）
+GOOGLE_DRIVE_FOLDER_ID=1DEF...
+
+# YouTube（動画アップロード - OAuth必須）
+YOUTUBE_CLIENT_SECRET=secret/youtube_oauth_client.json
+# または JSON 文字列を直接設定 (推奨: ファイルパス)
+# YOUTUBE_CLIENT_SECRET='{"web": {"client_id": "...", "client_secret": "...", ...}}'
+
+# ===== CrewAI設定 =====
+# CrewAI WOW Script Creation Crew の有効化
+USE_CREWAI_SCRIPT_GENERATION=true
+
+# 従来の3段階品質チェック（CrewAI無効時のみ）
+USE_THREE_STAGE_QUALITY_CHECK=true
+
+# 品質基準（オプション - config.yamlで設定推奨）
+# WOW_SCORE_MIN=8.0
+# JAPANESE_PURITY_MIN=95.0
+# RETENTION_PREDICTION_MIN=50.0
+
+# ===== 通知 =====
+# Discord Webhook（実行結果通知）
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+
+# Slack（オプション）
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+
+# ===== 開発設定 =====
+DEBUG=true
+LOG_LEVEL=INFO
+
+# ローカルストレージ
+LOCAL_OUTPUT_DIR=output
+SAVE_LOCAL_BACKUP=true
 ```
 
 ### 本番環境での設定
@@ -320,11 +430,140 @@ if __name__ == "__main__":
 # 設定確認
 python test_setup.py
 
-# 簡単な動作テスト
+# 依存関係テスト
 python -c "import google.oauth2.service_account; print('Google Auth OK')"
 python -c "import elevenlabs; print('ElevenLabs OK')"
 python -c "import pydub; print('Pydub OK')"
+python -c "import crewai; print('CrewAI OK')"
+
+# CrewAI統合テスト（推奨）
+python3 test_crewai_flow.py
 ```
+
+**期待される出力**:
+```
+============================================================
+🧪 CrewAI WOW Script Creation Flow テスト開始
+============================================================
+
+📋 テストニュース:
+  1. 日銀、金融政策の転換を示唆
+  2. 新NISAが投資ブームを加速
+  3. AI関連株が市場を牽引
+
+🚀 CrewAI実行中...
+✅ Created agent: deep_news_analyzer
+✅ Created agent: curiosity_gap_researcher
+✅ Created agent: emotional_story_architect
+✅ Created agent: script_writer
+✅ Created agent: engagement_optimizer
+✅ Created agent: quality_guardian
+✅ Created agent: japanese_purity_polisher
+✅ WOW Script Creation Crew: All 7 agents created successfully
+✅ Created 7 tasks for WOW Script Creation Crew
+🚀 Starting WOW Script Creation Crew execution...
+```
+
+## CrewAI統合のトラブルシューティング
+
+### エラー: "Vertex AI API has not been used"
+
+**完全なエラーメッセージ**:
+```
+Vertex AI API has not been used in project probable-setup-435816-r8
+before or it is disabled.
+```
+
+**解決策（3つの選択肢）**:
+
+#### 解決策1: Vertex AI APIを有効化（推奨）
+
+1. 以下のURLにアクセス:
+   ```
+   https://console.developers.google.com/apis/api/aiplatform.googleapis.com/overview?project=probable-setup-435816-r8
+   ```
+
+2. 「APIを有効にする」をクリック
+
+3. 数分待ってから再実行:
+   ```bash
+   python3 test_crewai_flow.py
+   ```
+
+#### 解決策2: 直接Gemini APIを使用（簡単）
+
+`app/config_prompts/prompts/agents.yaml` を編集:
+```yaml
+agents:
+  deep_news_analyzer:
+    model: gemini-pro  # または gemini-1.5-pro
+    temperature: 0.7
+    # ...他のエージェントも同様に変更
+```
+
+#### 解決策3: CrewAIを一時的に無効化
+
+`.env` ファイルに追加:
+```env
+USE_CREWAI_SCRIPT_GENERATION=false
+```
+
+この場合、従来の3段階品質チェックシステムが使用されます。
+
+### エラー: "Agent creation failed"
+
+**原因**: プロンプトファイルが見つからない
+
+**解決策**:
+```bash
+# プロンプトディレクトリの確認
+ls -la app/config_prompts/prompts/
+
+# 必要なファイル:
+# - agents.yaml
+# - analysis.yaml
+# - script_generation.yaml
+# - quality_check.yaml
+```
+
+ファイルが存在しない場合、Gitから最新版を取得してください。
+
+### エラー: "ModuleNotFoundError: No module named 'crewai'"
+
+**解決策**:
+```bash
+# CrewAIをインストール
+pip install crewai crewai-tools
+
+# または requirements.txt から
+pip install -r requirements.txt
+```
+
+### CrewAI パフォーマンスの問題
+
+**症状**: 台本生成に時間がかかりすぎる
+
+**解決策**:
+
+1. **並列処理を有効化**:
+   `config.yaml` を編集:
+   ```yaml
+   crew:
+     parallel_analysis: true
+   ```
+
+2. **より高速なモデルを使用**:
+   ```yaml
+   agents:
+     deep_news_analyzer:
+       model: gemini-1.5-flash  # より高速
+   ```
+
+3. **品質ループ回数を調整**:
+   ```yaml
+   crew:
+     max_quality_iterations: 1  # デフォルト: 2
+   ```
 
 ## トラブルシューティング
 
