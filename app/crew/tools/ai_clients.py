@@ -4,6 +4,7 @@ Gemini、Perplexityなどの異なるAI APIを統一インターフェースで�
 """
 
 import logging
+import os # 追加
 import random
 import time
 from abc import ABC, abstractmethod
@@ -78,9 +79,47 @@ class GeminiClient(AIClient):
         self.max_tokens = max_tokens
         self.timeout_seconds = timeout_seconds
 
-        # Gemini APIクライアントを初期化
-        genai.configure(api_key=self.api_key)
-        self.client = genai.GenerativeModel(f"models/{model}")
+        # GOOGLE_APPLICATION_CREDENTIALS が設定されているとVertex AIが優先されるため、一時的に無効化
+        original_google_creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if original_google_creds:
+            del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+            logger.debug("Temporarily unset GOOGLE_APPLICATION_CREDENTIALS to prevent Vertex AI preference.")
+
+        # LiteLLMがVertex AIをプロバイダーとして認識しないように環境変数をクリア
+        if "LITELLM_GEMINI_PROJECT" in os.environ:
+            del os.environ["LITELLM_GEMINI_PROJECT"]
+            logger.debug("Cleared LITELLM_GEMINI_PROJECT.")
+        if "LITELLM_GEMINI_LOCATION" in os.environ:
+            del os.environ["LITELLM_GEMINI_LOCATION"]
+            logger.debug("Cleared LITELLM_GEMINI_LOCATION.")
+
+        # LiteLLMがGoogle AI Studio APIを使用するように環境変数を設定
+        os.environ["LITELLM_MODEL"] = f"gemini/{model}" # モデル名を直接指定
+        os.environ["LITELLM_API_KEY"] = self.api_key
+        os.environ["LITELLM_API_BASE"] = "https://generativelanguage.googleapis.com/v1beta"
+        logger.debug(f"Set LiteLLM environment variables: LITELLM_MODEL={os.environ['LITELLM_MODEL']}, LITELLM_API_BASE={os.environ['LITELLM_API_BASE']}")
+
+        try:
+            # Gemini APIクライアントを初期化
+            genai.configure(api_key=self.api_key)
+            self.client = genai.GenerativeModel(f"models/{model}")
+        finally:
+            # 環境変数を元に戻す
+            if original_google_creds:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = original_google_creds
+                logger.debug("Restored GOOGLE_APPLICATION_CREDENTIALS.")
+            # LiteLLMの環境変数もクリーンアップ
+            if "LITELLM_MODEL" in os.environ:
+                del os.environ["LITELLM_MODEL"]
+            if "LITELLM_API_KEY" in os.environ:
+                del os.environ["LITELLM_API_KEY"]
+            if "LITELLM_API_BASE" in os.environ:
+                del os.environ["LITELLM_API_BASE"]
+            if "LITELLM_GEMINI_PROJECT" in os.environ:
+                del os.environ["LITELLM_GEMINI_PROJECT"]
+            if "LITELLM_GEMINI_LOCATION" in os.environ:
+                del os.environ["LITELLM_GEMINI_LOCATION"]
+            logger.debug("Cleaned up LiteLLM environment variables.")
 
         logger.info(f"GeminiClient initialized: model={model}, temp={temperature}")
 
@@ -383,12 +422,26 @@ class AIClientFactory:
         Returns:
             AI Clientインスタンス
         """
-        try:
-            from app.config_prompts.prompts import get_prompt_manager
-            pm = get_prompt_manager()
-            agent_config = pm.get_agent_config(agent_name)
+        from app.config_prompts.prompts import get_prompt_manager
+        pm = get_prompt_manager()
+        agent_config = pm.get_agent_config(agent_name)
 
-            # デフォルト設定でGeminiを返す（設定があればそれを使用）
+        # LiteLLMがVertex AIをプロバイダーとして認識しないように環境変数をクリア
+        if "LITELLM_GEMINI_PROJECT" in os.environ:
+            del os.environ["LITELLM_GEMINI_PROJECT"]
+            logger.debug("Cleared LITELLM_GEMINI_PROJECT.")
+        if "LITELLM_GEMINI_LOCATION" in os.environ:
+            del os.environ["LITELLM_GEMINI_LOCATION"]
+            logger.debug("Cleared LITELLM_GEMINI_LOCATION.")
+
+        # LiteLLMがGoogle AI Studio APIを使用するように環境変数を設定
+        os.environ["LITELLM_MODEL"] = f"gemini/{agent_config.get('model', 'gemini-2.0-flash-exp')}" # モデル名を直接指定
+        os.environ["LITELLM_API_KEY"] = settings.gemini_api_key
+        os.environ["LITELLM_API_BASE"] = "https://generativelanguage.googleapis.com/v1beta"
+        logger.debug(f"Set LiteLLM environment variables: LITELLM_MODEL={os.environ['LITELLM_MODEL']}, LITELLM_API_BASE={os.environ['LITELLM_API_BASE']}")
+
+        try:
+            # GeminiClientの初期化を試みる
             return GeminiClient(
                 model=agent_config.get('model', 'gemini-2.0-flash-exp'),
                 temperature=agent_config.get('temperature', 0.7),
@@ -396,8 +449,49 @@ class AIClientFactory:
                 timeout_seconds=agent_config.get('timeout_seconds', 300)
             )
         except Exception as e:
-            logger.warning(f"Could not load agent config for '{agent_name}': {e}. Using default Gemini")
-            return GeminiClient()
+            error_message = str(e).lower()
+            # LiteLLMの環境変数をクリーンアップ
+            if "LITELLM_MODEL" in os.environ:
+                del os.environ["LITELLM_MODEL"]
+            if "LITELLM_API_KEY" in os.environ:
+                del os.environ["LITELLM_API_KEY"]
+            if "LITELLM_API_BASE" in os.environ:
+                del os.environ["LITELLM_API_BASE"]
+            if "LITELLM_GEMINI_PROJECT" in os.environ:
+                del os.environ["LITELLM_GEMINI_PROJECT"]
+            if "LITELLM_GEMINI_LOCATION" in os.environ:
+                del os.environ["LITELLM_GEMINI_LOCATION"]
+            logger.debug("Cleaned up LiteLLM environment variables before fallback.")
+
+            # 課金エラーまたは権限エラーの場合、Perplexityにフォールバック
+            if "billing_disabled" in error_message or "403 forbidden" in error_message or "permission_denied" in error_message:
+                logger.warning(f"Gemini API billing disabled or forbidden for '{agent_name}'. Falling back to Perplexity API. Error: {e}")
+                try:
+                    # PerplexityClientの初期化を試みる
+                    return PerplexityClient(
+                        model=agent_config.get('model', 'sonar-online-7b'), # Perplexityのデフォルトモデル
+                        timeout_seconds=agent_config.get('timeout_seconds', 300)
+                    )
+                except Exception as perplexity_e:
+                    logger.error(f"Failed to initialize PerplexityClient as fallback for '{agent_name}': {perplexity_e}")
+                    raise RuntimeError(f"Failed to initialize any AI client for '{agent_name}' after Gemini billing error.") from perplexity_e
+            else:
+                # その他のエラーの場合は、デフォルトのGeminiClientを試す（GeminiClientの__init__でエラーになる可能性もあるため）
+                logger.warning(f"Could not initialize GeminiClient for '{agent_name}' due to unexpected error: {e}. Attempting with default GeminiClient.")
+                return GeminiClient()
+        finally:
+            # 処理が完了したらLiteLLMの環境変数をクリーンアップ
+            if "LITELLM_MODEL" in os.environ:
+                del os.environ["LITELLM_MODEL"]
+            if "LITELLM_API_KEY" in os.environ:
+                del os.environ["LITELLM_API_KEY"]
+            if "LITELLM_API_BASE" in os.environ:
+                del os.environ["LITELLM_API_BASE"]
+            if "LITELLM_GEMINI_PROJECT" in os.environ:
+                del os.environ["LITELLM_GEMINI_PROJECT"]
+            if "LITELLM_GEMINI_LOCATION" in os.environ:
+                del os.environ["LITELLM_GEMINI_LOCATION"]
+            logger.debug("Cleaned up LiteLLM environment variables after AIClientFactory.create_from_agent_config.")
 
 
 # ===================================
@@ -435,11 +529,16 @@ try:
         Vertex AIではなくGoogle AI Studio APIを使用するため課金不要
         """
         api_key = settings.gemini_api_key
+        # LiteLLMがVertex AIではなくGoogle AI Studio APIを使用するように環境変数を設定
+        os.environ["LITELLM_GEMINI_API_BASE"] = "https://generativelanguage.googleapis.com/v1beta"
+        os.environ["LITELLM_GEMINI_API_KEY"] = api_key
+        
         return ChatGoogleGenerativeAI(
             model=model,
             google_api_key=api_key,
             temperature=temperature,
             convert_system_message_to_human=True,
+            client_options={"api_endpoint": "generativelanguage.googleapis.com"}, # Vertex AIではなくGoogle AI Studio APIを明示的に使用
             **kwargs
         )
 except ImportError:

@@ -1,0 +1,32 @@
+# 共通テンプレート定義
+# 各エージェントが参照する共通の台本テンプレート
+
+templates:
+  opening:
+    narrator_greeting: |
+      こんにちは。今回は{{ topic }}について解説します
+
+    tanaka_conclusion: |
+      結論から言うと、{{ conclusion }}です
+
+    suzuki_question: |
+      え、それって{{ viewer_doubt }}ってことですか？
+
+  main_section:
+    prep_structure: |
+      田中: 「{{ point }}」（結論）
+      田中: 「なぜなら{{ reason }}だからです」（理由）
+      田中: 「例えば{{ example }}」（具体例）
+      鈴木: 「つまり{{ restate_point }}ってことですね」（再結論）
+
+  closing:
+    summary: |
+      ナレーター: 「今回のポイントを3つにまとめます」
+      ナレーター: 「1つ目、{{ point1 }}」
+      ナレーター: 「2つ目、{{ point2 }}」
+      ナレーター: 「3つ目、{{ point3 }}」
+
+    cta: |
+      ナレーター: 「今回の動画が参考になったら」
+      ナレーター: 「チャンネル登録と高評価をお願いします」
+      ナレーター: 「コメント欄でご意見もお待ちしています」
