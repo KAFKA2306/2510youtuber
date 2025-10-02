@@ -1,0 +1,218 @@
+# YouTube自動生成システム 統合設定ファイル
+# Phase 1: CrewAI WOW Script Creation Crew
+
+# ============================================
+# 話者設定
+# ============================================
+speakers:
+  - name: 田中
+    role: 経済専門家
+    voice_id_env: TTS_VOICE_TANAKA
+    stability: 0.5
+    similarity_boost: 0.75
+    style: 0.1
+    speaking_style: 落ち着いた、論理的、データ重視
+    speaking_pattern: 3文連続で説明 → 鈴木に振る
+
+  - name: 鈴木
+    role: 金融アナリスト・質問役
+    voice_id_env: TTS_VOICE_SUZUKI
+    stability: 0.4
+    similarity_boost: 0.8
+    style: 0.2
+    speaking_style: やや早口、リアクション多め、視聴者目線
+    speaking_pattern: 短い質問・確認（1文）
+
+  - name: ナレーター
+    role: 導入・まとめ担当
+    voice_id_env: TTS_VOICE_NARRATOR
+    stability: 0.6
+    similarity_boost: 0.7
+    style: 0.0
+    speaking_style: 明瞭、テンポ良く
+    speaking_pattern: 簡潔な要約
+
+# ============================================
+# 動画設定
+# ============================================
+video:
+  resolution:
+    width: 1920
+    height: 1080
+  quality_preset: high  # low/medium/high/ultra
+  max_duration_minutes: 40
+  target_duration_minutes: 8  # デフォルト目標
+
+subtitle:
+  font_size: 48
+  color: "&H00FFFF00"  # 黄色 (ASS形式)
+  outline_width: 5
+  margin_v: 100
+  margin_h: 80
+
+thumbnail:
+  resolution:
+    width: 1280
+    height: 720
+
+# ============================================
+# 品質基準
+# ============================================
+quality_thresholds:
+  # WOWスコア（10点満点）
+  wow_score_min: 8.0
+  wow_score_excellent: 9.0
+
+  # 日本語純度（0-100%）
+  japanese_purity_min: 95.0
+  japanese_purity_excellent: 98.0
+
+  # 保持率予測（0-100%）
+  retention_prediction_min: 50.0
+  retention_first_minute_min: 70.0
+
+  # WOW要素の最小数
+  surprise_points_min: 5
+  emotion_peaks_min: 5
+  curiosity_gaps_min: 3
+  visual_instructions_min: 15
+  concrete_numbers_min: 10
+  viewer_questions_min: 3
+
+# ============================================
+# CrewAI設定
+# ============================================
+crew:
+  enabled: true
+  max_quality_iterations: 2
+  parallel_analysis: true  # Agent 1-3を並列実行
+  verbose: false
+
+  # エージェント設定
+  agents:
+    deep_news_analyzer:
+      model: gemini-2.5-flash
+      temperature: 0.7
+      max_tokens: 4096
+      timeout_seconds: 120
+
+    curiosity_gap_researcher:
+      model: gemini-2.5-flash
+      temperature: 0.8
+      max_tokens: 2048
+      timeout_seconds: 90
+
+    emotional_story_architect:
+      model: gemini-2.5-flash
+      temperature: 0.8
+      max_tokens: 3072
+      timeout_seconds: 100
+
+    script_writer:
+      model: gemini-2.5-flash
+      temperature: 0.9
+      max_tokens: 8192
+      timeout_seconds: 180
+
+    engagement_optimizer:
+      model: gemini-2.5-flash
+      temperature: 0.7
+      max_tokens: 6144
+      timeout_seconds: 120
+
+    quality_guardian:
+      model: gemini-2.5-flash
+      temperature: 0.5
+      max_tokens: 4096
+      timeout_seconds: 90
+
+    japanese_purity_polisher:
+      model: gemini-2.5-flash
+      temperature: 0.6
+      max_tokens: 8192
+      timeout_seconds: 120
+
+  # 保持率予測設定
+  retention_predictor:
+    interval_seconds: 30
+    targets:
+      "0-30": 80
+      "30-60": 70
+      "60-120": 60
+      "120-240": 50
+      "240-480": 45
+
+# ============================================
+# YouTube最適化ルール (2025年版)
+# ============================================
+youtube_optimization:
+  # 最初の8秒ルール
+  first_8_seconds:
+    enabled: true
+    elements:
+      - conclusion
+      - surprise_number
+      - curiosity_question
+
+  # パターン・インタラプト
+  pattern_interrupt:
+    interval_seconds: 30
+    types:
+      - graph_display
+      - surprise_fact
+      - viewer_question
+      - example_introduction
+      - visual_change
+
+  # PREP法
+  prep_method:
+    min_usage_count: 3
+    structure:
+      - Point
+      - Reason
+      - Example
+      - Point
+
+  # 会話リズム
+  dialogue_rhythm:
+    tanaka_sentences_per_turn: 3
+    suzuki_sentences_per_turn: 1
+    max_sentence_length: 15  # 文字数
+
+# ============================================
+# プロンプト設定
+# ============================================
+prompts:
+  directory: app/config/prompts
+  files:
+    agents: agents.yaml
+    analysis: analysis.yaml
+    script_generation: script_generation.yaml
+    quality_check: quality_check.yaml
+
+# ============================================
+# TTS設定
+# ============================================
+tts:
+  max_concurrent: 3
+  chunk_size: 1500
+  voicevox:
+    enabled: false
+    port: 50121
+    speaker: 1
+
+# ============================================
+# デバッグ・ロギング
+# ============================================
+debug:
+  enabled: false
+  log_level: INFO  # DEBUG/INFO/WARNING/ERROR
+  save_intermediate_files: false
+  save_prompts: true
+
+# ============================================
+# バックアップ
+# ============================================
+backup:
+  save_local: true
+  output_dir: output
