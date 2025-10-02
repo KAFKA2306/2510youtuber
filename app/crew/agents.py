@@ -4,7 +4,6 @@
 """
 
 import logging
-import os # 追加
 from typing import Dict, List, Optional
 from crewai import Agent
 
@@ -38,20 +37,13 @@ class AgentFactory:
             # agents.yamlからエージェント設定を取得
             agent_config = self.prompt_manager.get_agent_config(agent_name)
 
-            # LiteLLMがGoogle AI Studio APIを使用するように環境変数を設定
-            # AgentがLLMを初期化する前に設定する必要がある
-            # まず、Vertex AI関連のLiteLLM環境変数をクリア
-            if "LITELLM_GEMINI_PROJECT" in os.environ:
-                del os.environ["LITELLM_GEMINI_PROJECT"]
-            if "LITELLM_GEMINI_LOCATION" in os.environ:
-                del os.environ["LITELLM_GEMINI_LOCATION"]
+            # CrewAI用にLangChain LLMを使用
+            from app.crew.tools.ai_clients import get_crewai_gemini_llm
 
-            os.environ["LITELLM_MODEL"] = f"gemini/{agent_config.get('model', 'gemini-2.0-flash-exp')}"
-            os.environ["LITELLM_API_KEY"] = settings.gemini_api_key
-            os.environ["LITELLM_API_BASE"] = "https://generativelanguage.googleapis.com/v1beta"
-
-            # AI Clientを生成
-            llm = AIClientFactory.create_from_agent_config(agent_name)
+            llm = get_crewai_gemini_llm(
+                model=agent_config.get('model', 'gemini-2.0-flash-exp'),
+                temperature=agent_config.get('temperature', 0.7)
+            )
 
             # エージェント作成
             agent = Agent(
@@ -62,18 +54,6 @@ class AgentFactory:
                 llm=llm,
                 **override_params
             )
-            
-            # 環境変数をクリーンアップ
-            if "LITELLM_MODEL" in os.environ:
-                del os.environ["LITELLM_MODEL"]
-            if "LITELLM_API_KEY" in os.environ:
-                del os.environ["LITELLM_API_KEY"]
-            if "LITELLM_API_BASE" in os.environ:
-                del os.environ["LITELLM_API_BASE"]
-            if "LITELLM_GEMINI_PROJECT" in os.environ:
-                del os.environ["LITELLM_GEMINI_PROJECT"]
-            if "LITELLM_GEMINI_LOCATION" in os.environ:
-                del os.environ["LITELLM_GEMINI_LOCATION"]
 
             logger.info(f"Created agent: {agent_name}")
             return agent

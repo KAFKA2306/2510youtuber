@@ -4,6 +4,7 @@ WOW Script Creation Crewの実行フローとオーケストレーション
 """
 
 import logging
+import os
 from typing import Dict, List, Any, Optional
 from crewai import Crew, Process
 
@@ -13,6 +14,52 @@ from .agents import create_wow_agents
 from .tasks import create_wow_tasks
 
 logger = logging.getLogger(__name__)
+
+# Configure LiteLLM to work with Google AI Studio (not Vertex AI)
+import litellm
+
+# CRITICAL: Force Google AI Studio by completely disabling Vertex AI detection
+# This MUST happen before any LiteLLM imports or calls
+os.environ.pop('GOOGLE_APPLICATION_CREDENTIALS', None)
+os.environ.pop('VERTEX_PROJECT', None)
+os.environ.pop('VERTEX_LOCATION', None)
+os.environ.pop('GOOGLE_CLOUD_PROJECT', None)
+os.environ.pop('GCLOUD_PROJECT', None)
+os.environ.pop('GCP_PROJECT', None)
+
+# Set Gemini API key for LiteLLM - this forces Google AI Studio
+os.environ['GEMINI_API_KEY'] = settings.gemini_api_key
+
+# Configure LiteLLM settings
+litellm.drop_params = True  # Drop unknown parameters
+litellm.suppress_debug_info = False  # Keep debug for now
+litellm.vertex_project = None  # Force no Vertex project
+litellm.vertex_location = None  # Force no Vertex location
+
+# CRITICAL: Patch the model_cost calculation to prevent Vertex AI routing
+# LiteLLM uses get_llm_provider internally which can still route to Vertex
+original_completion = litellm.completion
+
+def patched_completion(model=None, messages=None, **kwargs):
+    """Intercept all LiteLLM completion calls and force gemini/ prefix"""
+    if model and "gemini" in model.lower() and not model.startswith("gemini/"):
+        # Force gemini/ prefix to use Google AI Studio provider
+        clean_model = model.replace("vertex_ai/", "").replace("vertex_ai_beta/", "")
+        clean_model = clean_model.replace("models/", "")
+        forced_model = f"gemini/{clean_model}"
+        logger.warning(f"LiteLLM completion intercepted: {model} -> {forced_model}")
+        model = forced_model
+
+    # Remove any Vertex AI credentials from kwargs
+    kwargs.pop('vertex_credentials', None)
+    kwargs.pop('vertex_project', None)
+    kwargs.pop('vertex_location', None)
+
+    return original_completion(model=model, messages=messages, **kwargs)
+
+litellm.completion = patched_completion
+
+logger.info("Configured LiteLLM: Vertex AI blocked, Google AI Studio forced")
 
 
 class WOWScriptFlow:
@@ -89,18 +136,61 @@ class WOWScriptFlow:
         Returns:
             構造化された結果辞書
         """
+        import json
+        import re
+
         # CrewAIの結果は通常文字列として返される
         # 最後のタスク（Japanese Purity Check）の出力を最終台本とする
+        crew_output_str = str(crew_result)
 
-        result = {
-            'success': True,
-            'final_script': str(crew_result),
-            'crew_output': crew_result,
-        }
+        # JSON形式で返されている場合はパースして構造化データを抽出
+        try:
+            # ```json ... ``` のパターンを探す
+            json_match = re.search(r'```json\n(.*?)\n```', crew_output_str, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # フォールバック: 最初と最後の{}を探す
+                start = crew_output_str.find('{')
+                end = crew_output_str.rfind('}') + 1
+                if start != -1 and end != 0:
+                    json_str = crew_output_str[start:end]
+                else:
+                    # JSONが見つからない場合は生のテキストを使用
+                    logger.warning("No JSON found in CrewAI output, using raw text")
+                    return {
+                        'success': True,
+                        'final_script': crew_output_str,
+                        'crew_output': crew_result,
+                    }
 
-        # TODO: JSON形式で返されている場合はパースして構造化データを抽出
+            # JSONをパース
+            parsed_data = json.loads(json_str)
 
-        return result
+            # final_scriptフィールドを抽出
+            final_script = parsed_data.get('final_script', crew_output_str)
+
+            logger.info(f"Successfully parsed CrewAI JSON output, script length: {len(final_script)}")
+            logger.debug(f"First 500 chars of parsed script: {final_script[:500]}")
+
+            result = {
+                'success': True,
+                'final_script': final_script,
+                'crew_output': crew_result,
+                'quality_data': parsed_data.get('quality_guarantee', {}),
+                'japanese_purity_score': parsed_data.get('japanese_purity_score', 0),
+                'character_count': parsed_data.get('character_count', len(final_script)),
+            }
+
+            return result
+
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Failed to parse CrewAI output as JSON: {e}, using raw text")
+            return {
+                'success': True,
+                'final_script': crew_output_str,
+                'crew_output': crew_result,
+            }
 
 
 def create_wow_script_crew(

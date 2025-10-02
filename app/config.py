@@ -51,8 +51,12 @@ class Config:
     # ===== Google Services =====
     @property
     def google_credentials_json(self) -> dict:
-        """Google認証情報（JSON）."""
-        creds_str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "{}")
+        """Google認証情報（JSON）- For Drive/Sheets only, NOT for Vertex AI."""
+        creds_str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+        if not creds_str:
+            logging.info("GOOGLE_APPLICATION_CREDENTIALS not set (this is OK, prevents Vertex AI billing errors)")
+            return {}
+
         try:
             if creds_str.startswith("{"):
                 # JSON文字列として解析

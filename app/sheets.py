@@ -31,7 +31,9 @@ class SheetsManager:
         try:
             creds_dict = cfg.google_credentials_json
             if not creds_dict:
-                raise ValueError("Google credentials not configured")
+                logger.warning("Google credentials not configured - Sheets integration disabled")
+                self.service = None
+                return
 
             credentials = service_account.Credentials.from_service_account_info(
                 creds_dict, scopes=["https://www.googleapis.com/auth/spreadsheets"]
@@ -43,7 +45,7 @@ class SheetsManager:
 
         except Exception as e:
             logger.error(f"Failed to connect to Google Sheets: {e}")
-            raise
+            self.service = None
 
     def _rate_limit_retry(self, func, *args, **kwargs):
         """レート制限対応のリトライ機能付き実行"""
@@ -85,6 +87,10 @@ class SheetsManager:
             生成された run_id
 
         """
+        if not self.service:
+            logger.warning("Sheets service not available, returning dummy run_id")
+            return str(uuid.uuid4())[:8]
+
         run_id = str(uuid.uuid4())[:8]
         now = datetime.now().isoformat()
 
@@ -232,8 +238,11 @@ class SheetsManager:
 
         Returns:
             プロンプトの辞書 {prompt_a: "...", prompt_b: "...", ...}
-
         """
+        if not self.service:
+            logger.warning("Sheets service not available, returning empty prompts")
+            return {}
+
         try:
             result = self._rate_limit_retry(
                 self.service.spreadsheets().values().get, spreadsheetId=self.sheet_id, range="prompts!A1:E2"
