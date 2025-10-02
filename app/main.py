@@ -165,18 +165,38 @@ class YouTubeWorkflow:
 
     async def _step2_generate_script(self, news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
         logger.info("Step 2: Starting script generation...")
-        logger.info(f"3-stage quality check: {'ENABLED' if cfg.use_three_stage_quality_check else 'DISABLED'}")
+
+        # CrewAI Flowの使用判定
+        use_crewai = getattr(cfg, 'use_crewai_script_generation', True)
+        logger.info(f"CrewAI WOW Script Generation: {'ENABLED' if use_crewai else 'DISABLED'}")
 
         try:
-            prompt_b = self._get_prompts().get("prompt_b", self._default_script_prompt())
+            if use_crewai:
+                # CrewAI WOW Script Creation Flowを使用
+                from app.crew.flows import create_wow_script_crew
 
-            # 3段階品質チェックを使用（設定で有効な場合）
-            script_content = generate_dialogue(
-                news_items,
-                prompt_b,
-                target_duration_minutes=cfg.max_video_duration_minutes,
-                use_quality_check=cfg.use_three_stage_quality_check
-            )
+                logger.info("🚀 Using CrewAI WOW Script Creation Crew...")
+                crew_result = create_wow_script_crew(
+                    news_items=news_items,
+                    target_duration_minutes=cfg.max_video_duration_minutes
+                )
+
+                if not crew_result.get('success'):
+                    raise Exception(f"CrewAI execution failed: {crew_result.get('error', 'Unknown error')}")
+
+                script_content = crew_result.get('final_script', '')
+
+            else:
+                # 従来の3段階品質チェックを使用
+                logger.info(f"3-stage quality check: {'ENABLED' if cfg.use_three_stage_quality_check else 'DISABLED'}")
+                prompt_b = self._get_prompts().get("prompt_b", self._default_script_prompt())
+
+                script_content = generate_dialogue(
+                    news_items,
+                    prompt_b,
+                    target_duration_minutes=cfg.max_video_duration_minutes,
+                    use_quality_check=cfg.use_three_stage_quality_check
+                )
 
             if not script_content or len(script_content) < 100:
                 raise Exception("Generated script too short or empty")
@@ -193,7 +213,8 @@ class YouTubeWorkflow:
                 "length": len(script_content),
                 "step": "script_generation",
                 "files": [script_path],
-                "quality_checked": cfg.use_three_stage_quality_check,
+                "quality_checked": use_crewai or cfg.use_three_stage_quality_check,
+                "used_crewai": use_crewai,
             }
         except Exception as e:
             logger.error(f"Step 2 failed: {e}")

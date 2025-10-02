@@ -265,8 +265,13 @@ class Config:
         return os.getenv("LOCAL_OUTPUT_DIR", "output")
 
     @property
+    def use_crewai_script_generation(self) -> bool:
+        """CrewAI WOW Script Creation Flowを使用するか."""
+        return os.getenv("USE_CREWAI_SCRIPT_GENERATION", "true").lower() == "true"
+
+    @property
     def use_three_stage_quality_check(self) -> bool:
-        """3段階品質チェックを使用するか."""
+        """3段階品質チェックを使用するか（CrewAI無効時のみ）."""
         return os.getenv("USE_THREE_STAGE_QUALITY_CHECK", "true").lower() == "true"
 
     @property

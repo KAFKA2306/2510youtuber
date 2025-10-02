@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional, List
 import google.generativeai as genai
 import httpx
 
-from app.config import settings
+from app.config import cfg as settings
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class GeminiClient(AIClient):
             max_tokens: 最大トークン数
             timeout_seconds: タイムアウト（秒）
         """
-        self.api_key = api_key or settings.api_keys.get('gemini', '')
+        self.api_key = api_key or settings.gemini_api_key
         if not self.api_key:
             raise ValueError("Gemini API key not found")
 
@@ -122,10 +122,11 @@ class GeminiClient(AIClient):
             try:
                 logger.debug(f"Gemini API call (attempt {attempt+1}/{max_retries})")
 
+                # Note: request_options is not supported in this version of google-generativeai
+                # タイムアウトはhttpxレベルで管理
                 response = self.client.generate_content(
                     prompt,
-                    generation_config=generation_config,
-                    request_options={'timeout': timeout}
+                    generation_config=generation_config
                 )
 
                 content = response.text
@@ -230,7 +231,7 @@ class PerplexityClient(AIClient):
         model: str = "sonar",
         timeout_seconds: int = 120
     ):
-        self.api_key = api_key or settings.api_keys.get('perplexity', '')
+        self.api_key = api_key or settings.perplexity_api_key
         if not self.api_key:
             raise ValueError("Perplexity API key not found")
 
@@ -382,18 +383,21 @@ class AIClientFactory:
         Returns:
             AI Clientインスタンス
         """
-        agent_config = settings.get_agent_config(agent_name)
-        if not agent_config:
-            # デフォルト設定でGeminiを返す
-            logger.warning(f"Agent config not found for '{agent_name}', using default Gemini")
-            return GeminiClient()
+        try:
+            from app.config_prompts.prompts import get_prompt_manager
+            pm = get_prompt_manager()
+            agent_config = pm.get_agent_config(agent_name)
 
-        return GeminiClient(
-            model=agent_config.model,
-            temperature=agent_config.temperature,
-            max_tokens=agent_config.max_tokens,
-            timeout_seconds=agent_config.timeout_seconds
-        )
+            # デフォルト設定でGeminiを返す（設定があればそれを使用）
+            return GeminiClient(
+                model=agent_config.get('model', 'gemini-2.0-flash-exp'),
+                temperature=agent_config.get('temperature', 0.7),
+                max_tokens=agent_config.get('max_tokens', 4096),
+                timeout_seconds=agent_config.get('timeout_seconds', 300)
+            )
+        except Exception as e:
+            logger.warning(f"Could not load agent config for '{agent_name}': {e}. Using default Gemini")
+            return GeminiClient()
 
 
 # ===================================

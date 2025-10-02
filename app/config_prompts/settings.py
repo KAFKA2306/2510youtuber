@@ -1,32 +1,23 @@
 import os
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, validator
-from typing import List, Dict, Any
+from pydantic import BaseModel, Field
+from typing import List, Dict
 
 # .envファイルを読み込む
 load_dotenv()
 
 class SpeakerConfig(BaseModel):
-    """話者設定""" 
+    """話者設定"""
     name: str
     role: str
-    voice_id_env: str
+    voice_id: str
     stability: float = 0.5
     speaking_style: str
-    voice_id: str = ""
-
-    @validator('voice_id', pre=True, always=True)
-    def load_voice_id_from_env(cls, v, values):
-        return os.getenv(values.get('voice_id_env'))
-
-class VideoResolution(BaseModel):
-    width: int
-    height: int
 
 class VideoConfig(BaseModel):
     """動画設定"""
-    resolution: VideoResolution
+    resolution: tuple[int, int] = (1920, 1080)
     quality_preset: str = "high"
     max_duration_minutes: int = 40
 
@@ -77,19 +68,16 @@ class AppSettings(BaseModel):
         api_keys = {
             "gemini": os.getenv("GEMINI_API_KEY"),
             "elevenlabs": os.getenv("ELEVENLABS_API_KEY"),
-            "youtube": os.getenv("YOUTUBE_CLIENT_SECRET"), # Use client secret
+            "youtube": os.getenv("YOUTUBE_API_KEY"),
         }
         
         config["api_keys"] = api_keys
         
-        # pydantic expects the quality field, but yaml has quality_thresholds
-        if "quality_thresholds" in config:
-            config["quality"] = config.pop("quality_thresholds")
-
         # For compatibility with old cfg object
         config["use_crewai_script_generation"] = config.get("crew", {}).get("enabled", True)
         config["use_three_stage_quality_check"] = not config.get("crew", {}).get("enabled", True)
         config["max_video_duration_minutes"] = config.get("video", {}).get("max_duration_minutes", 15)
+
 
         return cls(**config)
 

@@ -13,7 +13,7 @@ from jinja2 import Template
 class PromptManager:
     """プロンプト管理クラス"""
 
-    def __init__(self, prompts_dir: str = "app/config/prompts"):
+    def __init__(self, prompts_dir: str = "app/config_prompts/prompts"):
         self.prompts_dir = Path(prompts_dir)
         self._cache: Dict[str, Dict[str, Any]] = {}
 
