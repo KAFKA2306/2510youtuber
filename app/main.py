@@ -160,6 +160,10 @@ class YouTubeWorkflow:
             if not news_items:
                 raise Exception("No news items collected")
             logger.info(f"Collected {len(news_items)} news items")
+
+            # Store in workflow state for later use
+            self.workflow_state["news_items"] = news_items
+
             return {
                 "success": True,
                 "news_items": news_items,
@@ -221,6 +225,9 @@ class YouTubeWorkflow:
             script_path = FileUtils.get_temp_file(prefix="script_", suffix=".txt")
             with open(script_path, "w", encoding="utf-8") as f:
                 f.write(script_content)
+
+            # Store in workflow state for later use
+            self.workflow_state["script_content"] = script_content
 
             logger.info(f"Generated script: {len(script_content)} characters")
             return {
@@ -297,19 +304,34 @@ class YouTubeWorkflow:
     async def _step6_generate_video(self, audio_path: str, subtitle_path: str) -> Dict[str, Any]:
         logger.info("Step 6: Starting video generation...")
         try:
+            # Get script and news from workflow state for stock footage keywords
+            script_content = self.workflow_state.get("script_content", "")
+            news_items = self.workflow_state.get("news_items", [])
+
             video_path = generate_video(
-                audio_path=audio_path, subtitle_path=subtitle_path, title="Economic News Analysis"
+                audio_path=audio_path,
+                subtitle_path=subtitle_path,
+                title="Economic News Analysis",
+                script_content=script_content,
+                news_items=news_items,
             )
             if not video_path or not os.path.exists(video_path):
                 raise Exception("Video generation failed")
             video_size = os.path.getsize(video_path)
             logger.info(f"Generated video: {video_path} ({video_size} bytes)")
+
+            # Record which method was used
+            from .video import video_generator
+            generation_method = video_generator.last_generation_method
+
             return {
                 "success": True,
                 "video_path": video_path,
                 "file_size": video_size,
                 "step": "video_generation",
                 "files": [video_path],
+                "generation_method": generation_method,
+                "used_stock_footage": video_generator.last_used_stock_footage,
             }
         except Exception as e:
             logger.error(f"Step 6 failed: {e}")

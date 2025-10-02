@@ -3,13 +3,14 @@
 音声ファイル、字幕ファイル、背景画像を組み合わせて最終的な動画を生成します。
 FFmpegを使用して高品質な動画出力を実現します。
 背景テーマのA/Bテストと継続的改善をサポートします。
+ストックビデオAPIを使用した無料のプロフェッショナルB-roll映像にも対応。
 """
 
 import logging
 import os
 import tempfile
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import ffmpeg
 from pydub import AudioSegment
@@ -28,7 +29,15 @@ class VideoGenerator:
         self.output_format = "mp4"
         self.theme_manager = get_theme_manager()
         self.current_theme: Optional[BackgroundTheme] = None
-        logger.info("Video generator initialized with theme management")
+
+        # Initialize stock footage services (lazy loading)
+        self._stock_manager = None
+        self._visual_matcher = None
+        self._broll_generator = None
+        self.last_used_stock_footage = False
+        self.last_generation_method = "static"
+
+        logger.info("Video generator initialized with theme management and stock footage support")
 
     def generate_video(
         self,
@@ -39,6 +48,9 @@ class VideoGenerator:
         output_path: str = None,
         theme_name: str = None,
         enable_ab_test: bool = True,
+        script_content: str = "",
+        news_items: List[Dict] = None,
+        use_stock_footage: bool = None,
     ) -> str:
         """動画を生成
 
@@ -50,12 +62,42 @@ class VideoGenerator:
             output_path: 出力ファイルパス
             theme_name: 使用するテーマ名（Noneの場合はA/Bテスト選択）
             enable_ab_test: A/Bテストを有効にするか
+            script_content: スクリプト内容（キーワード抽出用）
+            news_items: ニュースアイテムリスト（キーワード抽出用）
+            use_stock_footage: ストック映像を使用するか（Noneの場合は設定から取得）
         """
         try:
             self._validate_input_files(audio_path, subtitle_path, background_image)
             if not output_path:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_path = f"video_{timestamp}.{self.output_format}"
+
+            audio_duration = self._get_audio_duration(audio_path)
+
+            # Determine if using stock footage
+            if use_stock_footage is None:
+                use_stock_footage = cfg.enable_stock_footage
+
+            # TRY 1: Stock Footage B-roll (if enabled and configured)
+            if use_stock_footage and self._can_use_stock_footage():
+                try:
+                    logger.info("Attempting to generate video with stock footage B-roll...")
+                    video_path = self._generate_with_stock_footage(
+                        audio_path, subtitle_path, audio_duration,
+                        script_content, news_items, output_path
+                    )
+                    if video_path:
+                        self.last_used_stock_footage = True
+                        self.last_generation_method = "stock_footage"
+                        logger.info(f"✓ Generated video with stock footage: {video_path}")
+                        return video_path
+                except Exception as e:
+                    logger.warning(f"Stock footage generation failed: {e}, falling back to static")
+
+            # TRY 2: Enhanced Static Background (theme-based, A/B tested)
+            logger.info("Generating video with static background...")
+            self.last_used_stock_footage = False
+            self.last_generation_method = "static"
 
             # テーマ選択（A/Bテストまたは指定）
             if theme_name:
@@ -70,7 +112,6 @@ class VideoGenerator:
                 self.theme_manager.record_usage(self.current_theme.name)
 
             bg_image_path = self._prepare_background_image(background_image, title)
-            audio_duration = self._get_audio_duration(audio_path)
 
             stream = ffmpeg.input(bg_image_path, loop=1, t=audio_duration)
             audio_stream = ffmpeg.input(audio_path)
@@ -92,6 +133,7 @@ class VideoGenerator:
 
         except Exception as e:
             logger.error(f"Video generation failed: {e}")
+            self.last_generation_method = "fallback"
             return self._generate_fallback_video(audio_path, title)
         finally:
             if "bg_image_path" in locals() and bg_image_path != background_image:
@@ -425,6 +467,140 @@ class VideoGenerator:
         except Exception as e:
             logger.warning(f"Failed to get video info: {e}")
             return {"file_size_mb": 0, "error": str(e)}
+
+    def _can_use_stock_footage(self) -> bool:
+        """Check if stock footage generation is available."""
+        return bool(cfg.pexels_api_key or cfg.pixabay_api_key)
+
+    def _ensure_stock_services(self):
+        """Lazy load stock footage services."""
+        if self._stock_manager is None:
+            from .services.media import StockFootageManager, VisualMatcher, BRollGenerator
+
+            self._stock_manager = StockFootageManager(
+                pexels_api_key=cfg.pexels_api_key,
+                pixabay_api_key=cfg.pixabay_api_key,
+            )
+            self._visual_matcher = VisualMatcher()
+            self._broll_generator = BRollGenerator(ffmpeg_path=cfg.ffmpeg_path)
+
+    def _generate_with_stock_footage(
+        self,
+        audio_path: str,
+        subtitle_path: str,
+        audio_duration: float,
+        script_content: str,
+        news_items: List[Dict],
+        output_path: str,
+    ) -> Optional[str]:
+        """Generate video using stock footage B-roll.
+
+        Args:
+            audio_path: Audio file path
+            subtitle_path: Subtitle file path
+            audio_duration: Duration of audio
+            script_content: Script text for keyword extraction
+            news_items: News items for context
+            output_path: Final video output path
+
+        Returns:
+            Output path if successful, None otherwise
+        """
+        self._ensure_stock_services()
+
+        # Extract visual keywords from script
+        keywords = self._visual_matcher.extract_keywords(
+            script_content=script_content,
+            news_items=news_items or [],
+            max_keywords=cfg.stock_footage_clips_per_video,
+        )
+
+        if not keywords:
+            logger.warning("No keywords extracted for stock footage search")
+            return None
+
+        logger.info(f"Stock footage keywords: {keywords}")
+
+        # Search for stock footage
+        footage_results = self._stock_manager.search_footage(
+            keywords=keywords,
+            duration_target=audio_duration,
+            max_clips=cfg.stock_footage_clips_per_video,
+        )
+
+        if not footage_results:
+            logger.warning("No stock footage found")
+            return None
+
+        logger.info(f"Found {len(footage_results)} stock clips")
+
+        # Download clips
+        clip_paths = self._stock_manager.download_clips(footage_results)
+
+        if not clip_paths:
+            logger.warning("Failed to download stock clips")
+            return None
+
+        logger.info(f"Downloaded {len(clip_paths)} clips successfully")
+
+        # Generate B-roll sequence
+        broll_path = self._broll_generator.create_broll_sequence(
+            clip_paths=clip_paths,
+            target_duration=audio_duration,
+            transition_duration=1.0,
+            enable_effects=True,
+        )
+
+        if not broll_path or not os.path.exists(broll_path):
+            logger.warning("Failed to create B-roll sequence")
+            return None
+
+        logger.info(f"Created B-roll sequence: {broll_path}")
+
+        # Combine B-roll + audio + subtitles
+        try:
+            video_stream = ffmpeg.input(broll_path)
+            audio_stream = ffmpeg.input(audio_path)
+
+            # Apply subtitle overlay
+            video_with_subs = video_stream.filter(
+                'subtitles',
+                subtitle_path,
+                force_style=self._get_subtitle_style_string(),
+            )
+
+            # Combine video + audio
+            output = ffmpeg.output(
+                video_with_subs,
+                audio_stream,
+                output_path,
+                vcodec='libx264',
+                acodec='aac',
+                **self._get_quality_settings(),
+            ).overwrite_output()
+
+            ffmpeg.run(output, quiet=True)
+
+            if os.path.exists(output_path):
+                video_info = self._get_video_info(output_path)
+                logger.info(f"Stock footage video complete: {video_info}")
+                return output_path
+
+        except Exception as e:
+            logger.error(f"Failed to combine B-roll with audio: {e}")
+
+        return None
+
+    def _get_subtitle_style_string(self) -> str:
+        """Get subtitle style as string for ffmpeg filter."""
+        # Reuse existing subtitle filter logic
+        filter_str = self._build_subtitle_filter("dummy.srt")
+        if filter_str and "force_style='" in filter_str:
+            # Extract style string
+            start = filter_str.find("force_style='") + len("force_style='")
+            end = filter_str.find("'", start)
+            return filter_str[start:end]
+        return ""
 
     def _generate_fallback_video(self, audio_path: str, title: str) -> str:
         try:

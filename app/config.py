@@ -48,6 +48,17 @@ class Config:
         """ElevenLabs API キー."""
         return os.getenv("ELEVENLABS_API_KEY", "")
 
+    # ===== Stock Footage APIs (FREE) =====
+    @property
+    def pexels_api_key(self) -> str:
+        """Pexels API キー（無料、無制限）- https://www.pexels.com/api/"""
+        return os.getenv("PEXELS_API_KEY", "")
+
+    @property
+    def pixabay_api_key(self) -> str:
+        """Pixabay API キー（無料、無制限）- https://pixabay.com/api/docs/"""
+        return os.getenv("PIXABAY_API_KEY", "")
+
     # ===== Google Services =====
     @property
     def google_credentials_json(self) -> dict:
@@ -297,6 +308,17 @@ class Config:
     def save_local_backup(self) -> bool:
         """ローカルバックアップを保存."""
         return os.getenv("SAVE_LOCAL_BACKUP", "true").lower() == "true"
+
+    # ===== Stock Footage Settings =====
+    @property
+    def enable_stock_footage(self) -> bool:
+        """無料ストック映像を使用するか（Pexels/Pixabay）."""
+        return os.getenv("ENABLE_STOCK_FOOTAGE", "true").lower() == "true"
+
+    @property
+    def stock_footage_clips_per_video(self) -> int:
+        """動画あたりのストック映像クリップ数."""
+        return int(os.getenv("STOCK_CLIPS_PER_VIDEO", "5"))
 
     def _setup_logging(self):
         """ログ設定."""

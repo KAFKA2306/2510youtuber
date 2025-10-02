@@ -12,6 +12,8 @@
 - [ ] **Google Cloud**: Gemini API・Sheets・Drive・YouTube Data API用
   - ⚠️ **重要**: Vertex AI APIまたは直接のGemini API（CrewAI用）
 - [ ] **ElevenLabs**: TTS（音声合成）用
+- [ ] **Pexels**: 無料ストック映像API用 🆕
+- [ ] **Pixabay**: 無料ストック映像API用（オプション）🆕
 - [ ] **Discord**: 運用通知用（Webhook URL）
 - [ ] **Render**: 実行基盤（Cronジョブ）用（オプション）
 - [ ] **GitHub**: コード管理・自動デプロイ用（オプション）
@@ -204,6 +206,46 @@ uv run python test_upload.py
 2. Webhook URLをコピー
 3. **メモ**: `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...`
 
+### 5. Stock Footage APIs（無料・推奨）🎬
+
+**動画背景を自動的にプロフェッショナルなB-roll映像にアップグレード！**
+
+#### Pexels API（推奨）
+
+1. [Pexels API](https://www.pexels.com/api/)にアクセス
+2. 「Get API Key」をクリック
+3. アカウント登録（無料）
+4. APIキーをコピー
+5. **メモ**: `PEXELS_API_KEY=YOUR_KEY_HERE`
+
+**特徴:**
+- ✅ 完全無料・無制限
+- ✅ HD/4K品質のストック映像
+- ✅ 商用利用可能
+- ✅ 著作権表示不要
+
+#### Pixabay API（オプション・フォールバック）
+
+1. [Pixabay API](https://pixabay.com/api/docs/)にアクセス
+2. アカウント登録
+3. APIキーを取得
+4. **メモ**: `PIXABAY_API_KEY=YOUR_KEY_HERE`
+
+**動作の仕組み:**
+
+1. スクリプトから自動的にキーワードを抽出（例：「経済」→ "economy, finance, business"）
+2. Pexels/Pixabay APIから関連する映像を検索
+3. 複数クリップを自動ダウンロード
+4. FFmpegでプロフェッショナルなB-rollシーケンスを生成
+   - スムーズなクロスフェードトランジション
+   - Ken Burns効果（ズーム/パン）
+   - カラーグレーディング
+5. 音声+字幕を合成して最終動画を出力
+
+**フォールバック動作:**
+
+ストック映像の取得に失敗した場合、自動的に既存の静的背景（テーマベース・A/Bテスト済み）にフォールバックします。
+
 ## Google Sheetsセットアップ
 
 ### 1. スプレッドシート作成
@@ -286,6 +328,15 @@ ELEVENLABS_API_KEY=sk_...
 GEMINI_API_KEY_2=AIza...
 GEMINI_API_KEY_3=AIza...
 
+# ===== Stock Footage APIs（無料・無制限） =====
+# Pexels API（プロフェッショナルなB-roll映像）
+# 取得先: https://www.pexels.com/api/
+PEXELS_API_KEY=YOUR_PEXELS_API_KEY
+
+# Pixabay API（フォールバック用）
+# 取得先: https://pixabay.com/api/docs/
+PIXABAY_API_KEY=YOUR_PIXABAY_API_KEY
+
 # ===== Google Cloud Services =====
 # サービスアカウント認証（Sheets, Drive, Vertex AI）
 GOOGLE_APPLICATION_CREDENTIALS=secret/service-account-key.json
@@ -312,6 +363,13 @@ USE_THREE_STAGE_QUALITY_CHECK=true
 # WOW_SCORE_MIN=8.0
 # JAPANESE_PURITY_MIN=95.0
 # RETENTION_PREDICTION_MIN=50.0
+
+# ===== Video Generation Settings =====
+# ストック映像B-rollを使用するか（無料、プロフェッショナル品質）
+ENABLE_STOCK_FOOTAGE=true
+
+# 動画あたりのストック映像クリップ数（1-10推奨）
+STOCK_CLIPS_PER_VIDEO=5
 
 # ===== 通知 =====
 # Discord Webhook（実行結果通知）
