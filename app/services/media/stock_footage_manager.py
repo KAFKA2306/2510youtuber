@@ -141,17 +141,24 @@ class StockFootageManager:
     def _search_pixabay(
         self, keywords: List[str], max_clips: int, orientation: str
     ) -> List[Dict]:
-        """Search Pixabay API for stock footage."""
+        """Search Pixabay API for stock footage.
+
+        API Docs: https://pixabay.com/api/docs/
+        Response includes: id, pageURL, type, tags, duration, videos{large,medium,small,tiny}
+        """
         results = []
 
         for keyword in keywords[:3]:
             try:
+                # Pixabay requires per_page to be between 3 and 200
+                per_page = max(3, min(200, max_clips // len(keywords)))
+
                 response = requests.get(
                     self.PIXABAY_API_URL,
                     params={
                         "key": self.pixabay_api_key,
                         "q": keyword,
-                        "per_page": max(3, max_clips // len(keywords)),
+                        "per_page": per_page,
                         "video_type": "all",
                     },
                     timeout=10,
@@ -160,26 +167,42 @@ class StockFootageManager:
                 if response.status_code == 200:
                     data = response.json()
                     videos = data.get("hits", [])
+                    logger.info(f"Pixabay: Found {len(videos)} videos for '{keyword}' (total available: {data.get('totalHits', 0)})")
 
                     for video in videos:
-                        # Get medium quality video
-                        video_url = video.get("videos", {}).get("medium", {}).get("url")
+                        video_files = video.get("videos", {})
 
-                        if video_url:
-                            results.append({
-                                "id": f"pixabay_{video['id']}",
-                                "url": video_url,
-                                "duration": video.get("duration", 10),
-                                "keyword": keyword,
-                                "width": video.get("videos", {}).get("medium", {}).get("width", 1280),
-                                "height": video.get("videos", {}).get("medium", {}).get("height", 720),
-                                "quality": "medium",
-                                "source": "pixabay",
-                                "thumbnail": video.get("picture_id", ""),
-                            })
+                        # Prefer 'large' (1920x1080) for HD quality, fallback to 'medium' (1280x720)
+                        if "large" in video_files and video_files["large"].get("url"):
+                            video_data = video_files["large"]
+                            quality = "hd"
+                        elif "medium" in video_files and video_files["medium"].get("url"):
+                            video_data = video_files["medium"]
+                            quality = "medium"
+                        else:
+                            # Skip if no suitable quality available
+                            continue
 
+                        results.append({
+                            "id": f"pixabay_{video['id']}",
+                            "url": video_data["url"],
+                            "duration": video.get("duration", 10),
+                            "keyword": keyword,
+                            "width": video_data.get("width", 1280),
+                            "height": video_data.get("height", 720),
+                            "quality": quality,
+                            "source": "pixabay",
+                            "thumbnail": video_data.get("thumbnail", ""),
+                            "tags": video.get("tags", ""),
+                            "downloads": video.get("downloads", 0),
+                            "likes": video.get("likes", 0),
+                        })
+
+                elif response.status_code == 429:
+                    logger.warning("Pixabay API rate limit reached")
+                    break
                 else:
-                    logger.warning(f"Pixabay API error {response.status_code}")
+                    logger.warning(f"Pixabay API error {response.status_code}: {response.text}")
 
             except Exception as e:
                 logger.error(f"Error searching Pixabay for '{keyword}': {e}")

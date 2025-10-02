@@ -35,11 +35,23 @@ class Config:
 
     @property
     def gemini_api_keys(self) -> List[str]:
-        """Gemini API キーリスト（並列処理用）."""
+        """Gemini API キーリスト（ローテーション用）."""
         keys = [
             os.getenv("GEMINI_API_KEY"),
             os.getenv("GEMINI_API_KEY_2"),
             os.getenv("GEMINI_API_KEY_3"),
+            os.getenv("GEMINI_API_KEY_4"),
+            os.getenv("GEMINI_API_KEY_5"),
+        ]
+        return [k for k in keys if k]
+
+    @property
+    def perplexity_api_keys(self) -> List[str]:
+        """Perplexity API キーリスト（ローテーション用）."""
+        keys = [
+            os.getenv("PERPLEXITY_API_KEY"),
+            os.getenv("PERPLEXITY_API_KEY_2"),
+            os.getenv("PERPLEXITY_API_KEY_3"),
         ]
         return [k for k in keys if k]
 
@@ -308,6 +320,12 @@ class Config:
     def save_local_backup(self) -> bool:
         """ローカルバックアップを保存."""
         return os.getenv("SAVE_LOCAL_BACKUP", "true").lower() == "true"
+
+    # ===== NewsAPI.org Settings (Perplexity Fallback) =====
+    @property
+    def newsapi_key(self) -> str:
+        """NewsAPI.org API キー（Perplexityのフォールバック）."""
+        return os.getenv("NEWSAPI_API_KEY", "")
 
     # ===== Stock Footage Settings =====
     @property

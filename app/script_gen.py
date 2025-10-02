@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 import google.generativeai as genai
 
 from .config import cfg
+from .api_rotation import get_rotation_manager
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +44,25 @@ class ScriptGenerator:
         self._setup_client()
 
     def _setup_client(self):
-        """Gemini APIクライアントを初期化"""
+        """Gemini APIクライアントを初期化（ローテーション対応）"""
         try:
-            if not cfg.gemini_api_key:
-                raise ValueError("Gemini API key not configured")
+            # キーローテーションマネージャーを初期化
+            rotation_manager = get_rotation_manager()
 
-            genai.configure(api_key=cfg.gemini_api_key)
-            self.client = genai.GenerativeModel("models/gemini-2.5-flash")
-            logger.info("Script generator initialized with Gemini")
+            # Gemini keysを登録
+            gemini_keys = cfg.gemini_api_keys
+            if gemini_keys:
+                rotation_manager.register_keys("gemini", gemini_keys)
+                logger.info(f"Registered {len(gemini_keys)} Gemini API keys for rotation")
+            elif cfg.gemini_api_key:
+                rotation_manager.register_keys("gemini", [cfg.gemini_api_key])
+                logger.info("Registered 1 Gemini API key")
+            else:
+                raise ValueError("No Gemini API keys configured")
+
+            # 初期クライアント作成（実際の使用時に動的に変更）
+            self.client = None
+            logger.info("Script generator initialized with Gemini key rotation")
 
         except Exception as e:
             logger.error(f"Failed to initialize script generator: {e}")
@@ -195,57 +207,60 @@ class ScriptGenerator:
         return full_prompt
 
     def _call_gemini_for_script(self, prompt: str, max_retries: int = 3) -> str:
-        """台本生成用Gemini API呼び出し（タイムアウト対策付き）"""
-        import random
-        import time
+        """台本生成用Gemini API呼び出し（キーローテーション対応）"""
+        rotation_manager = get_rotation_manager()
 
-        for attempt in range(max_retries):
+        def api_call_with_key(api_key: str) -> str:
+            """単一APIキーでの呼び出し"""
             try:
+                # キーごとにクライアントを再設定
+                genai.configure(api_key=api_key)
+                client = genai.GenerativeModel("models/gemini-2.5-flash")
+
                 # リクエストタイムアウトを設定（120秒）
                 generation_config = genai.GenerationConfig(
                     temperature=0.9,
                     top_p=0.95,
                     top_k=40,
-                    max_output_tokens=8192,  # 最大トークン数を制限
+                    max_output_tokens=8192,
                 )
 
-                response = self.client.generate_content(
+                response = client.generate_content(
                     prompt,
                     generation_config=generation_config,
-                    timeout=120  # 120秒タイムアウト
+                    timeout=120
                 )
                 content = response.text
                 logger.debug(f"Generated script length: {len(content)}")
                 return content
+
             except Exception as e:
                 error_str = str(e).lower()
 
-                # 504 Deadline Exceeded エラーの特別処理
-                if "504" in error_str or "deadline exceeded" in error_str or "timeout" in error_str:
-                    if attempt < max_retries - 1:
-                        wait_time = 5 + (attempt * 3)  # 5秒、8秒、11秒...
-                        logger.warning(f"API timeout (504), retrying in {wait_time}s (attempt {attempt+1}/{max_retries})")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        logger.error("API timeout after all retries, returning fallback")
-                        raise Exception("API timeout after all retries")
+                # Rate limitエラーを検出して再raiseして上位でハンドリング
+                if any(kw in error_str for kw in ["429", "rate limit", "quota"]):
+                    logger.warning(f"Gemini rate limit detected: {e}")
+                    raise  # ローテーションマネージャーがハンドリング
 
-                # Rate limit エラー処理
-                if "rate_limit" in error_str and attempt < max_retries - 1:
-                    wait_time = (2**attempt) + random.uniform(0, 1)
-                    logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
-                    time.sleep(wait_time)
-                    continue
+                # 504/timeout エラー
+                if any(kw in error_str for kw in ["504", "deadline exceeded", "timeout"]):
+                    logger.warning(f"Gemini timeout detected: {e}")
+                    raise
 
                 # その他のエラー
-                if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 3
-                    logger.warning(f"Script generation error, retrying in {wait_time}s: {e}")
-                    time.sleep(wait_time)
-                    continue
+                logger.warning(f"Gemini API error: {e}")
                 raise
-        raise Exception("Max retries exceeded for script generation")
+
+        # キーローテーション実行
+        try:
+            return rotation_manager.execute_with_rotation(
+                provider="gemini",
+                api_call=api_call_with_key,
+                max_attempts=max_retries
+            )
+        except Exception as e:
+            logger.error(f"All Gemini API attempts failed: {e}")
+            raise Exception("Gemini API failed with all keys")
 
     def _clean_script(self, raw_script: str) -> str:
         """台本テキストのクリーニング"""

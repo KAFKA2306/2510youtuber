@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 import httpx
 
 from .config import cfg
+from .api_rotation import get_rotation_manager
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +21,24 @@ class NewsCollector:
     """ニュース収集クラス"""
 
     def __init__(self):
-        self.api_key = cfg.perplexity_api_key
         self.api_url = "https://api.perplexity.ai/chat/completions"
-        if not self.api_key:
-            logger.warning("Perplexity API key not configured")
+        self.newsapi_url = "https://newsapi.org/v2/everything"
+
+        # キーローテーションマネージャーを初期化
+        rotation_manager = get_rotation_manager()
+
+        # Perplexity keysを登録
+        perplexity_keys = cfg.perplexity_api_keys
+        if perplexity_keys:
+            rotation_manager.register_keys("perplexity", perplexity_keys)
+            logger.info(f"Registered {len(perplexity_keys)} Perplexity API keys for rotation")
+        elif cfg.perplexity_api_key:
+            rotation_manager.register_keys("perplexity", [cfg.perplexity_api_key])
+            logger.info("Registered 1 Perplexity API key")
         else:
-            logger.info("NewsCollector initialized for Perplexity")
+            logger.warning("No Perplexity API keys configured")
+
+        logger.info("NewsCollector initialized with key rotation and NewsAPI fallback")
 
     def collect_news(self, prompt_a: str, mode: str = "daily") -> List[Dict[str, Any]]:
         """ニュースを収集・要約
@@ -40,12 +53,32 @@ class NewsCollector:
         """
         try:
             adjusted_prompt = self._adjust_prompt_for_mode(prompt_a, mode)
-            response_text = self._call_perplexity_with_retry(adjusted_prompt)
-            news_items = self._parse_news_response(response_text)
-            validated_news = self._validate_news_items(news_items)
 
-            logger.info(f"Collected {len(validated_news)} news items (mode: {mode})")
-            return validated_news
+            # Perplexityで収集を試みる（ローテーション対応）
+            try:
+                response_text = self._call_perplexity_with_rotation(adjusted_prompt)
+                news_items = self._parse_news_response(response_text)
+                validated_news = self._validate_news_items(news_items)
+
+                if validated_news:
+                    logger.info(f"Collected {len(validated_news)} news items via Perplexity (mode: {mode})")
+                    return validated_news
+            except Exception as e:
+                logger.warning(f"Perplexity collection failed: {e}, trying NewsAPI fallback...")
+
+            # NewsAPIフォールバック
+            if cfg.newsapi_key:
+                try:
+                    news_items = self._collect_from_newsapi(mode)
+                    if news_items:
+                        logger.info(f"Collected {len(news_items)} news items via NewsAPI fallback")
+                        return news_items
+                except Exception as e:
+                    logger.warning(f"NewsAPI fallback failed: {e}")
+
+            # すべて失敗した場合はダミーニュース
+            logger.error("All news collection methods failed")
+            return self._get_fallback_news(mode)
 
         except Exception as e:
             logger.error(f"Failed to collect news: {e}")
