@@ -290,11 +290,11 @@ class NewsCollector:
             ニュース項目のリスト
         """
         try:
-            # 検索クエリを構築
+            # 検索クエリを構築（英語記事にフォールバック）
             query_params = {
                 "apiKey": cfg.newsapi_key,
-                "q": "経済 OR 株式 OR 金融 OR 企業",
-                "language": "ja",
+                "q": "economy OR finance OR stock market OR business",
+                "language": "en",  # 日本語記事が少ないため英語で取得
                 "sortBy": "publishedAt",
                 "pageSize": 5,
             }
