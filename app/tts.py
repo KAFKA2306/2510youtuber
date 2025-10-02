@@ -40,7 +40,7 @@ class TTSManager:
     def __init__(self):
         self.api_key = cfg.elevenlabs_api_key
         self.client = None
-        self.max_concurrent = 2  # Directly set to 2 to handle ElevenLabs rate limit
+        self.max_concurrent = cfg.max_concurrent_tts  # 動的に調整（デフォルトは設定値）
         self.chunk_size = cfg.tts_chunk_size
         self.voicevox_port = cfg.tts_voicevox_port
         self.voicevox_speaker = cfg.tts_voicevox_speaker
@@ -56,6 +56,8 @@ class TTSManager:
         # Initialize OpenAI client if available
         if openai and os.getenv('OPENAI_API_KEY'):
             self.openai_client = OpenAI()
+
+        logger.info(f"TTS Manager initialized (default concurrency: {self.max_concurrent})")
 
     async def _synthesize_with_fallback(self, text: str, output_path: str, voice_config: Dict[str, Any]) -> bool:
         """複数の方法で音声合成を試行"""
@@ -329,16 +331,57 @@ class TTSManager:
             )
         return config
 
+    def _calculate_optimal_concurrency(self, total_chunks: int, estimated_duration_minutes: float) -> int:
+        """動画長に基づいて最適な並列度を計算
+
+        Args:
+            total_chunks: チャンク総数
+            estimated_duration_minutes: 推定動画長（分）
+
+        Returns:
+            最適な並列数
+        """
+        # 動画長に応じた並列度の調整
+        if estimated_duration_minutes < 5:
+            # 短い動画（5分未満）: 高並列度
+            optimal = min(4, total_chunks)
+        elif estimated_duration_minutes < 15:
+            # 中程度の動画（5-15分）: 中並列度
+            optimal = min(3, total_chunks)
+        else:
+            # 長い動画（15分以上）: 低並列度（安定性重視）
+            optimal = min(2, total_chunks)
+
+        # 設定値を超えない
+        optimal = min(optimal, cfg.max_concurrent_tts)
+
+        logger.info(
+            f"Optimal concurrency: {optimal} "
+            f"(duration: {estimated_duration_minutes:.1f}min, chunks: {total_chunks})"
+        )
+        return optimal
+
     async def synthesize_script(self, script_text: str, target_voice: str = "neutral") -> List[str]:
-        """台本全体を音声合成"""
+        """台本全体を音声合成（動的並列度調整）"""
         try:
             chunks = self.split_text_for_tts(script_text)
             if not chunks:
                 logger.warning("No chunks to synthesize")
                 return []
 
-            logger.info(f"Starting TTS for {len(chunks)} chunks with max_concurrent={self.max_concurrent}")
-            semaphore = asyncio.Semaphore(self.max_concurrent)
+            # 推定動画長を計算（平均300文字/分）
+            estimated_duration_minutes = len(script_text) / 300
+
+            # 最適な並列度を計算
+            optimal_concurrency = self._calculate_optimal_concurrency(
+                len(chunks), estimated_duration_minutes
+            )
+
+            logger.info(
+                f"Starting TTS for {len(chunks)} chunks "
+                f"(concurrency: {optimal_concurrency}, estimated: {estimated_duration_minutes:.1f}min)"
+            )
+            semaphore = asyncio.Semaphore(optimal_concurrency)
 
             audio_paths = []
             for chunk in chunks:

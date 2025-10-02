@@ -14,6 +14,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from .config import cfg
+from .prompt_cache import get_prompt_cache
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +235,7 @@ class SheetsManager:
             return False
 
     def load_prompts(self, mode: str = "daily") -> Dict[str, str]:
-        """プロンプトテンプレートを読み込み（モード対応・動的最適化）
+        """プロンプトテンプレートを読み込み（モード対応・キャッシュ対応）
 
         Args:
             mode: 実行モード (daily/special/test) - モード別プロンプトの選択に使用
@@ -242,8 +243,16 @@ class SheetsManager:
         Returns:
             プロンプトの辞書 {prompt_a: "...", prompt_b: "...", ...}
         """
+        prompt_cache = get_prompt_cache()
+
+        # Sheets接続がない場合、キャッシュを試す
         if not self.service:
-            logger.warning("Sheets service not available, returning default prompts")
+            logger.warning("Sheets service not available, trying cache...")
+            cached_prompts = prompt_cache.load_prompts(mode)
+            if cached_prompts:
+                logger.info(f"Using cached prompts for mode '{mode}'")
+                return cached_prompts
+            logger.warning("No cache available, returning default prompts")
             return self._get_default_prompts()
 
         try:
@@ -271,14 +280,27 @@ class SheetsManager:
                     if key not in prompts or not prompts[key]:
                         prompts[key] = default_prompts.get(key, "")
 
-                logger.info(f"Loaded {len(prompts)} prompts for mode '{mode}'")
+                logger.info(f"Loaded {len(prompts)} prompts from Sheets for mode '{mode}'")
+
+                # キャッシュに保存
+                prompt_cache.save_prompts(mode, prompts)
+
                 return prompts
             else:
-                logger.warning("Prompts sheet is empty or malformed")
+                logger.warning("Prompts sheet is empty or malformed, trying cache...")
+                cached_prompts = prompt_cache.load_prompts(mode)
+                if cached_prompts:
+                    return cached_prompts
                 return self._get_default_prompts()
 
         except Exception as e:
-            logger.error(f"Failed to load prompts: {e}")
+            logger.error(f"Failed to load prompts from Sheets: {e}, trying cache...")
+            # Sheets失敗時はキャッシュフォールバック
+            cached_prompts = prompt_cache.load_prompts(mode)
+            if cached_prompts:
+                logger.info(f"Using cached prompts as fallback for mode '{mode}'")
+                return cached_prompts
+            logger.warning("No cache available, returning default prompts")
             return self._get_default_prompts()
 
     def _find_mode_row(self, rows: List[List[str]], mode: str) -> Optional[int]:

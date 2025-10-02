@@ -138,27 +138,27 @@ class NewsCollector:
 """
         return full_prompt
 
-    def _call_perplexity_with_retry(self, prompt: str, max_retries: int = 3) -> str:
-        """リトライ機能付きPerplexity API呼び出し"""
-        import random
-        import time
+    def _call_perplexity_with_rotation(self, prompt: str, max_attempts: int = 3) -> str:
+        """キーローテーション対応Perplexity API呼び出し"""
+        rotation_manager = get_rotation_manager()
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": "sonar",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are an expert financial news analyst. Provide answers in JSON format as requested.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-        }
+        def api_call_with_key(api_key: str) -> str:
+            """単一APIキーでの呼び出し"""
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": "sonar",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are an expert financial news analyst. Provide answers in JSON format as requested.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+            }
 
-        for attempt in range(max_retries):
             try:
                 with httpx.Client() as client:
                     response = client.post(self.api_url, json=payload, headers=headers, timeout=120.0)
@@ -167,28 +167,30 @@ class NewsCollector:
                     content = data["choices"][0]["message"]["content"]
                     logger.debug(f"Perplexity response length: {len(content)}")
                     return content
+
             except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429 and attempt < max_retries - 1:
-                    wait_time = (2**attempt) + random.uniform(0, 1)
-                    logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    logger.error(
-                        f"Perplexity API error: {e}\n"
-                        f"URL: {e.request.url}\n"
-                        f"Response: {e.response.text}"
-                    )
-                    raise
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 2
-                    logger.warning(f"Perplexity API error, retrying in {wait_time}s: {e}")
-                    time.sleep(wait_time)
-                    continue
+                # Rate limit検出
+                if e.response.status_code == 429:
+                    logger.warning(f"Perplexity rate limit: {e}")
+                    raise  # ローテーションマネージャーがハンドリング
+
+                logger.error(f"Perplexity API HTTP error: {e}")
                 raise
 
-        raise Exception("Max retries exceeded for Perplexity API")
+            except Exception as e:
+                logger.warning(f"Perplexity API error: {e}")
+                raise
+
+        # キーローテーション実行
+        try:
+            return rotation_manager.execute_with_rotation(
+                provider="perplexity",
+                api_call=api_call_with_key,
+                max_attempts=max_attempts
+            )
+        except Exception as e:
+            logger.error(f"All Perplexity API attempts failed: {e}")
+            raise
 
     def _parse_news_response(self, response: str) -> List[Dict[str, Any]]:
         """Perplexity応答からニュースデータを抽出"""
@@ -277,6 +279,60 @@ class NewsCollector:
                 }
             )
         return fallback_news
+
+    def _collect_from_newsapi(self, mode: str) -> List[Dict[str, Any]]:
+        """NewsAPI.orgからニュースを収集（フォールバック）
+
+        Args:
+            mode: 実行モード
+
+        Returns:
+            ニュース項目のリスト
+        """
+        try:
+            # 検索クエリを構築
+            query_params = {
+                "apiKey": cfg.newsapi_key,
+                "q": "経済 OR 株式 OR 金融 OR 企業",
+                "language": "ja",
+                "sortBy": "publishedAt",
+                "pageSize": 5,
+            }
+
+            with httpx.Client() as client:
+                response = client.get(self.newsapi_url, params=query_params, timeout=30.0)
+                response.raise_for_status()
+                data = response.json()
+
+                articles = data.get("articles", [])
+                if not articles:
+                    logger.warning("NewsAPI returned no articles")
+                    return []
+
+                # NewsAPIの形式を統一形式に変換
+                news_items = []
+                for article in articles[:5]:
+                    news_item = {
+                        "title": article.get("title", "無題"),
+                        "url": article.get("url", ""),
+                        "summary": article.get("description", "") or article.get("content", "")[:300],
+                        "key_points": [
+                            article.get("title", ""),
+                            f"出典: {article.get('source', {}).get('name', '不明')}"
+                        ],
+                        "source": article.get("source", {}).get("name", "NewsAPI"),
+                        "impact_level": "medium",
+                        "category": "経済",
+                        "collected_at": datetime.now().isoformat(),
+                    }
+                    news_items.append(news_item)
+
+                logger.info(f"NewsAPI collected {len(news_items)} articles")
+                return self._validate_news_items(news_items)
+
+        except Exception as e:
+            logger.error(f"NewsAPI collection failed: {e}")
+            return []
 
     def search_specific_topic(self, topic: str, num_items: int = 3) -> List[Dict[str, Any]]:
         """特定トピックに関するニュースを検索"""
