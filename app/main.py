@@ -37,6 +37,7 @@ class YouTubeWorkflow:
 
     def __init__(self):
         self.run_id = None
+        self.mode = "daily"  # デフォルトモード
         self.workflow_state = {}
         self.generated_files = []
 
@@ -45,6 +46,7 @@ class YouTubeWorkflow:
         """
         start_time = datetime.now()
         try:
+            self.mode = mode  # モードを保存
             self.run_id = self._initialize_run(mode)
             await self._notify_workflow_start(mode)
 
@@ -147,7 +149,13 @@ class YouTubeWorkflow:
     async def _step1_collect_news(self, mode: str) -> Dict[str, Any]:
         logger.info("Step 1: Starting news collection...")
         try:
-            prompt_a = self._get_prompts().get("prompt_a", self._default_news_prompt())
+            # インスタンス変数のmodeを使用
+            prompt_a = self._get_prompts(self.mode).get("prompt_a", self._default_news_prompt())
+
+            # 使用したプロンプトを記録
+            if sheets_manager and self.run_id:
+                sheets_manager.record_prompt_used(self.run_id, "prompt_a", prompt_a)
+
             news_items = collect_news(prompt_a, mode)
             if not news_items:
                 raise Exception("No news items collected")
@@ -189,7 +197,13 @@ class YouTubeWorkflow:
             else:
                 # 従来の3段階品質チェックを使用
                 logger.info(f"3-stage quality check: {'ENABLED' if cfg.use_three_stage_quality_check else 'DISABLED'}")
-                prompt_b = self._get_prompts().get("prompt_b", self._default_script_prompt())
+
+                # インスタンス変数のmodeを使用
+                prompt_b = self._get_prompts(self.mode).get("prompt_b", self._default_script_prompt())
+
+                # 使用したプロンプトを記録
+                if sheets_manager and self.run_id:
+                    sheets_manager.record_prompt_used(self.run_id, "prompt_b", prompt_b)
 
                 script_content = generate_dialogue(
                     news_items,
@@ -425,10 +439,18 @@ class YouTubeWorkflow:
             logger.warning(f"Step 10 warning: {e}")
             return {"success": True, "youtube_result": {"error": str(e)}, "step": "youtube_upload", "error": str(e)}
 
-    def _get_prompts(self) -> Dict[str, str]:
+    def _get_prompts(self, mode: str = "daily") -> Dict[str, str]:
+        """モード別にプロンプトを取得
+
+        Args:
+            mode: 実行モード (daily/special/test)
+
+        Returns:
+            プロンプトの辞書
+        """
         try:
             if sheets_manager:
-                return load_prompts_from_sheets()
+                return load_prompts_from_sheets(mode)
             else:
                 return self._default_prompts()
         except Exception:
