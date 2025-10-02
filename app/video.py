@@ -2,18 +2,20 @@
 
 音声ファイル、字幕ファイル、背景画像を組み合わせて最終的な動画を生成します。
 FFmpegを使用して高品質な動画出力を実現します。
+背景テーマのA/Bテストと継続的改善をサポートします。
 """
 
 import logging
 import os
 import tempfile
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import ffmpeg
 from pydub import AudioSegment
 
 from .config import cfg
+from .background_theme import BackgroundTheme, get_theme_manager
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,9 @@ class VideoGenerator:
     def __init__(self):
         self.video_quality = cfg.video_quality or "high"
         self.output_format = "mp4"
-        logger.info("Video generator initialized")
+        self.theme_manager = get_theme_manager()
+        self.current_theme: Optional[BackgroundTheme] = None
+        logger.info("Video generator initialized with theme management")
 
     def generate_video(
         self,
@@ -33,13 +37,37 @@ class VideoGenerator:
         background_image: str = None,
         title: str = "Economic News Analysis",
         output_path: str = None,
+        theme_name: str = None,
+        enable_ab_test: bool = True,
     ) -> str:
-        """動画を生成"""
+        """動画を生成
+
+        Args:
+            audio_path: 音声ファイルパス
+            subtitle_path: 字幕ファイルパス
+            background_image: カスタム背景画像（Noneの場合はテーマベース生成）
+            title: タイトルテキスト
+            output_path: 出力ファイルパス
+            theme_name: 使用するテーマ名（Noneの場合はA/Bテスト選択）
+            enable_ab_test: A/Bテストを有効にするか
+        """
         try:
             self._validate_input_files(audio_path, subtitle_path, background_image)
             if not output_path:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_path = f"video_{timestamp}.{self.output_format}"
+
+            # テーマ選択（A/Bテストまたは指定）
+            if theme_name:
+                self.current_theme = self.theme_manager.get_theme(theme_name)
+            elif enable_ab_test:
+                self.current_theme = self.theme_manager.select_theme_for_ab_test()
+            else:
+                self.current_theme = self.theme_manager.get_best_performing_theme()
+
+            if self.current_theme:
+                logger.info(f"Using background theme: {self.current_theme.name}")
+                self.theme_manager.record_usage(self.current_theme.name)
 
             bg_image_path = self._prepare_background_image(background_image, title)
             audio_duration = self._get_audio_duration(audio_path)
@@ -90,86 +118,162 @@ class VideoGenerator:
         return self._create_default_background(title)
 
     def _create_default_background(self, title: str) -> str:
-        """プロ品質の動的背景を作成（投資系YouTuber品質）"""
+        """プロ品質の動的背景を作成（テーマベース）with robot icon"""
         try:
             import textwrap
             from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
             width, height = 1920, 1080
 
-            # 深い青のグラデーション背景（金融・投資のプロフェッショナル感）
-            image = Image.new("RGB", (width, height), color=(10, 20, 35))
+            # テーマが設定されていない場合はデフォルト値を使用
+            if not self.current_theme:
+                logger.warning("No theme selected, using default")
+                self.current_theme = self.theme_manager.get_theme("professional_blue")
+
+            theme = self.current_theme
+            logger.info(f"Creating background with theme: {theme.name}")
+
+            # 基本背景色（グラデーション開始色）
+            base_color = theme.gradient_colors[0] if theme.gradient_colors else (10, 20, 35)
+            image = Image.new("RGB", (width, height), color=base_color)
             draw = ImageDraw.Draw(image)
 
-            # 3段階のグラデーション（上部暗→中央→下部明）
+            # テーマベースのグラデーション生成
+            gradient_stops = theme.gradient_stops
+            gradient_colors = theme.gradient_colors
+
             for y_pos in range(height):
-                # より滑らかな3段階グラデーション
                 ratio = y_pos / height
-                if ratio < 0.3:
-                    # 上部: 深い青
-                    r = int(10 + (20 - 10) * (ratio / 0.3))
-                    g = int(20 + (35 - 20) * (ratio / 0.3))
-                    b = int(35 + (50 - 35) * (ratio / 0.3))
-                elif ratio < 0.7:
-                    # 中央: 標準青
-                    r = int(20 + (15 - 20) * ((ratio - 0.3) / 0.4))
-                    g = int(35 + (45 - 35) * ((ratio - 0.3) / 0.4))
-                    b = int(50 + (70 - 50) * ((ratio - 0.3) / 0.4))
+
+                # グラデーションの段階を決定
+                color_idx = 0
+                for i, stop in enumerate(gradient_stops):
+                    if ratio <= stop:
+                        color_idx = i
+                        break
+
+                # 色を補間
+                if color_idx == 0:
+                    prev_stop = 0.0
+                    prev_color = gradient_colors[0]
+                    next_stop = gradient_stops[0]
+                    next_color = gradient_colors[1]
+                elif color_idx < len(gradient_stops):
+                    prev_stop = gradient_stops[color_idx - 1]
+                    prev_color = gradient_colors[color_idx]
+                    next_stop = gradient_stops[color_idx]
+                    next_color = gradient_colors[color_idx + 1] if color_idx + 1 < len(gradient_colors) else gradient_colors[color_idx]
                 else:
-                    # 下部: やや明るい青（字幕スペース）
-                    r = int(15 + (25 - 15) * ((ratio - 0.7) / 0.3))
-                    g = int(45 + (60 - 45) * ((ratio - 0.7) / 0.3))
-                    b = int(70 + (85 - 70) * ((ratio - 0.7) / 0.3))
+                    prev_stop = gradient_stops[-1]
+                    prev_color = gradient_colors[-1]
+                    next_stop = 1.0
+                    next_color = gradient_colors[-1]
+
+                # 色の線形補間
+                local_ratio = (ratio - prev_stop) / (next_stop - prev_stop) if next_stop != prev_stop else 0
+                r = int(prev_color[0] + (next_color[0] - prev_color[0]) * local_ratio)
+                g = int(prev_color[1] + (next_color[1] - prev_color[1]) * local_ratio)
+                b = int(prev_color[2] + (next_color[2] - prev_color[2]) * local_ratio)
+
                 draw.line([(0, y_pos), (width, y_pos)], fill=(r, g, b))
 
-            # 装飾的な幾何学パターン（左上・右下）
+            # 装飾的なオーバーレイ（テーマベース）
             overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
             overlay_draw = ImageDraw.Draw(overlay)
 
-            # 左上の円形パターン（アクセント）
-            overlay_draw.ellipse([(-100, -100), (400, 400)], fill=(0, 120, 215, 30))
-            overlay_draw.ellipse([(-50, -50), (350, 350)], fill=(0, 150, 255, 20))
+            # アクセント円形パターン（テーマから取得）
+            for circle in theme.accent_circles:
+                pos = circle['pos']
+                color = tuple(circle['color'])
+                overlay_draw.ellipse(pos, fill=color)
 
-            # 右下の円形パターン
-            overlay_draw.ellipse([(width - 400, height - 400), (width + 100, height + 100)], fill=(255, 215, 0, 25))
-            overlay_draw.ellipse([(width - 350, height - 350), (width + 50, height + 50)], fill=(255, 193, 7, 15))
+            # グリッドライン（テーマ設定に応じて）
+            if theme.grid_enabled:
+                grid_limit_y = int(height * theme.subtitle_zone_height_ratio)
+                for i in range(0, width, theme.grid_spacing):
+                    overlay_draw.line([(i, 0), (i, grid_limit_y)], fill=(255, 255, 255, theme.grid_opacity), width=1)
+                for i in range(0, grid_limit_y, theme.grid_spacing):
+                    overlay_draw.line([(0, i), (width, i)], fill=(255, 255, 255, theme.grid_opacity), width=1)
 
-            # グリッドライン（プロフェッショナル感）
-            for i in range(0, width, 100):
-                overlay_draw.line([(i, 0), (i, height)], fill=(255, 255, 255, 3), width=1)
-            for i in range(0, height, 100):
-                overlay_draw.line([(0, i), (width, i)], fill=(255, 255, 255, 3), width=1)
+            # 対角線アクセント（テーマ設定に応じて）
+            if theme.diagonal_lines:
+                for i in range(-500, width + 500, 300):
+                    overlay_draw.line([(i, 0), (i + 600, height * 0.6)], fill=(255, 255, 255, theme.grid_opacity + 1), width=2)
 
             image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+            draw = ImageDraw.Draw(image)
 
-            # タイトルテキスト（上部中央）
-            font = self._get_japanese_font_for_background(64)
+            # ロボットアイコンを追加（テーマ設定に応じた位置）
+            if theme.robot_icon_enabled:
+                robot_icon_path = "/home/kafka/projects/youtuber/assets/icon/ChatGPT Image 2025年10月2日 19_53_38.png"
+                if os.path.exists(robot_icon_path):
+                    try:
+                        robot_img = Image.open(robot_icon_path).convert("RGBA")
+
+                        # テーマベースのサイズとopacity
+                        robot_img = robot_img.resize(theme.robot_icon_size, Image.Resampling.LANCZOS)
+                        robot_img.putalpha(int(255 * theme.robot_icon_opacity))
+
+                        # テーマベースの位置決定
+                        margin = 60
+                        if theme.robot_icon_position == "top-left":
+                            icon_x, icon_y = margin, margin
+                        elif theme.robot_icon_position == "top-right":
+                            icon_x, icon_y = width - theme.robot_icon_size[0] - margin, margin
+                        elif theme.robot_icon_position == "bottom-left":
+                            icon_x, icon_y = margin, height - theme.robot_icon_size[1] - margin
+                        elif theme.robot_icon_position == "bottom-right":
+                            icon_x, icon_y = width - theme.robot_icon_size[0] - margin, height - theme.robot_icon_size[1] - margin
+                        else:
+                            icon_x, icon_y = margin, margin
+
+                        image.paste(robot_img, (icon_x, icon_y), robot_img)
+                        logger.info(f"Robot icon added at {theme.robot_icon_position}")
+                    except Exception as e:
+                        logger.warning(f"Could not add robot icon: {e}")
+
+            # タイトルテキスト（テーマベース設定）
+            font = self._get_japanese_font_for_background(theme.title_font_size)
             if font:
                 # タイトルを短く整形
-                wrapped_title = textwrap.fill(title, width=20)
+                wrapped_title = textwrap.fill(title, width=22)
 
                 # テキストのバウンディングボックス
                 bbox = draw.textbbox((0, 0), wrapped_title, font=font)
                 text_width = bbox[2] - bbox[0]
                 text_height = bbox[3] - bbox[1]
                 x = (width - text_width) // 2
-                y = 150  # 上部に配置
+                y = theme.title_position_y
 
-                # 影（複数層で深さを出す）
-                for offset in [8, 6, 4, 2]:
-                    alpha_val = 255 - (offset * 30)
+                # 多層シャドウ（テーマ設定のレイヤー数）
+                shadow_offsets = list(range(theme.title_shadow_layers * 2, 0, -2))
+                for offset in shadow_offsets:
+                    alpha_val = max(50, 255 - (offset * 25))
                     draw.text((x + offset, y + offset), wrapped_title, font=font, fill=(0, 0, 0, alpha_val))
 
-                # メインテキスト（白）
+                # グロー効果（テーマ設定に応じて）
+                if theme.title_glow_enabled:
+                    glow_color = (100, 200, 255, 80)
+                    for offset_x, offset_y in [(-2, 0), (2, 0), (0, -2), (0, 2), (-1, -1), (1, 1), (-1, 1), (1, -1)]:
+                        draw.text((x + offset_x, y + offset_y), wrapped_title, font=font, fill=glow_color)
+
+                # メインテキスト（白、太字感）
                 draw.text((x, y), wrapped_title, font=font, fill=(255, 255, 255))
 
-                # アクセントライン（タイトル下）
-                line_y = y + text_height + 20
-                draw.rectangle([x, line_y, x + text_width, line_y + 5], fill=(255, 215, 0))
+                # アクセントライン（テーマ設定に応じて）
+                if theme.accent_lines_enabled:
+                    line_y = y + text_height + 25
+                    draw.rectangle([x - 20, line_y, x + text_width + 20, line_y + 6], fill=(255, 215, 0))
+                    draw.rectangle([x - 15, line_y + 10, x + text_width + 15, line_y + 13], fill=(0, 180, 255))
+
+            # 字幕エリアの明確な区切り（テーマ設定に応じて）
+            if theme.subtitle_zone_separator:
+                subtitle_zone_y = int(height * theme.subtitle_zone_height_ratio)
+                draw.rectangle([0, subtitle_zone_y - 3, width, subtitle_zone_y], fill=(0, 100, 180, 100))
 
             temp_path = tempfile.mktemp(suffix=".png")
             image.save(temp_path, "PNG", quality=95)
-            logger.info(f"Created professional background with dynamic elements: {temp_path}")
+            logger.info(f"Created professional background with robot icon and dynamic elements: {temp_path}")
             return temp_path
         except Exception as e:
             logger.warning(f"Failed to create professional background: {e}")
@@ -230,7 +334,7 @@ class VideoGenerator:
         return settings
 
     def _build_subtitle_filter(self, subtitle_path: str) -> str:
-        """字幕フィルタを構築（プロYouTuber品質、見切れ防止）"""
+        """字幕フィルタを構築（プロYouTuber品質、見切れ防止、最下部配置）"""
         try:
             # On Windows, paths must be escaped.
             if os.name == "nt":
@@ -249,25 +353,32 @@ class VideoGenerator:
             # 利用可能な日本語フォントを検索
             font_name = self._find_available_font(japanese_fonts)
 
-            # プロYouTuber品質の字幕スタイル（設定値は config.py から取得）
+            # 改善: 字幕を下部20%エリア（864px以降）に確実に配置
+            # MarginV を大幅に増やして見切れを完全防止
+            subtitle_margin_v = 50  # 下部から50pxマージン（1080の下部20%内）
+            subtitle_margin_h = 100  # 左右100pxマージン（横の見切れ防止）
+
+            # プロYouTuber品質の字幕スタイル（最強視認性 + 見切れ防止）
             subtitle_style = (
                 f"subtitles={subtitle_path}:force_style='FontName={font_name},"
-                f"FontSize={cfg.subtitle_font_size},"
-                f"PrimaryColour={cfg.subtitle_color},"
+                f"FontSize={cfg.subtitle_font_size},"  # config.py から取得（デフォルト48）
+                f"PrimaryColour=&H00FFFFFF,"  # 白文字（視認性最強）
                 f"OutlineColour=&H00000000,"  # 黒アウトライン
-                f"BackColour=&HC0000000,"  # 濃い半透明黒背景
+                f"BackColour=&HE0000000,"  # より濃い半透明黒背景（E0=88%不透明）
                 f"BorderStyle=4,"  # 4=ボックス背景+アウトライン（最強視認性）
-                f"Outline={cfg.subtitle_outline_width},"
-                f"Shadow=2,"  # 強い影
+                f"Outline={cfg.subtitle_outline_width + 1},"  # アウトライン幅を1px増加
+                f"Shadow=3,"  # より強い影（立体感）
                 f"Alignment=2,"  # 下部中央
-                f"MarginV={cfg.subtitle_margin_v},"
-                f"MarginL={cfg.subtitle_margin_h},"
-                f"MarginR={cfg.subtitle_margin_h},"
+                f"MarginV={subtitle_margin_v},"  # 下部マージン（見切れ防止）
+                f"MarginL={subtitle_margin_h},"  # 左マージン
+                f"MarginR={subtitle_margin_h},"  # 右マージン
                 f"Bold=1,"  # 太字
-                f"Spacing=0'"  # 文字間隔
+                f"Spacing=1,"  # 文字間隔を少し開ける（読みやすさ向上）
+                f"ScaleX=100,"  # 横スケール
+                f"ScaleY=100'"  # 縦スケール
             )
 
-            logger.info(f"Using subtitle font: {font_name}")
+            logger.info(f"Using subtitle font: {font_name}, MarginV: {subtitle_margin_v}px (bottom 20% zone)")
             return subtitle_style
 
         except Exception as e:
