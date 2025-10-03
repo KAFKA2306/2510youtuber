@@ -94,10 +94,17 @@ class TTSManager:
         """ElevenLabsによる実際の音声合成ロジック"""
         if not self.client:
             raise Exception("ElevenLabs client not initialized")
+
+        # voice_idがNoneの場合はスキップ
+        voice_id = voice_config.get("voice_id")
+        if not voice_id or voice_id == "None":
+            logger.warning("voice_id not configured, skipping ElevenLabs")
+            return False
+
         try:
             audio_stream = self.client.text_to_speech.convert(
                 text=text,
-                voice_id=voice_config["voice_id"],
+                voice_id=voice_id,
                 model_id="eleven_multilingual_v2",
             )
 
@@ -272,11 +279,16 @@ class TTSManager:
         return chunks
 
     def _split_by_speaker(self, text: str) -> List[Dict[str, str]]:
-        """話者別にテキストを分割"""
+        """話者別にテキストを分割
+
+        話者形式でない場合は、テキスト全体をナレーターとして扱う
+        """
         lines = text.split("\n")
         speaker_lines = []
         current_speaker = None
         current_content = []
+        unmatched_content = []  # 話者形式でない行を収集
+
         for line in lines:
             line = line.strip()
             if not line:
@@ -294,10 +306,20 @@ class TTSManager:
                 if current_speaker is not None:
                     # 直前の話者がいれば、そのコンテンツに連結
                     current_content.append(line)
-                # 最初の行が話者パターンにマッチしない場合は、current_speakerがNoneのままなので、
-                # その行は無視される（speaker_linesに追加されない）
+                else:
+                    # 話者が見つからない場合は、未マッチコンテンツに追加
+                    unmatched_content.append(line)
+
         if current_speaker and current_content:
             speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
+
+        # フォールバック: 話者形式の行が1つもない場合、全テキストをナレーターとして扱う
+        if not speaker_lines and (unmatched_content or text.strip()):
+            logger.warning("No speaker format detected, treating entire text as narrator")
+            content = " ".join(unmatched_content) if unmatched_content else text.strip()
+            if content:
+                speaker_lines.append({"speaker": "ナレーター", "content": content})
+
         return speaker_lines
 
     def _split_long_content(self, content: str, max_chars: int) -> List[str]:

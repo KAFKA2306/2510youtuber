@@ -27,8 +27,10 @@ os.environ.pop('GOOGLE_CLOUD_PROJECT', None)
 os.environ.pop('GCLOUD_PROJECT', None)
 os.environ.pop('GCP_PROJECT', None)
 
-# LiteLLMはAPIキーを直接設定するのではなく、GeminiClientがrotation_managerから取得するように変更したため、この行は不要
-# os.environ['GEMINI_API_KEY'] = settings.gemini_api_key
+# Set initial GEMINI_API_KEY for LiteLLM
+# LiteLLM will use this key, but we'll implement rotation on 429 errors
+if settings.gemini_api_key:
+    os.environ['GEMINI_API_KEY'] = settings.gemini_api_key
 
 # Configure LiteLLM settings
 litellm.drop_params = True  # Drop unknown parameters
@@ -40,13 +42,26 @@ litellm.vertex_location = None  # Force no Vertex location
 # LiteLLM uses get_llm_provider internally which can still route to Vertex
 original_completion = litellm.completion
 
+# Key rotation state
+_current_key_index = 0
+_gemini_keys = [settings.gemini_api_key] if settings.gemini_api_key else []
+# Add rotation keys
+for i in range(2, 10):
+    key = os.getenv(f"GEMINI_API_KEY_{i}")
+    if key:
+        _gemini_keys.append(key)
+
+logger.info(f"Initialized {len(_gemini_keys)} Gemini API keys for rotation")
+
 def patched_completion(model=None, messages=None, **kwargs):
-    """Intercept all LiteLLM completion calls and force gemini/ prefix and model name"""
+    """Intercept all LiteLLM completion calls and force gemini/ prefix and model name with key rotation"""
+    global _current_key_index
+
     if model and "gemini" in model.lower():
         # モデル名をgemini-2.5-flash-liteに強制
         forced_model = "gemini/gemini-2.5-flash-lite"
         if model != forced_model:
-            logger.warning(f"LiteLLM completion intercepted: {model} -> {forced_model} (forced)")
+            logger.debug(f"LiteLLM completion intercepted: {model} -> {forced_model} (forced)")
         model = forced_model
 
     # Remove any Vertex AI credentials from kwargs
@@ -54,7 +69,34 @@ def patched_completion(model=None, messages=None, **kwargs):
     kwargs.pop('vertex_project', None)
     kwargs.pop('vertex_location', None)
 
-    return original_completion(model=model, messages=messages, **kwargs)
+    # Try with current key, rotate on 429
+    max_attempts = min(len(_gemini_keys), 5)
+    last_error = None
+
+    for attempt in range(max_attempts):
+        try:
+            # Set current API key
+            if _gemini_keys:
+                current_key = _gemini_keys[_current_key_index % len(_gemini_keys)]
+                os.environ['GEMINI_API_KEY'] = current_key
+
+            result = original_completion(model=model, messages=messages, **kwargs)
+            return result
+
+        except Exception as e:
+            error_str = str(e).lower()
+            is_rate_limit = any(keyword in error_str for keyword in ["429", "rate limit", "quota", "resource_exhausted"])
+
+            if is_rate_limit and attempt < max_attempts - 1:
+                _current_key_index = (_current_key_index + 1) % len(_gemini_keys)
+                logger.warning(f"Gemini rate limit hit, rotating to key {_current_key_index + 1}/{len(_gemini_keys)}")
+                last_error = e
+                continue
+            else:
+                raise e
+
+    if last_error:
+        raise last_error
 
 litellm.completion = patched_completion
 
@@ -153,9 +195,14 @@ class WOWScriptFlow:
             else:
                 # JSONが見つからない場合は生のテキストを使用
                 logger.warning("No JSON found in CrewAI output, using raw text")
+
+                # JSONマーカーを削除（```json や ``` が残っている場合）
+                cleaned_output = re.sub(r'```json\s*', '', crew_output_str)
+                cleaned_output = re.sub(r'```\s*', '', cleaned_output)
+
                 return {
                     'success': True,
-                    'final_script': crew_output_str,
+                    'final_script': cleaned_output.strip(),
                     'crew_output': crew_result,
                 }
 

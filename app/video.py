@@ -612,8 +612,9 @@ class VideoGenerator:
             stream = ffmpeg.input(f"color=c=0x193d5a:size=1920x1080:duration={duration}", f="lavfi")
             audio_stream = ffmpeg.input(audio_path)
 
+            quality_settings = self._get_quality_settings()
             stream = ffmpeg.output(
-                stream, audio_stream, output_path, preset="fast", crf=28, **self._get_quality_settings()
+                stream, audio_stream, output_path, crf=28, **quality_settings
             ).overwrite_output()
 
             ffmpeg.run(stream, quiet=True)
@@ -629,9 +630,34 @@ video_generator = VideoGenerator()
 
 
 def generate_video(
-    audio_path: str, subtitle_path: str, background_image: str = None, title: str = "Economic News"
+    audio_path: str,
+    subtitle_path: str,
+    background_image: str = None,
+    title: str = "Economic News",
+    script_content: str = "",
+    **kwargs
 ) -> str:
-    return video_generator.generate_video(audio_path, subtitle_path, background_image, title)
+    """Generate video from audio and subtitle files
+
+    Args:
+        audio_path: Path to audio file
+        subtitle_path: Path to subtitle file
+        background_image: Optional background image path
+        title: Video title
+        script_content: Optional script content for B-roll
+        **kwargs: Additional arguments passed to VideoGenerator
+
+    Returns:
+        Path to generated video file
+    """
+    return video_generator.generate_video(
+        audio_path,
+        subtitle_path,
+        background_image,
+        title,
+        script_content=script_content,
+        **kwargs
+    )
 
 
 if __name__ == "__main__":

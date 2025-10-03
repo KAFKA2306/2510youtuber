@@ -48,9 +48,16 @@ class SheetsManager:
             self.service = None
 
     def _rate_limit_retry(self, func, *args, **kwargs):
-        """レート制限対応のリトライ機能付き実行"""
+        """レート制限対応のリトライ機能付き実行
+
+        Note: self.service が None の場合は呼び出し前にチェックすること
+        """
         import random
         import time
+
+        # Safety check: service が None の場合は即座にエラー
+        if not self.service:
+            raise RuntimeError("Sheets service not available")
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -146,6 +153,11 @@ class SheetsManager:
             更新成功時True
 
         """
+        # Sheets serviceが利用不可の場合は早期リターン
+        if not self.service:
+            logger.debug(f"Sheets service unavailable, skipping update for run {run_id}")
+            return False
+
         try:
             # 既存データを取得して対象行を特定
             result = self._rate_limit_retry(
@@ -215,6 +227,11 @@ class SheetsManager:
             # 自動で finished_at を設定
             if fields.get("status") == "completed" and "finished_at" not in fields:
                 current_row[3] = datetime.now().isoformat()
+
+            # Sheets serviceが利用不可の場合は早期リターン
+            if not self.service:
+                logger.debug(f"Sheets service unavailable, skipping update for run {run_id}")
+                return False
 
             # 更新実行
             range_name = f"runs!A{target_row_index + 1}:S{target_row_index + 1}"

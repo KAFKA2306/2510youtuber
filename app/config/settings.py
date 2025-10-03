@@ -133,6 +133,16 @@ class AppSettings(BaseModel):
         """Get YouTube client secret"""
         return self.api_keys.get("youtube")
 
+    @property
+    def video_quality_presets(self) -> Dict[str, Any]:
+        """Get video quality presets for backward compatibility"""
+        return {
+            "low": {"c:v": "libx264", "preset": "fast", "crf": "28", "b:v": "1000k"},
+            "medium": {"c:v": "libx264", "preset": "medium", "crf": "23", "b:v": "2500k"},
+            "high": {"c:v": "libx264", "preset": "slow", "crf": "20", "b:v": "5000k"},
+            "ultra": {"c:v": "libx264", "preset": "veryslow", "crf": "18", "b:v": "8000k"},
+        }
+
     @classmethod
     def load(cls) -> 'AppSettings':
         """環境変数 + YAMLから設定を読み込み"""
