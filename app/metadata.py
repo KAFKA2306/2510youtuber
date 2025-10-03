@@ -12,8 +12,10 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import google.generativeai as genai
+import os # 追加
 
 from .config import cfg
+from .api_rotation import get_rotation_manager # 追加
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +28,26 @@ class MetadataGenerator:
         self._setup_client()
 
     def _setup_client(self):
-        """Gemini APIクライアントを初期化"""
+        """Gemini APIクライアントを初期化（ローテーション対応）"""
         try:
-            if not cfg.gemini_api_key:
-                raise ValueError("Gemini API key not configured")
+            rotation_manager = get_rotation_manager()
 
-            genai.configure(api_key=cfg.gemini_api_key)
-            self.client = genai.GenerativeModel("models/gemini-2.5-flash")
-            logger.info("Metadata generator initialized with Gemini")
+            gemini_keys_with_names = []
+            for i in range(1, 6):
+                key_name = f'GEMINI_API_KEY_{i}' if i > 1 else 'GEMINI_API_KEY'
+                key_value = os.getenv(key_name)
+                if key_value:
+                    gemini_keys_with_names.append((key_name, key_value))
+
+            if gemini_keys_with_names:
+                rotation_manager.register_keys("gemini", gemini_keys_with_names)
+                logger.info(f"Registered {len(gemini_keys_with_names)} Gemini API keys for metadata generation")
+            else:
+                raise ValueError("No Gemini API keys configured for metadata generation")
+
+            # 初期クライアントは不要（_call_gemini_for_metadataで動的に設定）
+            self.client = None
+            logger.info("Metadata generator initialized with Gemini key rotation")
 
         except Exception as e:
             logger.error(f"Failed to initialize metadata generator: {e}")
@@ -127,29 +141,51 @@ class MetadataGenerator:
         return "\n".join(summaries)
 
     def _call_gemini_for_metadata(self, prompt: str, max_retries: int = 3) -> str:
-        """メタデータ生成用Gemini API呼び出し"""
-        import random
-        import time
+        """メタデータ生成用Gemini API呼び出し（キーローテーション対応）"""
+        rotation_manager = get_rotation_manager()
 
-        for attempt in range(max_retries):
+        def api_call_with_key(api_key: str) -> str:
+            """単一APIキーでの呼び出し"""
             try:
-                response = self.client.generate_content(prompt)
+                genai.configure(api_key=api_key)
+                client = genai.GenerativeModel("models/gemini-2.5-flash")
+
+                generation_config = genai.GenerationConfig(
+                    temperature=0.7,
+                    top_p=0.95,
+                    top_k=40,
+                    max_output_tokens=4096,
+                )
+
+                response = client.generate_content(
+                    prompt,
+                    generation_config=generation_config,
+                    timeout=90
+                )
                 content = response.text
                 logger.debug(f"Generated metadata response length: {len(content)}")
                 return content
+
             except Exception as e:
-                if "rate_limit" in str(e).lower() and attempt < max_retries - 1:
-                    wait_time = (2**attempt) + random.uniform(0, 1)
-                    logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
-                    time.sleep(wait_time)
-                    continue
-                if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 2
-                    logger.warning(f"Metadata generation error, retrying in {wait_time}s: {e}")
-                    time.sleep(wait_time)
-                    continue
+                error_str = str(e).lower()
+                if any(kw in error_str for kw in ["429", "rate limit", "quota"]):
+                    logger.warning(f"Gemini rate limit detected: {e}")
+                    raise
+                if any(kw in error_str for kw in ["504", "deadline exceeded", "timeout"]):
+                    logger.warning(f"Gemini timeout detected: {e}")
+                    raise
+                logger.warning(f"Gemini API error: {e}")
                 raise
-        raise Exception("Max retries exceeded for metadata generation")
+
+        try:
+            return rotation_manager.execute_with_rotation(
+                provider="gemini",
+                api_call=api_call_with_key,
+                max_attempts=max_retries
+            )
+        except Exception as e:
+            logger.error(f"All Gemini API attempts failed for metadata generation: {e}")
+            raise Exception("Gemini API failed with all keys for metadata generation")
 
     def _parse_metadata_response(self, response: str) -> Dict[str, Any]:
         """メタデータレスポンスを解析"""

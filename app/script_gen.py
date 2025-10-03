@@ -5,6 +5,7 @@
 """
 
 import logging
+import os # 追加
 import re
 from datetime import datetime
 from typing import Any, Dict, List
@@ -50,13 +51,16 @@ class ScriptGenerator:
             rotation_manager = get_rotation_manager()
 
             # Gemini keysを登録
-            gemini_keys = cfg.gemini_api_keys
-            if gemini_keys:
-                rotation_manager.register_keys("gemini", gemini_keys)
-                logger.info(f"Registered {len(gemini_keys)} Gemini API keys for rotation")
-            elif cfg.gemini_api_key:
-                rotation_manager.register_keys("gemini", [cfg.gemini_api_key])
-                logger.info("Registered 1 Gemini API key")
+            gemini_keys_with_names = []
+            for i in range(1, 6):
+                key_name = f'GEMINI_API_KEY_{i}' if i > 1 else 'GEMINI_API_KEY'
+                key_value = os.getenv(key_name)
+                if key_value:
+                    gemini_keys_with_names.append((key_name, key_value))
+
+            if gemini_keys_with_names:
+                rotation_manager.register_keys("gemini", gemini_keys_with_names)
+                logger.info(f"Registered {len(gemini_keys_with_names)} Gemini API keys for rotation")
             else:
                 raise ValueError("No Gemini API keys configured")
 
