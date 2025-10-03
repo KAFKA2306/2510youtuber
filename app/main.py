@@ -337,23 +337,38 @@ class YouTubeWorkflow:
             logger.info(f"Cleaned up {cleaned_count} temporary files")
 
 
-# グローバルワークフローインスタンス
-workflow = YouTubeWorkflow()
+# Backward compatibility: expose workflow via container
+def _get_workflow() -> YouTubeWorkflow:
+    """Get workflow instance from container (backward compatibility)."""
+    from .container import get_container
+    return get_container().workflow
+
+
+# Legacy global variable (backward compatibility)
+# Deprecated: Use _get_workflow() or container.workflow instead
+class _WorkflowProxy:
+    """Proxy object to maintain backward compatibility with 'workflow' global."""
+
+    def __getattr__(self, name):
+        return getattr(_get_workflow(), name)
+
+
+workflow = _WorkflowProxy()
 
 
 async def run_daily_workflow() -> Dict[str, Any]:
     """日次ワークフロー実行"""
-    return await workflow.execute_full_workflow("daily")
+    return await _get_workflow().execute_full_workflow("daily")
 
 
 async def run_special_workflow() -> Dict[str, Any]:
     """特別ワークフロー実行"""
-    return await workflow.execute_full_workflow("special")
+    return await _get_workflow().execute_full_workflow("special")
 
 
 async def run_test_workflow() -> Dict[str, Any]:
     """テストワークフロー実行"""
-    return await workflow.execute_full_workflow("test")
+    return await _get_workflow().execute_full_workflow("test")
 
 
 if __name__ == "__main__":
@@ -363,7 +378,7 @@ if __name__ == "__main__":
         mode = sys.argv[1] if len(sys.argv) > 1 else "test"
         print(f"Starting YouTube workflow in {mode} mode...")
         try:
-            result = await workflow.execute_full_workflow(mode)
+            result = await _get_workflow().execute_full_workflow(mode)
             if result.get("success"):
                 print("✅ Workflow completed successfully!")
                 print(f"Execution time: {result.get('execution_time', 0):.1f}s")

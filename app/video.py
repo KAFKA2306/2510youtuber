@@ -625,8 +625,23 @@ class VideoGenerator:
             return None
 
 
-# グローバルインスタンス
-video_generator = VideoGenerator()
+# グローバルインスタンス（後方互換性のため保持）
+# Deprecated: Use container.video_generator instead
+def _get_video_generator() -> VideoGenerator:
+    """Get video generator from container (backward compatibility)."""
+    from app.container import get_container
+    return get_container().video_generator
+
+
+# Legacy global variable (backward compatibility)
+class _VideoGeneratorProxy:
+    """Proxy object to maintain backward compatibility."""
+
+    def __getattr__(self, name):
+        return getattr(_get_video_generator(), name)
+
+
+video_generator = _VideoGeneratorProxy()
 
 
 def generate_video(
@@ -650,7 +665,7 @@ def generate_video(
     Returns:
         Path to generated video file
     """
-    return video_generator.generate_video(
+    return _get_video_generator().generate_video(
         audio_path,
         subtitle_path,
         background_image,

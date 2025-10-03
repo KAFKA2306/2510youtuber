@@ -318,15 +318,30 @@ class TTSManager:
             return {}
 
 
-# グローバルインスタンス
-tts_manager = TTSManager()
+# グローバルインスタンス（後方互換性のため保持）
+# Deprecated: Use container.tts_manager instead
+def _get_tts_manager() -> TTSManager:
+    """Get TTS manager from container (backward compatibility)."""
+    from app.container import get_container
+    return get_container().tts_manager
+
+
+# Legacy global variable (backward compatibility)
+class _TTSManagerProxy:
+    """Proxy object to maintain backward compatibility."""
+
+    def __getattr__(self, name):
+        return getattr(_get_tts_manager(), name)
+
+
+tts_manager = _TTSManagerProxy()
 
 
 async def synthesize_script(script_text: str, voice: str = "neutral") -> List[str]:
     """台本音声合成の簡易関数"""
-    return await tts_manager.synthesize_script(script_text, voice)
+    return await _get_tts_manager().synthesize_script(script_text, voice)
 
 
 def split_text_for_tts(text: str) -> List[Dict[str, Any]]:
     """テキスト分割の簡易関数"""
-    return tts_manager.split_text_for_tts(text)
+    return _get_tts_manager().split_text_for_tts(text)
