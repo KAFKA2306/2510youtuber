@@ -119,5 +119,6 @@ output/
 !*README.md*
 *Zone.Identifier*
 *csv
+!*AGENTS.md*
 
 *claude-desktop-debian*
