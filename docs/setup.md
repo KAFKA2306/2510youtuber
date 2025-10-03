@@ -85,7 +85,10 @@
 
 ### 必要なアカウント
 
-- [ ] **Perplexity**: ニュース収集用
+- [ ] **SerpAPI**: ニュース検索用（必須）
+  - 無料: 100検索/月（開発・テストには十分）
+  - 取得先: https://serpapi.com/
+- [ ] **Perplexity**: ニュース収集用（オプション）
   - 🆕 **推奨**: 複数アカウント（Rate limit対策・自動ローテーション）
 - [ ] **NewsAPI.org**: Perplexityフォールバック用（無料100リクエスト/日）🆕
 - [ ] **Google Cloud**: Gemini API・Sheets・Drive・YouTube Data API用
@@ -106,7 +109,25 @@
 
 ## APIキー取得手順
 
-### 1. Perplexity API
+### 1. SerpAPI（ニュース検索）
+
+**必須**: ニュース検索に使用します。
+
+1. [SerpAPI](https://serpapi.com/)にアクセス
+2. 「Sign Up」でアカウント作成（Googleアカウントで簡単登録可能）
+3. ダッシュボードから「API Key」をコピー
+4. **メモ**: `SERP_API_KEY=your_serpapi_key_here`
+
+**無料枠**:
+- 月間100検索まで無料
+- クレジットカード登録不要
+- 開発・テストには十分
+
+**有料プラン（必要に応じて）**:
+- Developer: $50/月（5,000検索）
+- Production: $250/月（30,000検索）
+
+### 2. Perplexity API（オプション）
 
 1. [Perplexity AI](https://www.perplexity.ai/)にアクセス
 2. アカウント作成・ログイン
@@ -130,7 +151,7 @@
 - 成功率ベースで最適なキーを選択
 - 連続5回失敗したキーは10分間休止
 
-### 1.1 NewsAPI.org（フォールバック）🆕
+### 3. NewsAPI.org（フォールバック）🆕
 
 **Perplexityのバックアップとして設定推奨**
 
@@ -147,7 +168,7 @@
 - Perplexity全失敗時に自動的にNewsAPIへフォールバック
 - 日本語ニュースを自動収集
 
-### 2. Google Cloud Platform
+### 4. Google Cloud Platform
 
 #### Gemini API（CrewAI統合対応）
 
@@ -327,19 +348,37 @@ rm token.pickle
 uv run python test_upload.py
 ```
 
-### 3. ElevenLabs STT
+### 5. ElevenLabs TTS（音声合成）
 
 1. [ElevenLabs](https://elevenlabs.io/)でアカウント作成
 2. SettingsのAPI Keysからキーを取得
 3. **メモ**: `ELEVENLABS_API_KEY=...`
 
-### 4. Discord Webhook
+**プラン**:
+- **Free**: 10,000文字/月（開発・テスト用）
+- **Starter**: $5/月、30,000文字（小規模運用）
+- **Creator**: $22/月、100,000文字（中規模運用）
 
-1. DiscordサーバーでWebhookを作成
-2. Webhook URLをコピー
-3. **メモ**: `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...`
+**音声ID（Voice ID）の取得方法**:
+1. ElevenLabsにログイン
+2. 「Voices」タブから使用したい音声を選択
+3. 音声の「Voice ID」をコピー
+4. `.env`ファイルに設定:
+   ```bash
+   TTS_VOICE_TANAKA=voice_id_here
+   TTS_VOICE_SUZUKI=voice_id_here
+   TTS_VOICE_NARRATOR=voice_id_here
+   ```
 
-### 5. Stock Footage APIs（無料・推奨）🎬
+### 6. Discord Webhook（通知）
+
+1. Discordサーバーで「サーバー設定」→「連携サービス」→「ウェブフック」を開く
+2. 「新しいウェブフック」をクリック
+3. ウェブフック名とチャンネルを設定
+4. 「ウェブフックURLをコピー」をクリック
+5. **メモ**: `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...`
+
+### 7. Stock Footage APIs（無料・推奨）🎬
 
 **動画背景を自動的にプロフェッショナルなB-roll映像にアップグレード！**
 
@@ -448,7 +487,11 @@ uv run python test_upload.py
 
 ```bash
 # ===== AI APIs =====
-# Perplexity（ニュース収集）
+# SerpAPI（ニュース検索 - 必須）
+# 取得先: https://serpapi.com/
+SERP_API_KEY=your_serpapi_key_here
+
+# Perplexity（ニュース収集 - オプション）
 PERPLEXITY_API_KEY=pplx-...
 
 # 🆕 API Key Rotation（複数キー設定で自動ローテーション）
@@ -1177,7 +1220,10 @@ chmod 700 secret/
 
 ### **必要なアカウント**
 
-- [ ] **Perplexity**: ニュース収集用
+- [ ] **SerpAPI**: ニュース検索用（必須）
+  - 無料: 100検索/月（開発・テストには十分）
+  - 取得先: https://serpapi.com/
+- [ ] **Perplexity**: ニュース収集用（オプション）
   - 🆕 **推奨**: 複数アカウント（Rate limit対策・自動ローテーション）
 - [ ] **NewsAPI.org**: Perplexityフォールバック用（無料100リクエスト/日）🆕[5]
 - [ ] **Google Cloud**: Gemini API・Sheets・Drive・YouTube Data API用
@@ -1193,6 +1239,19 @@ chmod 700 secret/
 ***
 
 ## API詳細仕様と対策
+
+### **SerpAPI（ニュース検索）**
+
+| プラン | 月額料金 | 検索数制限 | リクエストレート | 推奨用途 |
+|--------|----------|------------|-----------------|----------|
+| **Free** | $0 | 100検索/月 | 1検索/秒 | 開発・テスト |
+| **Developer** | $50 | 5,000検索/月 | 5検索/秒 | 小規模運用 |
+| **Production** | $250 | 30,000検索/月 | 25検索/秒 | 大規模運用 |
+
+**特徴**:
+- Google検索APIの高精度プロキシ
+- 日本語ニュース検索に最適
+- クレジットカード登録不要（無料プラン）
 
 ### **ElevenLabs TTS API**
 
@@ -1234,7 +1293,24 @@ chmod 700 secret/
 
 ## APIキー取得と設定
 
-### **1. Perplexity API（複数キー推奨）**
+### **1. SerpAPI（必須）**
+
+1. [SerpAPI](https://serpapi.com/)にアクセス
+2. 「Sign Up」でアカウント作成（Googleアカウントで簡単登録可能）
+3. ダッシュボードから「API Key」をコピー
+4. `.env`ファイルに設定
+
+**.env設定例**:
+```bash
+SERP_API_KEY=your_serpapi_key_here
+```
+
+**無料枠の活用**:
+- 月間100検索まで無料
+- 1日3-4回の実行で十分カバー可能
+- クレジットカード登録不要
+
+### **2. Perplexity API（オプション・複数キー推奨）**
 
 1. [Perplexity AI](https://www.perplexity.ai/)にアクセス
 2. アカウント作成・ログイン
@@ -1248,7 +1324,7 @@ PERPLEXITY_API_KEY_2=pplx-key2
 PERPLEXITY_API_KEY_3=pplx-key3
 ```
 
-### **2. NewsAPI.org（フォールバック）**
+### **3. NewsAPI.org（フォールバック）**
 
 1. [NewsAPI.org](https://newsapi.org/register)で無料アカウント作成
 2. APIキーをコピー
@@ -1258,7 +1334,7 @@ PERPLEXITY_API_KEY_3=pplx-key3
 NEWSAPI_API_KEY=your_newsapi_key
 ```
 
-### **3. Google Gemini API（複数キー推奨）**
+### **4. Google Gemini API（複数キー推奨）**
 
 #### **オプションA: Google AI Studio（推奨）**
 1. [Google AI Studio](https://makersuite.google.com/)でAPIキー作成
@@ -1277,7 +1353,7 @@ GEMINI_API_KEY_5=AIza-key5
 2. Vertex AI APIを有効化
 3. サービスアカウント認証設定
 
-### **4. Stock Footage APIs（完全無料）**
+### **5. Stock Footage APIs（完全無料）**
 
 #### **Pexels API（推奨）**
 1. [Pexels API](https://www.pexels.com/api/)で無料登録
@@ -1295,13 +1371,78 @@ PEXELS_API_KEY=YOUR_PEXELS_KEY
 PIXABAY_API_KEY=YOUR_PIXABAY_KEY
 ```
 
+### **6. ElevenLabs TTS（音声合成）**
+
+1. [ElevenLabs](https://elevenlabs.io/)でアカウント作成
+2. SettingsのAPI Keysからキーを取得
+3. **推奨プラン**: Starter（$5/月、30,000文字）
+
+```bash
+ELEVENLABS_API_KEY=sk_your_key
+```
+
+**音声ID（Voice ID）の取得**:
+1. ElevenLabsの「Voices」タブから音声を選択
+2. Voice IDをコピー
+3. `.env`に設定:
+```bash
+TTS_VOICE_TANAKA=voice_id_here
+TTS_VOICE_SUZUKI=voice_id_here
+TTS_VOICE_NARRATOR=voice_id_here
+```
+
+### **7. Discord Webhook（通知）**
+
+1. Discordサーバー設定 → 連携サービス → ウェブフック
+2. 新しいウェブフックを作成
+3. URLをコピー
+
+```bash
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your_webhook
+```
+
+### **8. VOICEVOX Nemo（無料TTSバックアップ）**
+
+**オプション**: ElevenLabs制限時の無料バックアップとして推奨
+
+#### Dockerで起動（推奨）
+
+```bash
+# VOICEVOX Nemo serverを起動
+docker run -d \
+  --rm \
+  -p 50121:50021 \
+  --name voicevox-nemo \
+  voicevox/voicevox_engine:cpu-ubuntu20.04-latest
+```
+
+#### 設定
+
+`config.yaml`で有効化:
+```yaml
+tts:
+  voicevox:
+    enabled: true
+    port: 50121
+    speaker: 1
+```
+
+**特徴**:
+- 完全無料・オープンソース
+- 日本語音声合成に最適
+- ElevenLabs失敗時に自動フォールバック
+
 ***
 
 ## 完全な.envファイルテンプレート
 
 ```bash
 # ===== AI APIs =====
-# Perplexity（ニュース収集）- 複数キー設定推奨
+# SerpAPI（ニュース検索 - 必須）
+# 取得先: https://serpapi.com/ （無料: 100検索/月）
+SERP_API_KEY=your_serpapi_key_here
+
+# Perplexity（ニュース収集 - オプション）- 複数キー設定推奨
 PERPLEXITY_API_KEY=pplx-key1
 PERPLEXITY_API_KEY_2=pplx-key2
 PERPLEXITY_API_KEY_3=pplx-key3
@@ -1385,7 +1526,24 @@ SAVE_LOCAL_BACKUP=true
 
 ## セットアップ検証手順
 
-### **1. 環境確認**
+### **1. 統合検証スクリプト（推奨）**
+
+全ての環境設定を自動で検証します:
+
+```bash
+# システム全体の検証（VOICEVOX Nemo自動起動含む）
+python verify.py
+```
+
+**検証内容**:
+- ✅ .envファイルの存在確認
+- ✅ 必須APIキーの設定確認
+- ✅ VOICEVOX Nemoサーバーの起動と動作確認
+- ✅ 必要なディレクトリの作成
+- ✅ 仮想環境の確認
+- ✅ 音声合成のテスト
+
+### **2. 個別環境確認**
 ```bash
 # 設定確認
 python test_setup.py
@@ -1394,7 +1552,7 @@ python test_setup.py
 python test_api_stability.py
 ```
 
-### **2. CrewAI統合テスト**
+### **3. CrewAI統合テスト**
 ```bash
 # サンプルニュースでCrewAI実行
 uv run python3 test_crewai_flow.py
@@ -1408,7 +1566,7 @@ uv run python3 test_crewai_flow.py
 🚀 Starting WOW Script Creation Crew execution...
 ```
 
-### **3. Stock Footage テスト**
+### **4. Stock Footage テスト**
 ```bash
 # Stock Footage統合テスト
 python test_stock_footage.py
