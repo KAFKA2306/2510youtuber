@@ -21,7 +21,7 @@ from elevenlabs.client import AsyncElevenLabs
 from gtts import gTTS
 from pydub import AudioSegment
 
-from .config import cfg
+from app.config.settings import settings
 
 # Conditional import for openai
 try:
@@ -38,12 +38,12 @@ class TTSManager:
     """音声合成管理クラス"""
 
     def __init__(self):
-        self.api_key = cfg.elevenlabs_api_key
+        self.api_key = settings.elevenlabs_api_key
         self.client = None
-        self.max_concurrent = cfg.max_concurrent_tts  # 動的に調整（デフォルトは設定値）
-        self.chunk_size = cfg.tts_chunk_size
-        self.voicevox_port = cfg.tts_voicevox_port
-        self.voicevox_speaker = cfg.tts_voicevox_speaker
+        self.max_concurrent = settings.max_concurrent_tts  # 動的に調整（デフォルトは設定値）
+        self.chunk_size = settings.tts_chunk_size
+        self.voicevox_port = settings.tts_voicevox_port
+        self.voicevox_speaker = settings.tts_voicevox_speaker
         self.pyttsx3_engine = None
         self.openai_client = None
 
@@ -281,15 +281,21 @@ class TTSManager:
             line = line.strip()
             if not line:
                 continue
-            speaker_match = re.match(r"^(田中|鈴木|ナレーター|司会)[:：]\s*(.+)", line)
+            # 話者名とコロンの間にスペースがあっても、コロンが必須であることを明確にする
+            # コロンが1つだけであることを強制するために否定先読みを使用
+            speaker_match = re.match(r"^(田中|鈴木|ナレーター|司会)\s*([:：])\s*(.*)", line)
             if speaker_match:
                 if current_speaker and current_content:
                     speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
                 current_speaker = speaker_match.group(1)
-                current_content = [speaker_match.group(2)]
+                current_content = [speaker_match.group(3)]
             else:
-                if current_content:
+                # 話者パターンにマッチしない行の処理
+                if current_speaker is not None:
+                    # 直前の話者がいれば、そのコンテンツに連結
                     current_content.append(line)
+                # 最初の行が話者パターンにマッチしない場合は、current_speakerがNoneのままなので、
+                # その行は無視される（speaker_linesに追加されない）
         if current_speaker and current_content:
             speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
         return speaker_lines
@@ -318,7 +324,7 @@ class TTSManager:
 
     def _get_voice_config(self, speaker: str) -> Dict[str, Any]:
         """話者に応じた音声設定を取得"""
-        voice_configs = cfg.tts_voice_configs
+        voice_configs = settings.tts_voice_configs
         config = voice_configs.get(speaker, voice_configs.get("田中", {}))
 
         # Add VoiceSettings object for ElevenLabs
@@ -353,7 +359,7 @@ class TTSManager:
             optimal = min(2, total_chunks)
 
         # 設定値を超えない
-        optimal = min(optimal, cfg.max_concurrent_tts)
+        optimal = min(optimal, settings.max_concurrent_tts)
 
         logger.info(
             f"Optimal concurrency: {optimal} "

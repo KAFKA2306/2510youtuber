@@ -74,11 +74,7 @@ def test_data_models():
 
 def test_config():
     """設定ファイルのテスト"""
-    print("=" * 60)
-    print("TEST 2: Configuration")
-    print("=" * 60)
-
-    from app.config import settings
+    from app.config.settings import settings
 
     print(f"✓ 設定読み込み成功")
     print(f"  - Speakers: {len(settings.speakers)}")
@@ -144,7 +140,7 @@ def test_ai_clients():
     print("TEST 4: AI Clients")
     print("=" * 60)
 
-    from app.config import settings
+    from app.config.settings import settings
 
     # API Keyの存在確認
     gemini_key = settings.api_keys.get('gemini')

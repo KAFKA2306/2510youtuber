@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 import ffmpeg
 from pydub import AudioSegment
 
-from .config import cfg
+from app.config.settings import settings
 from .background_theme import BackgroundTheme, get_theme_manager
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ class VideoGenerator:
     """動画生成クラス"""
 
     def __init__(self):
-        self.video_quality = cfg.video_quality or "high"
+        self.video_quality = settings.video_quality or "high"
         self.output_format = "mp4"
         self.theme_manager = get_theme_manager()
         self.current_theme: Optional[BackgroundTheme] = None
@@ -76,7 +76,7 @@ class VideoGenerator:
 
             # Determine if using stock footage
             if use_stock_footage is None:
-                use_stock_footage = cfg.enable_stock_footage
+                use_stock_footage = settings.enable_stock_footage
 
             # TRY 1: Stock Footage B-roll (if enabled and configured)
             if use_stock_footage and self._can_use_stock_footage():
@@ -370,8 +370,8 @@ class VideoGenerator:
             return 60.0
 
     def _get_quality_settings(self) -> Dict[str, Any]:
-        presets = cfg.video_quality_presets
-        settings = presets.get(self.video_quality, presets["medium"])
+        presets = settings.video_quality_presets
+        quality_settings = presets.get(self.video_quality, presets["medium"])
         settings.update({"c:a": "aac", "b:a": "128k", "ar": "44100", "pix_fmt": "yuv420p", "movflags": "+faststart"})
         return settings
 
@@ -403,12 +403,12 @@ class VideoGenerator:
             # プロYouTuber品質の字幕スタイル（最強視認性 + 見切れ防止）
             subtitle_style = (
                 f"subtitles={subtitle_path}:force_style='FontName={font_name},"
-                f"FontSize={cfg.subtitle_font_size},"  # config.py から取得（デフォルト48）
+                f"FontSize={settings.subtitle_font_size},"  # config.py から取得（デフォルト48）
                 f"PrimaryColour=&H00FFFFFF,"  # 白文字（視認性最強）
                 f"OutlineColour=&H00000000,"  # 黒アウトライン
                 f"BackColour=&HE0000000,"  # より濃い半透明黒背景（E0=88%不透明）
                 f"BorderStyle=4,"  # 4=ボックス背景+アウトライン（最強視認性）
-                f"Outline={cfg.subtitle_outline_width + 1},"  # アウトライン幅を1px増加
+                f"Outline={settings.subtitle_outline_width + 1},"  # アウトライン幅を1px増加
                 f"Shadow=3,"  # より強い影（立体感）
                 f"Alignment=2,"  # 下部中央
                 f"MarginV={subtitle_margin_v},"  # 下部マージン（見切れ防止）
@@ -470,7 +470,7 @@ class VideoGenerator:
 
     def _can_use_stock_footage(self) -> bool:
         """Check if stock footage generation is available."""
-        return bool(cfg.pexels_api_key or cfg.pixabay_api_key)
+        return bool(settings.pexels_api_key or settings.pixabay_api_key)
 
     def _ensure_stock_services(self):
         """Lazy load stock footage services."""
@@ -478,11 +478,11 @@ class VideoGenerator:
             from .services.media import StockFootageManager, VisualMatcher, BRollGenerator
 
             self._stock_manager = StockFootageManager(
-                pexels_api_key=cfg.pexels_api_key,
-                pixabay_api_key=cfg.pixabay_api_key,
+                pexels_api_key=settings.pexels_api_key,
+                pixabay_api_key=settings.pixabay_api_key,
             )
             self._visual_matcher = VisualMatcher()
-            self._broll_generator = BRollGenerator(ffmpeg_path=cfg.ffmpeg_path)
+            self._broll_generator = BRollGenerator(ffmpeg_path=settings.ffmpeg_path)
 
     def _generate_with_stock_footage(
         self,
@@ -512,7 +512,7 @@ class VideoGenerator:
         keywords = self._visual_matcher.extract_keywords(
             script_content=script_content,
             news_items=news_items or [],
-            max_keywords=cfg.stock_footage_clips_per_video,
+            max_keywords=settings.stock_footage_clips_per_video,
         )
 
         if not keywords:
@@ -525,7 +525,7 @@ class VideoGenerator:
         footage_results = self._stock_manager.search_footage(
             keywords=keywords,
             duration_target=audio_duration,
-            max_clips=cfg.stock_footage_clips_per_video,
+            max_clips=settings.stock_footage_clips_per_video,
         )
 
         if not footage_results:

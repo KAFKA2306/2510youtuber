@@ -106,7 +106,7 @@ def sample_news_items() -> List[Dict[str, Any]]:
         {
             "title": "新NISAが投資ブームを加速",
             "url": "https://example.com/news2",
-            "summary": "2024年に始まった新NISA制度により、個人投資家の参入が急増している。",
+            "summary": "2024年に始まった新NISA制度により、個人投資家の参入が急増しており、市場に活気をもたらしている。",
             "key_points": ["口座開設数200%増", "若年層の参加増", "長期積立人気"],
             "source": "ロイター",
             "impact_level": "medium",
@@ -115,7 +115,7 @@ def sample_news_items() -> List[Dict[str, Any]]:
         {
             "title": "AI関連株が市場を牽引",
             "url": "https://example.com/news3",
-            "summary": "生成AIブームにより、AI関連企業の株価が急騰している。",
+            "summary": "生成AIブームにより、AI関連企業の株価が急騰しており、市場全体の成長を牽引している。",
             "key_points": ["NVIDIA株価300%上昇", "日本AI銘柄も連動", "投資家関心集中"],
             "source": "Bloomberg",
             "impact_level": "high",

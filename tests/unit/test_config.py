@@ -5,8 +5,7 @@ import pytest
 
 @pytest.mark.unit
 def test_settings_load():
-    """設定が正しく読み込まれるか確認"""
-    from app.config import settings
+    from app.config.settings import settings
 
     assert settings is not None
     assert hasattr(settings, "speakers")
@@ -17,7 +16,7 @@ def test_settings_load():
 @pytest.mark.unit
 def test_speakers_configuration():
     """話者設定が正しく読み込まれるか確認"""
-    from app.config import settings
+    from app.config.settings import settings
 
     assert len(settings.speakers) > 0, "話者が設定されていません"
 
@@ -30,7 +29,7 @@ def test_speakers_configuration():
 @pytest.mark.unit
 def test_video_configuration():
     """動画設定が正しく読み込まれるか確認"""
-    from app.config import settings
+    from app.config.settings import settings
 
     assert settings.video.resolution_tuple is not None
     assert len(settings.video.resolution_tuple) == 2
@@ -41,7 +40,7 @@ def test_video_configuration():
 @pytest.mark.unit
 def test_quality_thresholds():
     """品質閾値が正しく設定されているか確認"""
-    from app.config import settings
+    from app.config.settings import settings
 
     assert hasattr(settings.quality_thresholds, "wow_score_min")
     assert settings.quality_thresholds.wow_score_min > 0
@@ -51,7 +50,7 @@ def test_quality_thresholds():
 @pytest.mark.unit
 def test_crewai_configuration():
     """CrewAI設定が正しく読み込まれるか確認"""
-    from app.config import settings
+    from app.config.settings import settings
 
     assert hasattr(settings.crew, "enabled")
     assert isinstance(settings.crew.enabled, bool)
@@ -60,7 +59,7 @@ def test_crewai_configuration():
 @pytest.mark.unit
 def test_agent_configuration():
     """エージェント設定が取得できるか確認"""
-    from app.config import settings
+    from app.config.settings import settings
 
     agent_config = settings.get_agent_config("deep_news_analyzer")
 

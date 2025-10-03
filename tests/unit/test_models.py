@@ -65,12 +65,12 @@ def test_quality_score_creation():
     from app.models import QualityScore
 
     score = QualityScore(
-        wow_score=8.5,
+        wow_score=9.0,
         surprise_score=9.0,
         emotion_score=8.0,
         clarity_score=8.5,
         retention_prediction=54.0,
-        japanese_purity=97.5
+        japanese_purity=98.0
     )
 
     assert score.wow_score == 8.5
@@ -86,12 +86,12 @@ def test_quality_score_passing_threshold():
 
     # 合格スコア
     passing_score = QualityScore(
-        wow_score=7.0,
+        wow_score=8.0,
         surprise_score=7.0,
         emotion_score=7.0,
         clarity_score=7.0,
         retention_prediction=50.0,
-        japanese_purity=90.0
+        japanese_purity=95.0
     )
     assert passing_score.is_passing() is True
 

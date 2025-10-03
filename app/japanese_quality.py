@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Tuple
 
 import google.generativeai as genai
 
-from .config import cfg
+from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,8 @@ class JapaneseQualityChecker:
     def _setup_client(self):
         """Gemini APIクライアントを初期化"""
         try:
-            if cfg.gemini_api_key:
-                genai.configure(api_key=cfg.gemini_api_key)
+            if settings.gemini_api_key:
+                genai.configure(api_key=settings.gemini_api_key)
                 self.client = genai.GenerativeModel("models/gemini-2.5-flash")
                 logger.info("Japanese quality checker initialized")
         except Exception as e:
@@ -364,7 +364,7 @@ class JapaneseQualityChecker:
 
 
 # グローバルインスタンス
-japanese_quality_checker = JapaneseQualityChecker() if cfg.gemini_api_key else None
+japanese_quality_checker = JapaneseQualityChecker() if settings.gemini_api_key else None
 
 
 def check_script_japanese_purity(script: str) -> Dict[str, Any]:

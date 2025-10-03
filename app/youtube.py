@@ -19,7 +19,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
-from .config import cfg
+from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class YouTubeManager:
     def __init__(self):
         self.service = None
         self.credentials = None
-        self.client_secrets = cfg.youtube_client_secret
+        self.client_secrets = settings.youtube_client_secret
         self._setup_service()
 
     def _setup_service(self):
@@ -470,7 +470,7 @@ class YouTubeManager:
 
 
 # グローバルインスタンス
-youtube_manager = YouTubeManager() if cfg.youtube_client_secret else None
+youtube_manager = YouTubeManager() if settings.youtube_client_secret else None
 
 
 def upload_video(
@@ -507,9 +507,9 @@ if __name__ == "__main__":
     print("Testing YouTube functionality...")
 
     # 設定確認
-    print(f"YouTube client secrets configured: {bool(cfg.youtube_client_secret)}")
+    print(f"YouTube client secrets configured: {bool(settings.youtube_client_secret)}")
 
-    if cfg.youtube_client_secret:
+    if settings.youtube_client_secret:
         try:
             manager = YouTubeManager()
 

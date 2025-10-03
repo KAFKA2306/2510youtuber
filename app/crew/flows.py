@@ -165,14 +165,19 @@ class WOWScriptFlow:
             logger.info(f"Successfully parsed CrewAI JSON output, script length: {len(final_script)}")
             logger.info(f"First 800 chars of parsed script: {final_script[:800]}")
 
-            # Verify script has speaker format (田中:, 鈴木:, ナレーター:)
-            import re
-            speaker_pattern = r'^(田中|鈴木|ナレーター|司会)[:：]\s*'
-            has_speakers = bool(re.search(speaker_pattern, final_script, re.MULTILINE))
-
-            if not has_speakers:
-                logger.warning("Script does not have proper speaker format (田中:, 鈴木:, etc.), TTS will fail")
-                logger.warning("This indicates CrewAI did not follow the output format instructions")
+            # Verify each line of the script has speaker format (田中:, 鈴木:, ナレーター:)
+            speaker_pattern = re.compile(r"^(田中|鈴木|ナレーター|司会)\s*([:：])\s*([^:：].*)")
+            script_lines = final_script.strip().split('\n')
+            
+            speaker_format_valid = True
+            for i, line in enumerate(script_lines):
+                if line.strip() and not speaker_pattern.match(line.strip()):
+                    speaker_format_valid = False
+                    break # 最初の無効な行が見つかったらループを抜ける
+            
+            if not speaker_format_valid:
+                logger.warning("Script does not have proper speaker format")
+                logger.warning("This indicates CrewAI did not follow the output format instructions.")
 
             result = {
                 'success': True,
@@ -181,6 +186,7 @@ class WOWScriptFlow:
                 'quality_data': parsed_data.get('quality_guarantee', {}),
                 'japanese_purity_score': parsed_data.get('japanese_purity_score', 0),
                 'character_count': parsed_data.get('character_count', len(final_script)),
+                'speaker_format_valid': speaker_format_valid, # 新しいフィールドを追加
             }
 
             return result

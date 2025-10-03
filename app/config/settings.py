@@ -14,7 +14,7 @@ class SpeakerConfig(BaseModel):
     voice_id_env: str
     stability: float = 0.5
     speaking_style: str
-    voice_id: str = ""
+    voice_id: str | None = None
 
     @validator('voice_id', pre=True, always=True)
     def load_voice_id_from_env(cls, v, values):
@@ -81,7 +81,13 @@ class AppSettings(BaseModel):
         }
         
         config["api_keys"] = api_keys
-        
+
+        # speakersのvoice_idを環境変数からロード
+        if "speakers" in config:
+            for speaker in config["speakers"]:
+                if "voice_id_env" in speaker:
+                    speaker["voice_id"] = os.getenv(speaker["voice_id_env"])
+
         # pydantic expects the quality field, but yaml has quality_thresholds
         if "quality_thresholds" in config:
             config["quality"] = config.pop("quality_thresholds")

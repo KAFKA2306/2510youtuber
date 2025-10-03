@@ -170,6 +170,7 @@ class WorkflowResult(BaseModel):
     # 品質指標
     quality_score: Optional[float] = Field(default=None, description="品質スコア")
     wow_score: Optional[float] = Field(default=None, description="WOWスコア")
+    curiosity_gap_score: Optional[float] = Field(default=0.0, description="好奇心ギャップスコア")
 
     # ステップサマリー
     completed_steps: int = Field(default=0, description="完了ステップ数")

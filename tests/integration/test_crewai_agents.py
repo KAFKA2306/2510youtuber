@@ -9,7 +9,7 @@ def test_agent_creation():
     """エージェントが正しく生成されるか確認"""
     from app.crew.agents import create_wow_agents
 
-    agents = create_wow_agents()
+    agents = create_wow_agents(gemini_model="mock-gemini-model")
 
     assert len(agents) > 0, "エージェントが作成されていません"
 
@@ -37,7 +37,7 @@ def test_task_creation(sample_news_items):
     from app.crew.tasks import create_wow_tasks
 
     # エージェント生成
-    agents = create_wow_agents()
+    agents = create_wow_agents(gemini_model="mock-gemini-model")
 
     # タスク生成
     tasks = create_wow_tasks(agents, sample_news_items)
