@@ -57,7 +57,7 @@ class GeminiClient(AIClient):
 
     def __init__(
         self,
-        model: str = "gemini-2.0-flash-exp",
+        model: str = "gemini-2.5-pro",
         temperature: float = 0.7,
         max_tokens: int = 4096,
         timeout_seconds: int = 120,
@@ -312,7 +312,7 @@ class FallbackAIClient(AIClient):
 
     def __init__(
         self,
-        gemini_model: str = "gemini-2.0-flash-exp",
+        gemini_model: str = "gemini-2.5-pro",
         perplexity_model: str = "sonar",
         temperature: float = 0.7,
         max_tokens: int = 4096,
@@ -445,7 +445,7 @@ class AIClientFactory:
         if use_fallback:
             # FallbackAIClientを使用（推奨）
             return FallbackAIClient(
-                gemini_model=agent_config.get("model", "gemini-2.0-flash-exp"),
+                gemini_model=agent_config.get("model", "gemini-2.5-pro"),
                 perplexity_model="sonar",
                 temperature=agent_config.get("temperature", 0.7),
                 max_tokens=agent_config.get("max_tokens", 4096),
@@ -454,7 +454,7 @@ class AIClientFactory:
         else:
             # Geminiのみ（フォールバックなし）
             return GeminiClient(
-                model=agent_config.get("model", "gemini-2.0-flash-exp"),
+                model=agent_config.get("model", "gemini-2.5-pro"),
                 temperature=agent_config.get("temperature", 0.7),
                 max_tokens=agent_config.get("max_tokens", 4096),
                 timeout_seconds=agent_config.get("timeout_seconds", 300),
@@ -466,7 +466,7 @@ class AIClientFactory:
 # ===================================
 
 
-def get_gemini_client(model: str = "gemini-2.5-flash", temperature: float = 0.7, **kwargs) -> GeminiClient:
+def get_gemini_client(model: str = "gemini-2.5-pro", temperature: float = 0.7, **kwargs) -> GeminiClient:
     """Gemini Clientを取得（簡易関数）"""
     return GeminiClient(model=model, temperature=temperature, **kwargs)
 
@@ -487,7 +487,7 @@ try:
     class GeminiDirectLLM(BaseLLM):
         """Direct Gemini SDK LLM - bypasses ALL LiteLLM/Vertex AI routing"""
 
-        model_name: str = "gemini-2.0-flash-exp"
+        model_name: str = "gemini-2.5-pro"
         temperature: float = 0.7
         api_key: str = ""
         _genai_client: Any = None
@@ -517,14 +517,10 @@ try:
                 logger.error(f"Gemini Direct call failed: {e}")
                 raise
 
-    def get_crewai_gemini_llm(model: str = "gemini-pro", temperature: float = 0.7, **kwargs):
+    def get_crewai_gemini_llm(model: str = "gemini-2.5-pro", temperature: float = 0.7, **kwargs):
         """CrewAI用のGemini LLM（Direct SDK - NO LiteLLM/Vertex AI）"""
         # モデル名の正規化 - Google AI Studio API compatible names
         model_mapping = {
-            "gemini-2.0-flash-exp": "gemini-2.0-flash-exp",
-            "gemini-pro": "gemini-1.5-pro-latest",
-            "gemini-1.5-pro": "gemini-1.5-pro-latest",
-            "gemini-1.5-flash": "gemini-1.5-flash-latest",
         }
 
         clean_model = model.replace("models/", "") if model.startswith("models/") else model
@@ -541,7 +537,7 @@ try:
 except ImportError as e:
     logger.warning(f"Failed to import required modules for CrewAI: {e}")
 
-    def get_crewai_gemini_llm(model: str = "gemini-pro", temperature: float = 0.7, **kwargs):
+    def get_crewai_gemini_llm(model: str = "gemini-2.5-pro", temperature: float = 0.7, **kwargs):
         """Fallback: GeminiClientを返す"""
         logger.warning("Using fallback GeminiClient instead of LangChain wrapper")
         return get_gemini_client(model=model, temperature=temperature, **kwargs)

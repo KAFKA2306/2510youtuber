@@ -35,7 +35,7 @@ def patched_completion(model=None, messages=None, **kwargs):
     """Intercept LiteLLM completion calls to use shared rotation manager"""
     if model and "gemini" in model.lower():
         # 統一モデル名に変換
-        forced_model = "gemini/gemini-2.0-flash-exp"
+        forced_model = "gemini/gemini-2.5-pro"
         if model != forced_model:
             logger.debug(f"LiteLLM completion intercepted: {model} -> {forced_model}")
         model = forced_model
@@ -83,7 +83,7 @@ class WOWScriptFlow:
         logger.info("Initializing WOW Script Creation Crew...")
 
         # エージェント生成 (統一モデル名を指定)
-        self.agents = create_wow_agents(gemini_model="gemini-2.0-flash-exp")
+        self.agents = create_wow_agents(gemini_model="gemini-2.5-pro")
 
         # タスク生成
         self.tasks = create_wow_tasks(self.agents, news_items)

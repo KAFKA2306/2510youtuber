@@ -41,7 +41,7 @@ class AgentFactory:
             from app.crew.tools.ai_clients import get_crewai_gemini_llm
 
             llm = get_crewai_gemini_llm(
-                model=agent_config.get("model", "gemini-2.0-flash-exp"),
+                model=agent_config.get("model", "gemini-2.5-pro"),
                 temperature=agent_config.get("temperature", 0.7),
             )
 
