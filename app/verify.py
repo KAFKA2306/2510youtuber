@@ -9,12 +9,15 @@
 
 import os
 import sys
-import time
 import subprocess
-import requests
 from pathlib import Path
-from typing import Tuple, Optional
+
+# プロジェクトルートをパスに追加
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 import logging
+from dotenv import load_dotenv
 
 # ロギング設定
 logging.basicConfig(
@@ -23,14 +26,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# .envファイルを読み込み
+load_dotenv(project_root / ".env")
+
 
 class SystemVerifier:
     """システム検証クラス"""
 
     def __init__(self):
-        self.project_root = Path(__file__).parent
+        self.project_root = Path(__file__).parent.parent
         self.voicevox_port = 50121
         self.voicevox_speaker = 1
+        self.voicevox_manager = self.project_root / "scripts" / "voicevox_manager.sh"
         self.errors = []
         self.warnings = []
 
@@ -51,20 +58,18 @@ class SystemVerifier:
         """API認証情報の確認"""
         logger.info("2. Checking API keys...")
 
-        # .envファイルを読み込み
-        from dotenv import load_dotenv
-        load_dotenv()
-
         required_keys = {
             'GEMINI_API_KEY': 'Gemini API (Primary)',
-            'SERP_API_KEY': 'SerpAPI (News Search)',
             'PIXABAY_API_KEY': 'Pixabay (Images)',
         }
 
         optional_keys = {
+            'PERPLEXITY_API_KEY': 'Perplexity (News)',
+            'NEWSAPI_API_KEY': 'NewsAPI (Fallback)',
             'ELEVENLABS_API_KEY': 'ElevenLabs TTS',
             'OPENAI_API_KEY': 'OpenAI TTS',
             'GOOGLE_APPLICATION_CREDENTIALS': 'Google Sheets',
+            'PEXELS_API_KEY': 'Pexels (Stock Footage)',
         }
 
         all_ok = True
@@ -95,15 +100,20 @@ class SystemVerifier:
         logger.info("3. Checking VOICEVOX Nemo server...")
 
         try:
-            response = requests.get(
-                f'http://localhost:{self.voicevox_port}/health',
-                timeout=3
+            result = subprocess.run(
+                [str(self.voicevox_manager), "status"],
+                capture_output=True,
+                text=True,
+                timeout=5
             )
-            if response.status_code == 200:
+            if result.returncode == 0:
                 logger.info(f"✅ VOICEVOX Nemo is running on port {self.voicevox_port}")
                 return True
-        except requests.exceptions.ConnectionError:
-            logger.warning(f"⚠️  VOICEVOX Nemo is not running on port {self.voicevox_port}")
+            else:
+                logger.warning(f"⚠️  VOICEVOX Nemo is not running")
+                return False
+        except FileNotFoundError:
+            logger.warning(f"⚠️  VOICEVOX manager script not found: {self.voicevox_manager}")
             return False
         except Exception as e:
             logger.warning(f"⚠️  Failed to check VOICEVOX: {e}")
@@ -113,74 +123,34 @@ class SystemVerifier:
         """VOICEVOX Nemo serverを起動"""
         logger.info("4. Starting VOICEVOX Nemo server...")
 
-        # Dockerが利用可能か確認
-        try:
-            result = subprocess.run(
-                ['docker', '--version'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            if result.returncode != 0:
-                logger.error("❌ Docker is not available")
-                self.errors.append("Docker is required for VOICEVOX Nemo")
-                return False
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            logger.error("❌ Docker is not installed")
-            self.errors.append("Docker is required for VOICEVOX Nemo")
+        if not self.voicevox_manager.exists():
+            logger.error(f"❌ VOICEVOX manager script not found: {self.voicevox_manager}")
+            self.warnings.append("VOICEVOX manager script not found (will use fallback TTS)")
             return False
 
-        # 既存のコンテナを確認
         try:
             result = subprocess.run(
-                ['docker', 'ps', '--filter', f'publish={self.voicevox_port}', '--format', '{{.ID}}'],
+                [str(self.voicevox_manager), "start"],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=120
             )
-            if result.stdout.strip():
-                logger.info(f"✅ VOICEVOX container already running (ID: {result.stdout.strip()})")
+
+            if result.returncode == 0:
+                logger.info(f"✅ VOICEVOX Nemo started successfully")
                 return True
-        except Exception as e:
-            logger.warning(f"Failed to check existing container: {e}")
+            else:
+                logger.warning(f"⚠️  VOICEVOX Nemo startup failed: {result.stderr}")
+                self.warnings.append("VOICEVOX Nemo could not be started (will use fallback TTS)")
+                return False
 
-        # コンテナを起動
-        try:
-            logger.info("Starting VOICEVOX Nemo container...")
-            subprocess.run(
-                [
-                    'docker', 'run', '-d',
-                    '--rm',
-                    '-p', f'{self.voicevox_port}:50021',
-                    '--name', 'voicevox-nemo',
-                    'voicevox/voicevox_engine:cpu-ubuntu20.04-latest'
-                ],
-                capture_output=True,
-                text=True,
-                timeout=60,
-                check=True
-            )
-
-            # 起動を待機
-            logger.info("Waiting for VOICEVOX to be ready...")
-            for i in range(30):
-                time.sleep(2)
-                if self.check_voicevox_status():
-                    logger.info(f"✅ VOICEVOX Nemo started successfully on port {self.voicevox_port}")
-                    return True
-                logger.info(f"Waiting... ({i+1}/30)")
-
-            logger.error("❌ VOICEVOX Nemo failed to start within timeout")
-            self.errors.append("VOICEVOX startup timeout")
-            return False
-
-        except subprocess.CalledProcessError as e:
-            logger.error(f"❌ Failed to start VOICEVOX container: {e.stderr}")
-            self.warnings.append("VOICEVOX Nemo could not be started (will use fallback TTS)")
+        except subprocess.TimeoutExpired:
+            logger.error("❌ VOICEVOX Nemo startup timeout")
+            self.warnings.append("VOICEVOX startup timeout (will use fallback TTS)")
             return False
         except Exception as e:
-            logger.error(f"❌ Unexpected error starting VOICEVOX: {e}")
-            self.warnings.append("VOICEVOX Nemo could not be started (will use fallback TTS)")
+            logger.error(f"❌ Failed to start VOICEVOX: {e}")
+            self.warnings.append(f"VOICEVOX startup error: {e}")
             return False
 
     def check_directories(self) -> bool:
@@ -224,36 +194,28 @@ class SystemVerifier:
             logger.warning("⚠️  Skipping synthesis test (server not running)")
             return False
 
+        if not self.voicevox_manager.exists():
+            logger.warning("⚠️  VOICEVOX manager script not found")
+            return False
+
         try:
-            # クエリ作成
-            test_text = "こんにちは、音声合成のテストです。"
-            query_params = {'text': test_text, 'speaker': self.voicevox_speaker}
-            query_response = requests.post(
-                f'http://localhost:{self.voicevox_port}/audio_query',
-                params=query_params,
-                timeout=10
+            result = subprocess.run(
+                [str(self.voicevox_manager), "test"],
+                capture_output=True,
+                text=True,
+                timeout=60
             )
 
-            if query_response.status_code != 200:
-                logger.error(f"❌ Query failed: {query_response.status_code}")
-                return False
-
-            # 音声合成
-            synthesis_params = {'speaker': self.voicevox_speaker}
-            synthesis_response = requests.post(
-                f'http://localhost:{self.voicevox_port}/synthesis',
-                params=synthesis_params,
-                json=query_response.json(),
-                timeout=30
-            )
-
-            if synthesis_response.status_code == 200:
+            if result.returncode == 0:
                 logger.info("✅ VOICEVOX synthesis test successful")
                 return True
             else:
-                logger.error(f"❌ Synthesis failed: {synthesis_response.status_code}")
+                logger.error(f"❌ Synthesis test failed: {result.stderr}")
                 return False
 
+        except subprocess.TimeoutExpired:
+            logger.error("❌ Synthesis test timeout")
+            return False
         except Exception as e:
             logger.error(f"❌ Synthesis test failed: {e}")
             return False
@@ -298,7 +260,12 @@ class SystemVerifier:
 
         # 4. VOICEVOX起動（必要な場合）
         if not voicevox_running:
-            self.start_voicevox_server()
+            logger.info("4. Attempting to start VOICEVOX Nemo server...")
+            voicevox_started = self.start_voicevox_server()
+            if not voicevox_started:
+                logger.warning("⚠️  VOICEVOX Nemo not available - will use fallback TTS (gTTS, pyttsx3)")
+        else:
+            logger.info("4. VOICEVOX Nemo already running, skipping startup")
 
         # 5. ディレクトリチェック
         self.check_directories()
@@ -306,8 +273,11 @@ class SystemVerifier:
         # 6. 仮想環境チェック
         self.check_virtual_environment()
 
-        # 7. VOICEVOX合成テスト
-        self.test_voicevox_synthesis()
+        # 7. VOICEVOX合成テスト（起動している場合のみ）
+        if self.check_voicevox_status():
+            self.test_voicevox_synthesis()
+        else:
+            logger.warning("7. Skipping VOICEVOX synthesis test (server not running)")
 
         # サマリー表示
         self.print_summary()

@@ -197,9 +197,13 @@ tts:
   max_concurrent: 3
   chunk_size: 1500
   voicevox:
-    enabled: false
+    enabled: true  # VOICEVOX Nemoを有効化（ElevenLabsのバックアップ）
     port: 50121
-    speaker: 1
+    speaker: 1  # 話者ID（1: 四国めたん（ノーマル））
+    # 管理スクリプト: scripts/voicevox_manager.sh
+    # 起動: ./scripts/voicevox_manager.sh start
+    # 停止: ./scripts/voicevox_manager.sh stop
+    # ステータス: ./scripts/voicevox_manager.sh status
 
 # ============================================
 # デバッグ・ロギング
