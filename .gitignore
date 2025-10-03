@@ -53,7 +53,6 @@ tmp/
 *md
 *.lock
 *txt
-*test*
 
 # Generated content
 output/
