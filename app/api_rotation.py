@@ -5,10 +5,10 @@
 """
 
 import logging
-import os # 追加
+import os  # 追加
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
@@ -111,7 +111,7 @@ class APIKeyRotationManager:
         for key_name, key_value in keys_with_names:
             if key_value:
                 self.key_pools[provider].append(APIKey(key=key_value, provider=provider, key_name=key_name))
-        
+
         self.current_indices[provider] = 0
         logger.info(f"Registered {len(self.key_pools[provider])} keys for {provider}")
         if provider == "gemini":
@@ -160,7 +160,7 @@ class APIKeyRotationManager:
                         if self.key_pools["gemini"][self._gemini_current_key_index].is_available:
                             selected_key = self.key_pools["gemini"][self._gemini_current_key_index]
                             break
-            
+
             # 次のキーのインデックスを更新
             self._gemini_current_key_index = (self._gemini_current_key_index + 1) % len(self.key_pools["gemini"])
 
@@ -187,7 +187,7 @@ class APIKeyRotationManager:
                 selected_key = random.choice(sorted_keys[:top_80_count])
             else:
                 selected_key = available_keys[0]
-            
+
             key_identifier = selected_key.key_name if selected_key.key_name else selected_key.provider
             logger.debug(
                 f"Selected {key_identifier} key (success_rate: {selected_key.success_rate:.2%}, "
@@ -348,10 +348,10 @@ def initialize_from_config():
     # Gemini keys
     gemini_key_names = ["GEMINI_API_KEY"] + [f"GEMINI_API_KEY_{i}" for i in range(2, 6)]
     gemini_keys_with_names = [(name, os.getenv(name)) for name in gemini_key_names if os.getenv(name)]
-    
+
     if gemini_keys_with_names:
         manager.register_keys("gemini", gemini_keys_with_names)
-    
+
     # Gemini daily quota limit
     if settings.gemini_daily_quota_limit > 0:
         manager.set_gemini_daily_quota_limit(settings.gemini_daily_quota_limit)

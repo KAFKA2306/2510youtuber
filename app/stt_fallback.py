@@ -1,19 +1,20 @@
+import json
 import logging
-from typing import List, Dict, Any
+import os
+import subprocess
+from typing import Any, Dict, List
+
 import speech_recognition as sr
 from pydub import AudioSegment
-import subprocess
-import requests
-import json
-import os
+
 
 class STTFallbackManager:
     """音声認識のフォールバックシステム"""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.recognizer = sr.Recognizer()
-        
+
     def transcribe_with_fallback(self, audio_path: str) -> List[Dict[str, Any]]:
         """複数の方法で音声認識を試行
 
@@ -28,7 +29,7 @@ class STTFallbackManager:
         # ElevenLabs is the primary method but handled by the main STTManager
         # Skip it here as this is called from STTManager which already tried it
         self.logger.info("Starting fallback transcription methods")
-            
+
         # Method 2: OpenAI Whisper Local
         try:
             self.logger.info("Attempting transcription with OpenAI Whisper Local")
@@ -37,7 +38,7 @@ class STTFallbackManager:
                 return result
         except Exception as e:
             self.logger.warning(f"Whisper failed: {e}")
-            
+
         # Method 3: Google Speech Recognition (Free)
         try:
             self.logger.info("Attempting transcription with Google Speech Recognition (Free)")
@@ -46,7 +47,7 @@ class STTFallbackManager:
                 return result
         except Exception as e:
             self.logger.warning(f"Google free failed: {e}")
-            
+
         # Method 4: SpeechRecognition Library
         try:
             self.logger.info("Attempting transcription with SpeechRecognition Library")
@@ -55,18 +56,18 @@ class STTFallbackManager:
                 return result
         except Exception as e:
             self.logger.warning(f"SpeechRecognition failed: {e}")
-            
+
         # Final Fallback: Generate dummy transcript
         self.logger.warning("All STT methods failed, generating fallback transcription.")
         return self._generate_fallback_transcription(audio_path)
-    
+
     def _whisper_transcribe(self, audio_path: str) -> List[Dict[str, Any]]:
         """Whisper による音声認識"""
         try:
             import whisper
             model = whisper.load_model("base")
             result = model.transcribe(audio_path, word_timestamps=True)
-            
+
             words = []
             for segment in result.get("segments", []):
                 for word_data in segment.get("words", []):
@@ -84,26 +85,26 @@ class STTFallbackManager:
         except Exception as e:
             self.logger.error(f"Whisper library transcription failed: {e}")
             return []
-    
+
     def _whisper_cli_transcribe(self, audio_path: str) -> List[Dict[str, Any]]:
         """Whisper CLI による音声認識"""
         try:
             # Ensure ffmpeg is available for whisper CLI
-            subprocess.run(['ffmpeg', '-version'], check=True, capture_output=True)
-            
+            subprocess.run(["ffmpeg", "-version"], check=True, capture_output=True)
+
             # Use a temporary file for JSON output
             temp_json_path = f"{audio_path}.json"
             result = subprocess.run([
-                'whisper', audio_path, '--model', 'base', 
-                '--output_format', 'json', '--word_timestamps', 'True',
-                '--output_dir', os.path.dirname(temp_json_path) # Specify output directory
+                "whisper", audio_path, "--model", "base",
+                "--output_format", "json", "--word_timestamps", "True",
+                "--output_dir", os.path.dirname(temp_json_path) # Specify output directory
             ], capture_output=True, text=True, check=True)
-            
+
             if os.path.exists(temp_json_path):
-                with open(temp_json_path, 'r') as f:
+                with open(temp_json_path, "r") as f:
                     data = json.load(f)
                 os.remove(temp_json_path) # Clean up temp file
-                
+
                 words = []
                 for segment in data.get("segments", []):
                     for word_data in segment.get("words", []):
@@ -126,14 +127,14 @@ class STTFallbackManager:
         except Exception as e:
             self.logger.error(f"Whisper CLI transcription failed: {e}")
             return []
-    
+
     def _google_free_transcribe(self, audio_path: str) -> List[Dict[str, Any]]:
         """Google無料音声認識（SpeechRecognition経由）"""
         try:
             with sr.AudioFile(audio_path) as source:
                 audio = self.recognizer.record(source)
-                
-            text = self.recognizer.recognize_google(audio, language='ja-JP')
+
+            text = self.recognizer.recognize_google(audio, language="ja-JP")
             return self._text_to_words_with_timestamps(text, audio_path)
         except sr.UnknownValueError:
             self.logger.warning("Google Speech Recognition could not understand audio")
@@ -144,19 +145,19 @@ class STTFallbackManager:
         except Exception as e:
             self.logger.error(f"Google free transcription failed: {e}")
             return []
-    
+
     def _speechrecognition_transcribe(self, audio_path: str) -> List[Dict[str, Any]]:
         """SpeechRecognition ライブラリによる認識"""
         try:
             with sr.AudioFile(audio_path) as source:
                 audio = self.recognizer.record(source)
-                
+
             # Try multiple engines
             engines = [
-                ('google', lambda: self.recognizer.recognize_google(audio, language='ja-JP')),
+                ("google", lambda: self.recognizer.recognize_google(audio, language="ja-JP")),
                 # ('sphinx', lambda: self.recognizer.recognize_sphinx(audio, language='ja-JP')), # Sphinx requires separate installation
             ]
-            
+
             for engine_name, recognize_func in engines:
                 try:
                     text = recognize_func()
@@ -169,25 +170,25 @@ class STTFallbackManager:
                 except Exception as e:
                     self.logger.error(f"{engine_name} SpeechRecognition failed: {e}")
                     continue
-            
+
             return []
         except Exception as e:
             self.logger.error(f"SpeechRecognition library transcription failed: {e}")
             return []
-    
+
     def _text_to_words_with_timestamps(self, text: str, audio_path: str) -> List[Dict[str, Any]]:
         """テキストから推定タイムスタンプ付き単語リストを生成"""
         try:
             audio = AudioSegment.from_file(audio_path)
             duration = len(audio) / 1000.0
             words = text.split()
-            
+
             if not words:
                 return []
-                
+
             word_duration = duration / len(words) if words else 0.0
             word_list = []
-            
+
             current_time = 0.0
             for word in words:
                 start_time = current_time
@@ -199,12 +200,12 @@ class STTFallbackManager:
                     "confidence": 0.7
                 })
                 current_time = end_time
-            
+
             return word_list
         except Exception as e:
             self.logger.error(f"Error generating estimated timestamps: {e}")
             return []
-    
+
     def _generate_fallback_transcription(self, audio_path: str) -> List[Dict[str, Any]]:
         """フォールバック用の転写データを生成"""
         try:

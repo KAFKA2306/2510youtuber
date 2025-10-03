@@ -60,9 +60,9 @@ def test_crewai_configuration():
 @pytest.mark.unit
 def test_agent_configuration():
     """エージェント設定が取得できるか確認"""
-    from app.config.settings import settings
-    import yaml
     import os
+
+    import yaml
 
     # Load agent config directly from config.yaml
     config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config.yaml")

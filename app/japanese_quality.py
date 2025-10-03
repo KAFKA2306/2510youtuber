@@ -6,7 +6,7 @@
 
 import logging
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import google.generativeai as genai
 
@@ -24,18 +24,18 @@ class JapaneseQualityChecker:
 
         # 許可される英数字パターン（数値、パーセント、単位など）
         self.allowed_patterns = [
-            r'\d+',  # 数字
-            r'\d+%',  # パーセント
-            r'\d+円',  # 円
-            r'\d+ドル',  # ドル
-            r'\d+年',  # 年
-            r'\d+月',  # 月
-            r'\d+日',  # 日
-            r'GDP',  # 許可される略語
-            r'AI',
-            r'IT',
-            r'IoT',
-            r'DX',
+            r"\d+",  # 数字
+            r"\d+%",  # パーセント
+            r"\d+円",  # 円
+            r"\d+ドル",  # ドル
+            r"\d+年",  # 年
+            r"\d+月",  # 月
+            r"\d+日",  # 日
+            r"GDP",  # 許可される略語
+            r"AI",
+            r"IT",
+            r"IoT",
+            r"DX",
         ]
 
     def _setup_client(self):
@@ -65,21 +65,21 @@ class JapaneseQualityChecker:
             english_chars = 0
 
             # 改行で分割して行ごとにチェック
-            lines = script.split('\n')
+            lines = script.split("\n")
             for line_num, line in enumerate(lines, 1):
                 line = line.strip()
                 if not line:
                     continue
 
                 # 話者名を除去
-                content = re.sub(r'^(田中|鈴木|ナレーター|司会)[:：]\s*', '', line)
+                content = re.sub(r"^(田中|鈴木|ナレーター|司会)[:：]\s*", "", line)
 
                 # 英語の検出
                 english_issues = self._detect_english_words(content, line_num)
                 if english_issues:
                     issues.extend(english_issues)
                     for issue in english_issues:
-                        english_chars += len(issue['text'])
+                        english_chars += len(issue["text"])
 
             # スコア計算
             english_ratio = (english_chars / total_chars * 100) if total_chars > 0 else 0
@@ -113,10 +113,10 @@ class JapaneseQualityChecker:
         # 許可されたパターンを一時的に置換
         temp_text = text
         for pattern in self.allowed_patterns:
-            temp_text = re.sub(pattern, '', temp_text)
+            temp_text = re.sub(pattern, "", temp_text)
 
         # 英単語を検出（連続した英字）
-        english_pattern = r'[a-zA-Z]{2,}'
+        english_pattern = r"[a-zA-Z]{2,}"
         matches = re.finditer(english_pattern, temp_text)
 
         for match in matches:
@@ -228,15 +228,15 @@ class JapaneseQualityChecker:
         字幕は短いので、より厳格にチェックします。
         """
         # 許可される文字: 日本語、数字、記号
-        allowed_pattern = r'^[ぁ-んァ-ヶー一-龯々〆〤\d\s　！？。、：（）「」『』【】\-\+\*\/\%]*$'
+        allowed_pattern = r"^[ぁ-んァ-ヶー一-龯々〆〤\d\s　！？。、：（）「」『』【】\-\+\*\/\%]*$"
 
         # 許可される略語を一時的に除去
         temp_text = subtitle_text
         for pattern in self.allowed_patterns:
-            temp_text = re.sub(pattern, '', temp_text)
+            temp_text = re.sub(pattern, "", temp_text)
 
         # 英字が残っているかチェック
-        has_english = bool(re.search(r'[a-zA-Z]', temp_text))
+        has_english = bool(re.search(r"[a-zA-Z]", temp_text))
 
         if has_english:
             logger.warning(f"Subtitle contains English: '{subtitle_text}'")
@@ -253,25 +253,25 @@ class JapaneseQualityChecker:
 
         # 一般的な英語フレーズを日本語に置換
         replacements = {
-            r'\bHello\b': 'こんにちは',
-            r'\bGoodbye\b': 'さようなら',
-            r'\bThank you\b': 'ありがとうございます',
-            r'\bPlease\b': 'どうぞ',
-            r'\bYes\b': 'はい',
-            r'\bNo\b': 'いいえ',
-            r'\bOK\b': 'わかりました',
-            r'\band\b': 'と',
-            r'\bor\b': 'または',
-            r'\bthe\b': '',
-            r'\ba\b': '',
-            r'\ban\b': '',
+            r"\bHello\b": "こんにちは",
+            r"\bGoodbye\b": "さようなら",
+            r"\bThank you\b": "ありがとうございます",
+            r"\bPlease\b": "どうぞ",
+            r"\bYes\b": "はい",
+            r"\bNo\b": "いいえ",
+            r"\bOK\b": "わかりました",
+            r"\band\b": "と",
+            r"\bor\b": "または",
+            r"\bthe\b": "",
+            r"\ba\b": "",
+            r"\ban\b": "",
         }
 
         for pattern, replacement in replacements.items():
             cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
 
         # 残った英単語を検出して警告
-        remaining_english = re.findall(r'[a-zA-Z]{2,}', cleaned)
+        remaining_english = re.findall(r"[a-zA-Z]{2,}", cleaned)
         if remaining_english:
             # 許可されたパターンを除外
             filtered_english = []
@@ -326,24 +326,24 @@ class JapaneseQualityChecker:
             result_text = response.text.strip()
 
             # スコアを抽出
-            clarity_match = re.search(r'明瞭性[：:]\s*(\d+)', result_text)
-            interest_match = re.search(r'面白さ[：:]\s*(\d+)', result_text)
+            clarity_match = re.search(r"明瞭性[：:]\s*(\d+)", result_text)
+            interest_match = re.search(r"面白さ[：:]\s*(\d+)", result_text)
 
             clarity_score = float(clarity_match.group(1)) if clarity_match else 50.0
             interest_score = float(interest_match.group(1)) if interest_match else 50.0
 
             # 改善提案を抽出
             suggestions = []
-            lines = result_text.split('\n')
+            lines = result_text.split("\n")
             in_suggestions = False
             for line in lines:
-                if '改善提案' in line:
+                if "改善提案" in line:
                     in_suggestions = True
                     continue
                 if in_suggestions:
                     stripped = line.strip()
-                    if stripped and (stripped[0].isdigit() or stripped[0] in ['-', '•', '・']):
-                        cleaned = stripped.lstrip('0123456789.-•・ ）】')
+                    if stripped and (stripped[0].isdigit() or stripped[0] in ["-", "•", "・"]):
+                        cleaned = stripped.lstrip("0123456789.-•・ ）】")
                         if cleaned:
                             suggestions.append(cleaned)
 
@@ -413,17 +413,17 @@ if __name__ == "__main__":
         print(f"Pure Japanese: {result['is_pure_japanese']}")
         print(f"Purity Score: {result['purity_score']:.1f}")
         print(f"Issues: {result['total_issues']}")
-        for issue in result['issues'][:3]:
+        for issue in result["issues"][:3]:
             print(f"  - Line {issue['line']}: {issue['text']}")
 
         # テスト2: 改善
         print("\n=== Test 2: Improving Quality ===")
         improved = japanese_quality_checker.improve_japanese_quality(test_script_bad)
-        if improved['success'] and improved['changes_made']:
+        if improved["success"] and improved["changes_made"]:
             print(f"Score: {improved['original_score']:.1f} -> {improved['new_score']:.1f}")
             print(f"Fixed {improved['issues_fixed']} issues")
             print("\nImproved script (first 200 chars):")
-            print(improved['improved_script'][:200])
+            print(improved["improved_script"][:200])
 
         # テスト3: 純粋な日本語
         test_script_good = """

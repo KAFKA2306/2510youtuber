@@ -12,10 +12,11 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from app.video import video_generator
 from app.services.media import VisualMatcher
+from app.video import video_generator
 
 
 def test_stock_footage_capability():

@@ -6,10 +6,10 @@
 
 import logging
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import List, Optional
-import subprocess
 
 logger = logging.getLogger(__name__)
 

@@ -1,18 +1,18 @@
-import os
 import json
+import os
 import sys
-from datetime import datetime
-from typing import Any, Dict, List
+from typing import Dict, List
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__))))
 
-from app.youtube import YouTubeManager
-from app.config import cfg
-
 # Configure logging
 import logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+from app.config import cfg
+from app.youtube import YouTubeManager
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 def get_failed_upload_videos(output_dir: str) -> List[Dict[str, str]]:
@@ -51,7 +51,7 @@ async def test_youtube_uploads():
     """
     logger.info("Starting YouTube re-upload test...")
 
-    output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'output'))
+    output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "output"))
     if not os.path.exists(output_dir):
         logger.error(f"Output directory not found: {output_dir}")
         return

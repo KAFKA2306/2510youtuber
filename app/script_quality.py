@@ -9,7 +9,7 @@ Stage 3: 最終稿生成 - 改善点を反映した高品質な台本を作成
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import google.generativeai as genai
 
@@ -339,9 +339,9 @@ class ThreeStageScriptGenerator:
 
         # "総合評価: 7.5" のようなパターンを検索
         patterns = [
-            r'総合評価[：:]\s*(\d+\.?\d*)',
-            r'総合[：:]\s*(\d+\.?\d*)',
-            r'スコア[：:]\s*(\d+\.?\d*)',
+            r"総合評価[：:]\s*(\d+\.?\d*)",
+            r"総合[：:]\s*(\d+\.?\d*)",
+            r"スコア[：:]\s*(\d+\.?\d*)",
         ]
 
         for pattern in patterns:
@@ -362,21 +362,21 @@ class ThreeStageScriptGenerator:
         improvements = []
 
         # "改善すべき点:" 以降のリスト項目を抽出
-        lines = review_text.split('\n')
+        lines = review_text.split("\n")
         in_improvements_section = False
 
         for line in lines:
-            if '改善' in line and ('点' in line or 'ポイント' in line):
+            if "改善" in line and ("点" in line or "ポイント" in line):
                 in_improvements_section = True
                 continue
-            elif '良い点' in line or '優れている' in line:
+            elif "良い点" in line or "優れている" in line:
                 break
             elif in_improvements_section:
                 # リスト項目（1. または - で始まる）を検出
                 stripped = line.strip()
-                if stripped and (stripped[0].isdigit() or stripped[0] in ['-', '•', '・']):
+                if stripped and (stripped[0].isdigit() or stripped[0] in ["-", "•", "・"]):
                     # 番号や記号を除去
-                    cleaned = stripped.lstrip('0123456789.-•・ ）】')
+                    cleaned = stripped.lstrip("0123456789.-•・ ）】")
                     if cleaned:
                         improvements.append(cleaned)
 
@@ -387,17 +387,17 @@ class ThreeStageScriptGenerator:
         strengths = []
 
         # "良い点:" 以降のリスト項目を抽出
-        lines = review_text.split('\n')
+        lines = review_text.split("\n")
         in_strengths_section = False
 
         for line in lines:
-            if '良い点' in line or '優れている' in line:
+            if "良い点" in line or "優れている" in line:
                 in_strengths_section = True
                 continue
             elif in_strengths_section:
                 stripped = line.strip()
-                if stripped and (stripped[0].isdigit() or stripped[0] in ['-', '•', '・']):
-                    cleaned = stripped.lstrip('0123456789.-•・ ）】')
+                if stripped and (stripped[0].isdigit() or stripped[0] in ["-", "•", "・"]):
+                    cleaned = stripped.lstrip("0123456789.-•・ ）】")
                     if cleaned:
                         strengths.append(cleaned)
 
@@ -466,13 +466,13 @@ if __name__ == "__main__":
                 print(f"\n✓ Success! Quality score: {result['quality_score']}/10")
                 print(f"  Iterations: {result['iterations']}")
                 print(f"  Final script length: {len(result['final_script'])} chars")
-                print(f"\n=== Final Script (first 500 chars) ===")
-                print(result['final_script'][:500] + "...")
+                print("\n=== Final Script (first 500 chars) ===")
+                print(result["final_script"][:500] + "...")
 
                 if result.get("stage2_review"):
-                    print(f"\n=== Review Summary ===")
+                    print("\n=== Review Summary ===")
                     print(f"Improvements: {len(result['stage2_review'].get('improvements', []))}")
-                    for imp in result['stage2_review'].get('improvements', [])[:3]:
+                    for imp in result["stage2_review"].get("improvements", [])[:3]:
                         print(f"  - {imp}")
             else:
                 print(f"\n✗ Failed: {result.get('error')}")

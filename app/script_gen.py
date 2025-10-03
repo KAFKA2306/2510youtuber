@@ -5,15 +5,15 @@
 """
 
 import logging
-import os # 追加
+import os  # 追加
 import re
 from datetime import datetime
 from typing import Any, Dict, List
 
 import google.generativeai as genai
 
-from .config import cfg
 from .api_rotation import get_rotation_manager
+from .config import cfg
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ except ImportError:
 
 # 日本語品質チェックシステムのインポート
 try:
-    from .japanese_quality import improve_japanese_quality, check_script_japanese_purity
+    from .japanese_quality import check_script_japanese_purity, improve_japanese_quality
     HAS_JAPANESE_QUALITY_CHECK = True
     logger.info("Japanese quality check system is available")
 except ImportError:
@@ -53,7 +53,7 @@ class ScriptGenerator:
             # Gemini keysを登録
             gemini_keys_with_names = []
             for i in range(1, 6):
-                key_name = f'GEMINI_API_KEY_{i}' if i > 1 else 'GEMINI_API_KEY'
+                key_name = f"GEMINI_API_KEY_{i}" if i > 1 else "GEMINI_API_KEY"
                 key_value = os.getenv(key_name)
                 if key_value:
                     gemini_keys_with_names.append((key_name, key_value))
@@ -427,7 +427,7 @@ class ScriptGenerator:
 田中: この件について、詳しく分析していきましょう。"""
 
             if key_points:
-                script += f"\n\n鈴木: 重要なポイントをまとめますと、"
+                script += "\n\n鈴木: 重要なポイントをまとめますと、"
                 for idx, point in enumerate(key_points, 1):
                     if idx == 1:
                         script += f"{point}"
@@ -436,15 +436,15 @@ class ScriptGenerator:
                     else:
                         script += f"、{point}"
 
-                script += f"\n\n田中: なるほど。この動きは市場にどのような影響を与えるでしょうか。"
+                script += "\n\n田中: なるほど。この動きは市場にどのような影響を与えるでしょうか。"
                 script += f"\n\n鈴木: {source}の報道によれば、"
 
                 impact_analysis = self._generate_impact_analysis(item)
                 script += impact_analysis
             else:
-                script += f"\n\n鈴木: この件については、引き続き詳細な情報を収集していく必要がありますね。"
+                script += "\n\n鈴木: この件については、引き続き詳細な情報を収集していく必要がありますね。"
 
-            script += f"\n\n田中: 投資家の皆様は、この動向を注視していく必要がありそうですね。\n"
+            script += "\n\n田中: 投資家の皆様は、この動向を注視していく必要がありそうですね。\n"
 
         script += """
 鈴木: 今日ご紹介したニュースは、いずれも今後の市場動向を左右する重要なものばかりです。

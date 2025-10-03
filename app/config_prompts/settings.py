@@ -1,10 +1,11 @@
-import os
-import yaml
 import json
+import os
+from typing import Any, Dict, List, Optional
+
+import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from pydantic import BaseModel
 
 # .envファイルを読み込む
 load_dotenv()
@@ -30,7 +31,7 @@ class PromptManager:
         loader = FileSystemLoader(template_dirs)
         return Environment(
             loader=loader,
-            autoescape=select_autoescape(['html', 'xml']),
+            autoescape=select_autoescape(["html", "xml"]),
             trim_blocks=True,
             lstrip_blocks=True
         )
@@ -39,10 +40,10 @@ class PromptManager:
         """指定された名前のプロンプトテンプレートを読み込む"""
         # config.yamlのfilesセクションからファイル名を解決
         file_name = self.prompt_config.get("files", {}).get(template_name, f"{template_name}.yaml")
-        
+
         # YAMLファイルを読み込み、Jinja2テンプレートとして返す
         template_path = os.path.join("prompts", file_name) # デフォルトのpromptsサブディレクトリを想定
-        
+
         # 直接ファイル名が指定された場合も考慮
         if not os.path.exists(os.path.join(self.env.loader.searchpath[0], template_path)):
              template_path = file_name
@@ -104,7 +105,7 @@ class AppSettings(BaseModel):
 
     # CrewAI設定
     crew: CrewConfig
-    
+
     use_crewai_script_generation: bool = True
     use_three_stage_quality_check: bool = True
     max_video_duration_minutes: int = 15
@@ -116,7 +117,7 @@ class AppSettings(BaseModel):
     prompt_manager: PromptManager
 
     @classmethod
-    def load(cls) -> 'AppSettings':
+    def load(cls) -> "AppSettings":
         """環境変数 + YAMLから設定を読み込み"""
         config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config.yaml")
         with open(config_path, "r") as f:
@@ -127,7 +128,7 @@ class AppSettings(BaseModel):
             "elevenlabs": os.getenv("ELEVENLABS_API_KEY"),
             "youtube": os.getenv("YOUTUBE_CLIENT_SECRET"),
         }
-        
+
         config["api_keys"] = api_keys
 
         # Handle speakers voice_id_env
@@ -168,7 +169,7 @@ class AppSettings(BaseModel):
 
         # PromptManagerのインスタンスを生成
         config["prompt_manager"] = PromptManager(config.get("prompts", {}))
-        
+
         # For compatibility with old cfg object
         config["use_crewai_script_generation"] = config.get("crew", {}).get("enabled", True)
         config["use_three_stage_quality_check"] = not config.get("crew", {}).get("enabled", True)

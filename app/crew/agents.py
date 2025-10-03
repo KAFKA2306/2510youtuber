@@ -4,12 +4,12 @@
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict
+
 from crewai import Agent
 
 from app.config.settings import settings
 from app.prompt_cache import get_prompt_manager
-from app.crew.tools import AIClientFactory
 
 logger = logging.getLogger(__name__)
 
@@ -41,16 +41,16 @@ class AgentFactory:
             from app.crew.tools.ai_clients import get_crewai_gemini_llm
 
             llm = get_crewai_gemini_llm(
-                model=agent_config.get('model', 'gemini-2.0-flash-exp'),
-                temperature=agent_config.get('temperature', 0.7)
+                model=agent_config.get("model", "gemini-2.0-flash-exp"),
+                temperature=agent_config.get("temperature", 0.7)
             )
 
             # エージェント作成
             agent = Agent(
-                role=agent_config.get('role', agent_name),
-                goal=agent_config.get('goal', ''),
-                backstory=agent_config.get('backstory', ''),
-                verbose=getattr(settings, 'crew_verbose', False),
+                role=agent_config.get("role", agent_name),
+                goal=agent_config.get("goal", ""),
+                backstory=agent_config.get("backstory", ""),
+                verbose=getattr(settings, "crew_verbose", False),
                 llm=llm,
                 **override_params
             )

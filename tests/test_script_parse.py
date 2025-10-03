@@ -1,7 +1,8 @@
 """Test script to verify TTS parsing works correctly"""
 
 import sys
-sys.path.insert(0, '/home/kafka/projects/youtuber')
+
+sys.path.insert(0, "/home/kafka/projects/youtuber")
 
 from app.tts import tts_manager
 

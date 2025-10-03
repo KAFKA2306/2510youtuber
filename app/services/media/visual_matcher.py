@@ -5,7 +5,6 @@
 """
 
 import logging
-import re
 from typing import Dict, List, Set
 
 logger = logging.getLogger(__name__)
@@ -264,7 +263,7 @@ if __name__ == "__main__":
     print(f"\n✓ Extracted keywords: {keywords}")
 
     stats = matcher.get_extraction_stats()
-    print(f"\nStatistics:")
+    print("\nStatistics:")
     print(f"  - Total keywords: {stats['total_keywords']}")
     print(f"  - Matched terms: {stats['matched_japanese_terms']}")
     print(f"  - Japanese terms: {stats['japanese_terms']}")

@@ -3,6 +3,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -192,7 +193,7 @@ class WorkflowResult(BaseModel):
         return (self.completed_steps / self.total_steps) * 100.0
 
     @classmethod
-    def from_workflow_state(cls, state: WorkflowState) -> 'WorkflowResult':
+    def from_workflow_state(cls, state: WorkflowState) -> "WorkflowResult":
         """WorkflowStateから結果を生成"""
         return cls(
             success=state.status == StepStatus.COMPLETED,

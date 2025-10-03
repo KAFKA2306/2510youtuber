@@ -5,11 +5,12 @@ WOW Script Creation Crewの実行フローとオーケストレーション
 
 import logging
 import os
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List
+
 from crewai import Crew, Process
 
-from app.models import NewsCollection, Script, QualityScore
 from app.config import cfg as settings
+
 from .agents import create_wow_agents
 from .tasks import create_wow_tasks
 
@@ -20,17 +21,17 @@ import litellm
 
 # CRITICAL: Force Google AI Studio by completely disabling Vertex AI detection
 # This MUST happen before any LiteLLM imports or calls
-os.environ.pop('GOOGLE_APPLICATION_CREDENTIALS', None)
-os.environ.pop('VERTEX_PROJECT', None)
-os.environ.pop('VERTEX_LOCATION', None)
-os.environ.pop('GOOGLE_CLOUD_PROJECT', None)
-os.environ.pop('GCLOUD_PROJECT', None)
-os.environ.pop('GCP_PROJECT', None)
+os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+os.environ.pop("VERTEX_PROJECT", None)
+os.environ.pop("VERTEX_LOCATION", None)
+os.environ.pop("GOOGLE_CLOUD_PROJECT", None)
+os.environ.pop("GCLOUD_PROJECT", None)
+os.environ.pop("GCP_PROJECT", None)
 
 # Set initial GEMINI_API_KEY for LiteLLM
 # LiteLLM will use this key, but we'll implement rotation on 429 errors
 if settings.gemini_api_key:
-    os.environ['GEMINI_API_KEY'] = settings.gemini_api_key
+    os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
 
 # Configure LiteLLM settings
 litellm.drop_params = True  # Drop unknown parameters
@@ -65,9 +66,9 @@ def patched_completion(model=None, messages=None, **kwargs):
         model = forced_model
 
     # Remove any Vertex AI credentials from kwargs
-    kwargs.pop('vertex_credentials', None)
-    kwargs.pop('vertex_project', None)
-    kwargs.pop('vertex_location', None)
+    kwargs.pop("vertex_credentials", None)
+    kwargs.pop("vertex_project", None)
+    kwargs.pop("vertex_location", None)
 
     # Try with current key, rotate on 429
     max_attempts = min(len(_gemini_keys), 5)
@@ -78,7 +79,7 @@ def patched_completion(model=None, messages=None, **kwargs):
             # Set current API key
             if _gemini_keys:
                 current_key = _gemini_keys[_current_key_index % len(_gemini_keys)]
-                os.environ['GEMINI_API_KEY'] = current_key
+                os.environ["GEMINI_API_KEY"] = current_key
 
             result = original_completion(model=model, messages=messages, **kwargs)
             return result
@@ -111,7 +112,7 @@ class WOWScriptFlow:
     """
 
     def __init__(self):
-        self.max_quality_iterations = getattr(settings, 'max_quality_iterations', 2)
+        self.max_quality_iterations = getattr(settings, "max_quality_iterations", 2)
         self.agents = None
         self.tasks = None
 
@@ -148,7 +149,7 @@ class WOWScriptFlow:
             agents=list(self.agents.values()),
             tasks=list(self.tasks.values()),
             process=Process.sequential,  # 順次実行
-            verbose=getattr(settings, 'crew_verbose', False)
+            verbose=getattr(settings, "crew_verbose", False)
         )
 
         logger.info("🚀 Starting WOW Script Creation Crew execution...")
@@ -187,7 +188,7 @@ class WOWScriptFlow:
         # JSON形式で返されている場合はパースして構造化データを抽出
         try:
             # ```json ... ``` のパターンを探す
-            json_match = re.search(r'```json\n(.*?)\n```', crew_output_str, re.DOTALL)
+            json_match = re.search(r"```json\n(.*?)\n```", crew_output_str, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
                 # JSONをパース
@@ -197,43 +198,43 @@ class WOWScriptFlow:
                 logger.warning("No JSON found in CrewAI output, using raw text")
 
                 # JSONマーカーを削除（```json や ``` が残っている場合）
-                cleaned_output = re.sub(r'```json\s*', '', crew_output_str)
-                cleaned_output = re.sub(r'```\s*', '', cleaned_output)
+                cleaned_output = re.sub(r"```json\s*", "", crew_output_str)
+                cleaned_output = re.sub(r"```\s*", "", cleaned_output)
 
                 return {
-                    'success': True,
-                    'final_script': cleaned_output.strip(),
-                    'crew_output': crew_result,
+                    "success": True,
+                    "final_script": cleaned_output.strip(),
+                    "crew_output": crew_result,
                 }
 
             # final_scriptフィールドを抽出
-            final_script = parsed_data.get('final_script', crew_output_str)
+            final_script = parsed_data.get("final_script", crew_output_str)
 
             logger.info(f"Successfully parsed CrewAI JSON output, script length: {len(final_script)}")
             logger.info(f"First 800 chars of parsed script: {final_script[:800]}")
 
             # Verify each line of the script has speaker format (田中:, 鈴木:, ナレーター:)
             speaker_pattern = re.compile(r"^(田中|鈴木|ナレーター|司会)\s*([:：])\s*([^:：].*)")
-            script_lines = final_script.strip().split('\n')
-            
+            script_lines = final_script.strip().split("\n")
+
             speaker_format_valid = True
             for i, line in enumerate(script_lines):
                 if line.strip() and not speaker_pattern.match(line.strip()):
                     speaker_format_valid = False
                     break # 最初の無効な行が見つかったらループを抜ける
-            
+
             if not speaker_format_valid:
                 logger.warning("Script does not have proper speaker format")
                 logger.warning("This indicates CrewAI did not follow the output format instructions.")
 
             result = {
-                'success': True,
-                'final_script': final_script,
-                'crew_output': crew_result,
-                'quality_data': parsed_data.get('quality_guarantee', {}),
-                'japanese_purity_score': parsed_data.get('japanese_purity_score', 0),
-                'character_count': parsed_data.get('character_count', len(final_script)),
-                'speaker_format_valid': speaker_format_valid, # 新しいフィールドを追加
+                "success": True,
+                "final_script": final_script,
+                "crew_output": crew_result,
+                "quality_data": parsed_data.get("quality_guarantee", {}),
+                "japanese_purity_score": parsed_data.get("japanese_purity_score", 0),
+                "character_count": parsed_data.get("character_count", len(final_script)),
+                "speaker_format_valid": speaker_format_valid, # 新しいフィールドを追加
             }
 
             return result
@@ -241,9 +242,9 @@ class WOWScriptFlow:
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning(f"Failed to parse CrewAI output as JSON: {e}, using raw text")
             return {
-                'success': True,
-                'final_script': crew_output_str,
-                'crew_output': crew_result,
+                "success": True,
+                "final_script": crew_output_str,
+                "crew_output": crew_result,
             }
 
 
@@ -271,8 +272,8 @@ class WOWScriptFlowWithQualityLoop:
     """
 
     def __init__(self):
-        self.max_iterations = getattr(settings, 'max_quality_iterations', 2)
-        self.wow_threshold = getattr(settings, 'wow_score_min', 8.0)
+        self.max_iterations = getattr(settings, "max_quality_iterations", 2)
+        self.wow_threshold = getattr(settings, "wow_score_min", 8.0)
 
     def execute_with_quality_loop(
         self,
@@ -297,11 +298,11 @@ class WOWScriptFlowWithQualityLoop:
 
             # 品質評価
             # TODO: 実際の品質スコアを抽出
-            wow_score = result.get('wow_score', 0.0)
+            wow_score = result.get("wow_score", 0.0)
 
             if wow_score >= self.wow_threshold:
                 logger.info(f"✅ Quality threshold met: WOW Score = {wow_score}")
-                result['iterations'] = iteration + 1
+                result["iterations"] = iteration + 1
                 return result
 
             logger.warning(f"⚠️ Quality threshold not met: {wow_score} < {self.wow_threshold}")
@@ -309,6 +310,6 @@ class WOWScriptFlowWithQualityLoop:
 
         # 最大反復回数到達
         logger.warning(f"Max iterations ({self.max_iterations}) reached")
-        result['iterations'] = self.max_iterations
-        result['quality_warning'] = "Max iterations reached without meeting threshold"
+        result["iterations"] = self.max_iterations
+        result["quality_warning"] = "Max iterations reached without meeting threshold"
         return result

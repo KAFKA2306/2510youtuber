@@ -41,7 +41,7 @@ for i, video in enumerate(results, 1):
     print(f"   {video['quality']} - {video['width']}x{video['height']} - {video['duration']}s")
     print(f"   Likes: {video.get('likes', 0)}, Downloads: {video.get('downloads', 0)}")
 
-pixabay_count = sum(1 for v in results if v['source'] == 'pixabay')
+pixabay_count = sum(1 for v in results if v["source"] == "pixabay")
 print(f"\n📊 Pixabay clips: {pixabay_count}/{len(results)}")
 
 assert pixabay_count == len(results), "All clips should be from Pixabay"
@@ -76,9 +76,9 @@ results2 = manager2.search_footage(["finance", "investment"], max_clips=8)
 
 sources = {}
 for v in results2:
-    sources[v['source']] = sources.get(v['source'], 0) + 1
+    sources[v["source"]] = sources.get(v["source"], 0) + 1
 
-print(f"\n📊 Results with both APIs enabled:")
+print("\n📊 Results with both APIs enabled:")
 for source, count in sources.items():
     print(f"   {source.upper()}: {count} clips")
 

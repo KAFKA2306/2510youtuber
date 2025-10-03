@@ -191,7 +191,7 @@ class YouTubeWorkflow:
         logger.info("Step 2: Starting script generation...")
 
         # CrewAI Flowの使用判定
-        use_crewai = getattr(cfg, 'use_crewai_script_generation', True)
+        use_crewai = getattr(cfg, "use_crewai_script_generation", True)
         logger.info(f"CrewAI WOW Script Generation: {'ENABLED' if use_crewai else 'DISABLED'}")
 
         try:
@@ -205,10 +205,10 @@ class YouTubeWorkflow:
                     target_duration_minutes=cfg.max_video_duration_minutes
                 )
 
-                if not crew_result.get('success'):
+                if not crew_result.get("success"):
                     raise Exception(f"CrewAI execution failed: {crew_result.get('error', 'Unknown error')}")
 
-                script_content = crew_result.get('final_script', '')
+                script_content = crew_result.get("final_script", "")
 
             else:
                 # 従来の3段階品質チェックを使用

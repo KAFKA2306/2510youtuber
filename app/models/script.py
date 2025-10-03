@@ -1,7 +1,8 @@
 """台本関連のデータモデル"""
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field, validator
 
 
@@ -17,12 +18,12 @@ class ScriptSegment(BaseModel):
     visual_instruction: Optional[str] = Field(default=None, description="視覚指示")
     emotion_tag: Optional[str] = Field(default=None, description="感情タグ")
 
-    @validator('speaker')
+    @validator("speaker")
     def validate_speaker(cls, v):
         """話者名の検証"""
-        allowed = ['田中', '鈴木', 'ナレーター']
+        allowed = ["田中", "鈴木", "ナレーター"]
         if v not in allowed:
-            raise ValueError(f'speaker must be one of {allowed}')
+            raise ValueError(f"speaker must be one of {allowed}")
         return v
 
     @property

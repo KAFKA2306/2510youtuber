@@ -16,7 +16,7 @@ import re
 import textwrap
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -283,12 +283,12 @@ class ThumbnailGenerator:
 
         # 数値を強調記号で囲む（YouTubeスタイル）
         # 例: "10月利上げ" -> "【10月】利上げ"
-        title = re.sub(r'(\d+[%％円ドル年月日])', r'【\1】', title)
+        title = re.sub(r"(\d+[%％円ドル年月日])", r"【\1】", title)
 
         # 重要キーワードを強調
         important_patterns = [
-            (r'(速報|緊急|注目|衝撃|驚愕)', r'⚡\1⚡'),
-            (r'(暴落|急落|急騰|高騰)', r'📉\1📈'),
+            (r"(速報|緊急|注目|衝撃|驚愕)", r"⚡\1⚡"),
+            (r"(暴落|急落|急騰|高騰)", r"📉\1📈"),
         ]
 
         for pattern, replacement in important_patterns:
@@ -638,7 +638,6 @@ class ThumbnailGenerator:
             return self._generate_fallback_thumbnail(title, output_path)
 
         try:
-            from PIL import Image, ImageDraw, ImageEnhance
 
             if not output_path:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -733,7 +732,7 @@ class ThumbnailGenerator:
             icon_y = (height - icon_height) // 2
 
             # 影を追加
-            if icon.mode == 'RGBA':
+            if icon.mode == "RGBA":
                 shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
                 shadow_draw = ImageDraw.Draw(shadow)
                 shadow_draw.ellipse(
@@ -772,7 +771,7 @@ class ThumbnailGenerator:
         if not copy_font:
             return image
 
-        lines = catchcopy.split('\n')
+        lines = catchcopy.split("\n")
         total_height = len(lines) * 145
         start_y = (height - total_height) // 2 + 20
 
@@ -817,19 +816,19 @@ class ThumbnailGenerator:
     def _create_wow_catchcopy(self, title: str) -> str:
         """WOWなキャッチコピーを生成"""
         wow_keywords = {
-            '暴落': '大暴落\n警報!',
-            '急落': '急落\n速報!',
-            '急騰': '急騰\n来た!',
-            '高騰': '高騰\n注目!',
-            '速報': '緊急\n速報!',
-            '利上げ': '利上げ\nショック',
-            '円安': '円安\n加速!',
-            '円高': '円高\n急騰!',
-            '株価': '株価\n激変!',
-            '金利': '金利\n衝撃!',
-            'AI': 'AI\n革命!',
-            'ビットコイン': 'BTC\n爆上げ',
-            '仮想通貨': '暗号資産\n祭り!',
+            "暴落": "大暴落\n警報!",
+            "急落": "急落\n速報!",
+            "急騰": "急騰\n来た!",
+            "高騰": "高騰\n注目!",
+            "速報": "緊急\n速報!",
+            "利上げ": "利上げ\nショック",
+            "円安": "円安\n加速!",
+            "円高": "円高\n急騰!",
+            "株価": "株価\n激変!",
+            "金利": "金利\n衝撃!",
+            "AI": "AI\n革命!",
+            "ビットコイン": "BTC\n爆上げ",
+            "仮想通貨": "暗号資産\n祭り!",
         }
 
         for keyword, copy in wow_keywords.items():
@@ -838,9 +837,9 @@ class ThumbnailGenerator:
 
         # 数字抽出
         number_patterns = [
-            (r'([+\-]?\d+\.?\d*[%％])', '{}%\n激震!'),
-            (r'(\d+\.?\d*倍)', '{}\n急上昇'),
-            (r'([+\-]\d+円)', '{}\n動く!'),
+            (r"([+\-]?\d+\.?\d*[%％])", "{}%\n激震!"),
+            (r"(\d+\.?\d*倍)", "{}\n急上昇"),
+            (r"([+\-]\d+円)", "{}\n動く!"),
         ]
 
         for pattern, template in number_patterns:
@@ -850,17 +849,17 @@ class ThumbnailGenerator:
                 return template.format(num)
 
         # デフォルト
-        important_words = ['注目', '速報', '衝撃', '警告', '予測', '分析']
+        important_words = ["注目", "速報", "衝撃", "警告", "予測", "分析"]
         for word in important_words:
             if word in title:
-                return f'{word}\n情報!'
+                return f"{word}\n情報!"
 
-        words = title.replace(' ', '').replace('　', '')
+        words = title.replace(" ", "").replace("　", "")
         if len(words) >= 4:
             first_part = words[:5]
-            return f'{first_part}\n速報!'
+            return f"{first_part}\n速報!"
 
-        return '超注目\n情報!'
+        return "超注目\n情報!"
 
     def _get_v2_text_color(self, mode: str) -> tuple:
         """V2用テキストカラー"""

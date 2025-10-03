@@ -1,5 +1,7 @@
 import pytest
+
 from app.tts import TTSManager
+
 
 @pytest.fixture
 def tts_manager():

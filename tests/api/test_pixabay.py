@@ -1,8 +1,9 @@
 """Pixabay API統合テスト"""
 
 import os
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 @pytest.mark.api
@@ -39,16 +40,16 @@ def test_pixabay_video_search(has_pixabay_key):
         results = manager.search_footage(keywords, max_clips=3)
 
         assert len(results) > 0, "検索結果が0件です"
-        assert all(v['source'] == 'pixabay' for v in results), "Pixabay以外のソースが混入しています"
+        assert all(v["source"] == "pixabay" for v in results), "Pixabay以外のソースが混入しています"
 
         # 最初の結果の構造確認
         first_result = results[0]
-        assert 'keyword' in first_result
-        assert 'url' in first_result
-        assert 'quality' in first_result
-        assert 'duration' in first_result
-        assert 'width' in first_result
-        assert 'height' in first_result
+        assert "keyword" in first_result
+        assert "url" in first_result
+        assert "quality" in first_result
+        assert "duration" in first_result
+        assert "width" in first_result
+        assert "height" in first_result
 
     finally:
         # Pexelsキーを復元
@@ -77,7 +78,7 @@ def test_pixabay_video_quality(has_pixabay_key):
         assert len(results) > 0, "検索結果が0件です"
 
         # HD品質（1920x1080以上）が含まれるか確認
-        hd_videos = [v for v in results if v['width'] >= 1920 and v['height'] >= 1080]
+        hd_videos = [v for v in results if v["width"] >= 1920 and v["height"] >= 1080]
         assert len(hd_videos) > 0, "HD品質の動画が見つかりませんでした"
 
     finally:

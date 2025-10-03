@@ -41,7 +41,7 @@ def test_agent_creation():
                 print(f"✗ Missing agent: {expected}")
                 return False
 
-        print(f"✓ All 7 required agents created successfully")
+        print("✓ All 7 required agents created successfully")
         return True
 
     except Exception as e:
@@ -132,15 +132,15 @@ def test_crew_initialization():
         # 初期化
         flow.initialize(test_news)
 
-        print(f"✓ Flow initialized successfully")
+        print("✓ Flow initialized successfully")
         print(f"  - Agents: {len(flow.agents)}")
         print(f"  - Tasks: {len(flow.tasks)}")
 
         if len(flow.agents) == 7 and len(flow.tasks) == 7:
-            print(f"✓ Flow ready for execution")
+            print("✓ Flow ready for execution")
             return True
         else:
-            print(f"✗ Unexpected agent/task count")
+            print("✗ Unexpected agent/task count")
             return False
 
     except Exception as e:

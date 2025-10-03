@@ -1,9 +1,11 @@
-import pytest
-from unittest.mock import patch, MagicMock
 import os
+from unittest.mock import patch
+
+import pytest
 
 # Assuming app.config.settings is correctly importable
 from app.config.settings import AppSettings
+
 
 @pytest.fixture
 def mock_env_vars():

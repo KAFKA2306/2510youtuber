@@ -5,15 +5,15 @@ Perplexity AIを使用して最新の経済ニュースを収集・要約しま�
 
 import json
 import logging
-import os # 追加
+import os  # 追加
 import re
 from datetime import datetime
 from typing import Any, Dict, List
 
 import httpx
 
-from .config import cfg
 from .api_rotation import get_rotation_manager
+from .config import cfg
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class NewsCollector:
         # Perplexity keysを登録
         perplexity_keys_with_names = []
         for i in range(1, 10): # PERPLEXITY_API_KEY_1からPERPLEXITY_API_KEY_9まで
-            key_name = f'PERPLEXITY_API_KEY_{i}' if i > 1 else 'PERPLEXITY_API_KEY'
+            key_name = f"PERPLEXITY_API_KEY_{i}" if i > 1 else "PERPLEXITY_API_KEY"
             key_value = os.getenv(key_name)
             if key_value:
                 perplexity_keys_with_names.append((key_name, key_value))

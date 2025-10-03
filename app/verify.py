@@ -8,8 +8,8 @@
 """
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 # プロジェクトルートをパスに追加
@@ -17,12 +17,13 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 import logging
+
 from dotenv import load_dotenv
 
 # ロギング設定
 logging.basicConfig(
     level=logging.INFO,
-    format='[%(levelname)s] %(message)s'
+    format="[%(levelname)s] %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -59,17 +60,17 @@ class SystemVerifier:
         logger.info("2. Checking API keys...")
 
         required_keys = {
-            'GEMINI_API_KEY': 'Gemini API (Primary)',
-            'PIXABAY_API_KEY': 'Pixabay (Images)',
+            "GEMINI_API_KEY": "Gemini API (Primary)",
+            "PIXABAY_API_KEY": "Pixabay (Images)",
         }
 
         optional_keys = {
-            'PERPLEXITY_API_KEY': 'Perplexity (News)',
-            'NEWSAPI_API_KEY': 'NewsAPI (Fallback)',
-            'ELEVENLABS_API_KEY': 'ElevenLabs TTS',
-            'OPENAI_API_KEY': 'OpenAI TTS',
-            'GOOGLE_APPLICATION_CREDENTIALS': 'Google Sheets',
-            'PEXELS_API_KEY': 'Pexels (Stock Footage)',
+            "PERPLEXITY_API_KEY": "Perplexity (News)",
+            "NEWSAPI_API_KEY": "NewsAPI (Fallback)",
+            "ELEVENLABS_API_KEY": "ElevenLabs TTS",
+            "OPENAI_API_KEY": "OpenAI TTS",
+            "GOOGLE_APPLICATION_CREDENTIALS": "Google Sheets",
+            "PEXELS_API_KEY": "Pexels (Stock Footage)",
         }
 
         all_ok = True
@@ -77,7 +78,7 @@ class SystemVerifier:
         # 必須キーのチェック
         for key, name in required_keys.items():
             value = os.getenv(key)
-            if not value or value == 'your_key_here':
+            if not value or value == "your_key_here":
                 self.errors.append(f"{name} ({key}) not configured")
                 logger.error(f"❌ {name}: NOT CONFIGURED")
                 all_ok = False
@@ -87,7 +88,7 @@ class SystemVerifier:
         # オプショナルキーのチェック
         for key, name in optional_keys.items():
             value = os.getenv(key)
-            if not value or value == 'your_key_here':
+            if not value or value == "your_key_here":
                 self.warnings.append(f"{name} ({key}) not configured (optional)")
                 logger.warning(f"⚠️  {name}: not configured (optional)")
             else:
@@ -110,7 +111,7 @@ class SystemVerifier:
                 logger.info(f"✅ VOICEVOX Nemo is running on port {self.voicevox_port}")
                 return True
             else:
-                logger.warning(f"⚠️  VOICEVOX Nemo is not running")
+                logger.warning("⚠️  VOICEVOX Nemo is not running")
                 return False
         except FileNotFoundError:
             logger.warning(f"⚠️  VOICEVOX manager script not found: {self.voicevox_manager}")
@@ -137,7 +138,7 @@ class SystemVerifier:
             )
 
             if result.returncode == 0:
-                logger.info(f"✅ VOICEVOX Nemo started successfully")
+                logger.info("✅ VOICEVOX Nemo started successfully")
                 return True
             else:
                 logger.warning(f"⚠️  VOICEVOX Nemo startup failed: {result.stderr}")
@@ -158,10 +159,10 @@ class SystemVerifier:
         logger.info("5. Checking required directories...")
 
         required_dirs = [
-            'logs',
-            'output',
-            'temp',
-            'cache',
+            "logs",
+            "output",
+            "temp",
+            "cache",
         ]
 
         all_ok = True
@@ -178,7 +179,7 @@ class SystemVerifier:
         """仮想環境の確認"""
         logger.info("6. Checking virtual environment...")
 
-        if not hasattr(sys, 'real_prefix') and not (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+        if not hasattr(sys, "real_prefix") and not (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix):
             logger.warning("⚠️  Not running in a virtual environment")
             self.warnings.append("Not running in virtual environment (recommended)")
             return False

@@ -6,11 +6,10 @@
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 import pytest
 from dotenv import load_dotenv
-
 
 # ===== プロジェクト設定 =====
 
@@ -19,9 +18,9 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 # .envファイル読み込み（secret/.envを優先）
-env_path = PROJECT_ROOT / 'secret' / '.env'
+env_path = PROJECT_ROOT / "secret" / ".env"
 if not env_path.exists():
-    env_path = PROJECT_ROOT / '.env'
+    env_path = PROJECT_ROOT / ".env"
 load_dotenv(env_path)
 
 

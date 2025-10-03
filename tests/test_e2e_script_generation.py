@@ -5,11 +5,9 @@
 """
 
 import logging
-import json
-from pprint import pprint
 
 # ログ設定
-logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(name)s:%(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -94,7 +92,7 @@ def test_minimal_crew_execution():
     print("TEST: Minimal Crew Execution (3 agents)")
     print("=" * 60)
     print("⚠️ このテストはAPI料金が発生します")
-    print("⚠️ 実行を続けますか? (yes/no): ", end='')
+    print("⚠️ 実行を続けますか? (yes/no): ", end="")
 
     # ユーザー確認をスキップ（自動実行のため）
     # response = input().strip().lower()
@@ -106,7 +104,8 @@ def test_minimal_crew_execution():
     print()
 
     try:
-        from crewai import Crew, Task, Process
+        from crewai import Crew, Process, Task
+
         from app.crew.agents import AgentFactory
 
         # テスト用ニュース
@@ -133,7 +132,7 @@ def test_minimal_crew_execution():
         agent2 = factory.create_agent("script_writer")
         agent3 = factory.create_agent("japanese_purity_polisher")
 
-        print(f"✓ Created agents:")
+        print("✓ Created agents:")
         print(f"  - {agent1.role}")
         print(f"  - {agent2.role}")
         print(f"  - {agent3.role}")
@@ -155,7 +154,7 @@ def test_minimal_crew_execution():
 
         # Task 2: 短い台本作成（2分）
         task2 = Task(
-            description=f"""
+            description="""
 以下の分析結果をもとに、2分程度の短い対談台本を作成してください。
 
 話者: 田中、鈴木
@@ -209,7 +208,7 @@ def test_minimal_crew_execution():
 
         # 結果をファイルに保存
         output_file = "test_output_minimal_crew.txt"
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             f.write("=== Minimal Crew Execution Result ===\n\n")
             f.write(str(result))
 
@@ -239,7 +238,7 @@ def main():
 
     # Test 2: Minimal Crew (オプション)
     print("\n【Test 2】最小構成Crew実行テスト（料金: 中）")
-    print("このテストをスキップしますか? (skip/run): ", end='')
+    print("このテストをスキップしますか? (skip/run): ", end="")
 
     # 自動実行のためスキップ
     skip_crew = True  # input().strip().lower() == 'skip'

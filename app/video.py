@@ -16,6 +16,7 @@ import ffmpeg
 from pydub import AudioSegment
 
 from app.config.settings import settings
+
 from .background_theme import BackgroundTheme, get_theme_manager
 
 logger = logging.getLogger(__name__)
@@ -163,7 +164,8 @@ class VideoGenerator:
         """プロ品質の動的背景を作成（テーマベース）with robot icon"""
         try:
             import textwrap
-            from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+            from PIL import Image, ImageDraw
 
             width, height = 1920, 1080
 
@@ -225,8 +227,8 @@ class VideoGenerator:
 
             # アクセント円形パターン（テーマから取得）
             for circle in theme.accent_circles:
-                pos = circle['pos']
-                color = tuple(circle['color'])
+                pos = circle["pos"]
+                color = tuple(circle["color"])
                 overlay_draw.ellipse(pos, fill=color)
 
             # グリッドライン（テーマ設定に応じて）
@@ -475,7 +477,7 @@ class VideoGenerator:
     def _ensure_stock_services(self):
         """Lazy load stock footage services."""
         if self._stock_manager is None:
-            from .services.media import StockFootageManager, VisualMatcher, BRollGenerator
+            from .services.media import BRollGenerator, StockFootageManager, VisualMatcher
 
             self._stock_manager = StockFootageManager(
                 pexels_api_key=settings.pexels_api_key,
@@ -564,7 +566,7 @@ class VideoGenerator:
 
             # Apply subtitle overlay
             video_with_subs = video_stream.filter(
-                'subtitles',
+                "subtitles",
                 subtitle_path,
                 force_style=self._get_subtitle_style_string(),
             )

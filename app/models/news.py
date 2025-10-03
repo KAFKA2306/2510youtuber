@@ -2,7 +2,8 @@
 
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, HttpUrl, Field, validator
+
+from pydantic import BaseModel, Field, validator
 
 
 class NewsItem(BaseModel):
@@ -24,25 +25,25 @@ class NewsItem(BaseModel):
     viewer_relevance: Optional[str] = Field(default=None, description="視聴者との関連性")
     hidden_factors: Optional[List[str]] = Field(default=None, description="隠れた要因")
 
-    @validator('impact_level')
+    @validator("impact_level")
     def validate_impact_level(cls, v):
         """影響度の検証"""
-        allowed = ['high', 'medium', 'low']
+        allowed = ["high", "medium", "low"]
         if v not in allowed:
-            raise ValueError(f'impact_level must be one of {allowed}')
+            raise ValueError(f"impact_level must be one of {allowed}")
         return v
 
-    @validator('summary')
+    @validator("summary")
     def validate_summary_length(cls, v):
         """要約の長さ検証"""
         if len(v) < 50:
-            raise ValueError('Summary must be at least 50 characters')
+            raise ValueError("Summary must be at least 50 characters")
         return v
 
     @property
     def is_high_impact(self) -> bool:
         """高影響度かどうか"""
-        return self.impact_level == 'high'
+        return self.impact_level == "high"
 
     class Config:
         json_encoders = {
@@ -65,12 +66,12 @@ class NewsCollection(BaseModel):
         if self.total_count is None:
             self.total_count = len(self.items)
 
-    @validator('mode')
+    @validator("mode")
     def validate_mode(cls, v):
         """モードの検証"""
-        allowed = ['daily', 'special', 'test']
+        allowed = ["daily", "special", "test"]
         if v not in allowed:
-            raise ValueError(f'mode must be one of {allowed}')
+            raise ValueError(f"mode must be one of {allowed}")
         return v
 
     @property

@@ -1,15 +1,16 @@
+import json
 import os
+from typing import Any, Dict, List, Optional
+
 import yaml
 from dotenv import load_dotenv
-import json
 from pydantic import BaseModel, Field, validator
-from typing import List, Dict, Any, Optional
 
 # .envファイルを読み込む
 load_dotenv()
 
 class SpeakerConfig(BaseModel):
-    """話者設定""" 
+    """話者設定"""
     name: str
     role: str
     voice_id_env: str
@@ -19,10 +20,10 @@ class SpeakerConfig(BaseModel):
     style: float = 0.1 # 追加
     voice_id: str | None = None
 
-    @validator('voice_id', pre=True, always=True)
+    @validator("voice_id", pre=True, always=True)
     def load_voice_id_from_env(cls, v: Optional[str], values: Dict[str, Any]) -> Optional[str]:
         """環境変数からvoice_idをロード。環境変数が設定されていない場合はNoneを返す。"""
-        voice_id_env_key = values.get('voice_id_env')
+        voice_id_env_key = values.get("voice_id_env")
         if voice_id_env_key:
             return os.getenv(voice_id_env_key)
         return None # 環境変数が設定されていない場合はNoneを返す
@@ -89,7 +90,7 @@ class AppSettings(BaseModel):
 
     # TTS話者設定 (tts_voice_configs)
     tts_voice_configs: Dict[str, SpeakerConfig] = Field(default_factory=dict)
-    
+
     use_crewai_script_generation: bool = True
     use_three_stage_quality_check: bool = True
     max_video_duration_minutes: int = 15
@@ -144,12 +145,12 @@ class AppSettings(BaseModel):
         }
 
     @classmethod
-    def load(cls) -> 'AppSettings':
+    def load(cls) -> "AppSettings":
         """環境変数 + YAMLから設定を読み込み"""
         config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config.yaml")
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
- 
+
         api_keys = {
             "gemini": os.getenv("GEMINI_API_KEY"),
             "perplexity": os.getenv("PERPLEXITY_API_KEY"), # Perplexity APIキーを追加
@@ -158,7 +159,7 @@ class AppSettings(BaseModel):
             "google_sheet_id": os.getenv("GOOGLE_SHEET_ID"), # Google Sheet IDを追加
             "google_credentials_json": json.loads(os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")) if os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON") else None, # Google Credentials JSONを追加
         }
-        
+
         # Noneのキーも保持するように変更
         config["api_keys"] = api_keys
 
@@ -206,7 +207,7 @@ class AppSettings(BaseModel):
             config["video"]["resolution"] = VideoResolution(width=1920, height=1080) # デフォルト値を設定
         elif "video" not in config:
             config["video"] = VideoConfig(resolution=VideoResolution(width=1920, height=1080))
-        
+
         # qualityフィールドがconfigに存在しない場合のデフォルト値設定
         if "quality" not in config:
             config["quality"] = QualityThresholds()

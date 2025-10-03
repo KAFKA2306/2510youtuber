@@ -27,23 +27,23 @@ class VideoFeedbackCollector:
         """フィードバックファイルが存在することを確認"""
         os.makedirs(os.path.dirname(self.feedback_file) if os.path.dirname(self.feedback_file) else ".", exist_ok=True)
         if not os.path.exists(self.feedback_file):
-            with open(self.feedback_file, 'w', encoding='utf-8') as f:
+            with open(self.feedback_file, "w", encoding="utf-8") as f:
                 json.dump({}, f)
 
     def record_video_metadata(self, video_id: str, theme_name: str, metadata: Dict):
         """動画メタデータを記録（どのテーマを使ったか）"""
         try:
-            with open(self.feedback_file, 'r', encoding='utf-8') as f:
+            with open(self.feedback_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             data[video_id] = {
-                'theme_name': theme_name,
-                'created_at': datetime.now().isoformat(),
-                'metadata': metadata,
-                'analytics': {},
+                "theme_name": theme_name,
+                "created_at": datetime.now().isoformat(),
+                "metadata": metadata,
+                "analytics": {},
             }
 
-            with open(self.feedback_file, 'w', encoding='utf-8') as f:
+            with open(self.feedback_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
 
             logger.info(f"Recorded metadata for video {video_id} with theme {theme_name}")
@@ -67,29 +67,29 @@ class VideoFeedbackCollector:
             }
         """
         try:
-            with open(self.feedback_file, 'r', encoding='utf-8') as f:
+            with open(self.feedback_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             if video_id not in data:
                 logger.warning(f"Video {video_id} not found in feedback data")
                 return
 
-            data[video_id]['analytics'] = analytics
-            data[video_id]['updated_at'] = datetime.now().isoformat()
+            data[video_id]["analytics"] = analytics
+            data[video_id]["updated_at"] = datetime.now().isoformat()
 
-            with open(self.feedback_file, 'w', encoding='utf-8') as f:
+            with open(self.feedback_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
 
             # テーマのパフォーマンス指標を更新
-            theme_name = data[video_id]['theme_name']
-            retention_rate = analytics.get('retention_rate', 0.0)
-            avg_view_duration = analytics.get('avg_view_duration', 0.0)
+            theme_name = data[video_id]["theme_name"]
+            retention_rate = analytics.get("retention_rate", 0.0)
+            avg_view_duration = analytics.get("avg_view_duration", 0.0)
 
             self.theme_manager.update_performance_metrics(theme_name, avg_view_duration, retention_rate)
 
             # ポジティブフィードバックの判定（いいね/視聴の比率）
-            views = analytics.get('views', 0)
-            likes = analytics.get('likes', 0)
+            views = analytics.get("views", 0)
+            likes = analytics.get("likes", 0)
             if views > 0:
                 like_ratio = likes / views
                 if like_ratio > 0.05:  # 5%以上のいいね率はポジティブ
@@ -111,33 +111,33 @@ class VideoFeedbackCollector:
             comment: コメント（オプション）
         """
         try:
-            with open(self.feedback_file, 'r', encoding='utf-8') as f:
+            with open(self.feedback_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
             if video_id not in data:
                 logger.warning(f"Video {video_id} not found, creating new entry")
                 data[video_id] = {
-                    'theme_name': 'unknown',
-                    'created_at': datetime.now().isoformat(),
-                    'metadata': {},
-                    'analytics': {},
+                    "theme_name": "unknown",
+                    "created_at": datetime.now().isoformat(),
+                    "metadata": {},
+                    "analytics": {},
                 }
 
-            if 'manual_feedback' not in data[video_id]:
-                data[video_id]['manual_feedback'] = []
+            if "manual_feedback" not in data[video_id]:
+                data[video_id]["manual_feedback"] = []
 
-            data[video_id]['manual_feedback'].append({
-                'positive': positive,
-                'comment': comment,
-                'timestamp': datetime.now().isoformat(),
+            data[video_id]["manual_feedback"].append({
+                "positive": positive,
+                "comment": comment,
+                "timestamp": datetime.now().isoformat(),
             })
 
-            with open(self.feedback_file, 'w', encoding='utf-8') as f:
+            with open(self.feedback_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
 
             # テーマにフィードバックを反映
-            theme_name = data[video_id]['theme_name']
-            if theme_name != 'unknown':
+            theme_name = data[video_id]["theme_name"]
+            if theme_name != "unknown":
                 self.theme_manager.record_feedback(theme_name, positive)
 
             logger.info(f"Recorded manual feedback for video {video_id}: {'positive' if positive else 'negative'}")
@@ -148,7 +148,7 @@ class VideoFeedbackCollector:
     def get_video_feedback(self, video_id: str) -> Optional[Dict]:
         """特定動画のフィードバックを取得"""
         try:
-            with open(self.feedback_file, 'r', encoding='utf-8') as f:
+            with open(self.feedback_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data.get(video_id)
         except Exception as e:
@@ -158,46 +158,46 @@ class VideoFeedbackCollector:
     def get_theme_performance_summary(self, theme_name: str) -> Dict:
         """特定テーマのパフォーマンスサマリーを取得"""
         try:
-            with open(self.feedback_file, 'r', encoding='utf-8') as f:
+            with open(self.feedback_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            theme_videos = [v for v in data.values() if v.get('theme_name') == theme_name]
+            theme_videos = [v for v in data.values() if v.get("theme_name") == theme_name]
 
             if not theme_videos:
                 return {
-                    'theme_name': theme_name,
-                    'video_count': 0,
-                    'total_views': 0,
-                    'total_likes': 0,
-                    'avg_retention_rate': 0.0,
-                    'avg_view_duration': 0.0,
-                    'positive_feedback_count': 0,
-                    'negative_feedback_count': 0,
+                    "theme_name": theme_name,
+                    "video_count": 0,
+                    "total_views": 0,
+                    "total_likes": 0,
+                    "avg_retention_rate": 0.0,
+                    "avg_view_duration": 0.0,
+                    "positive_feedback_count": 0,
+                    "negative_feedback_count": 0,
                 }
 
-            total_views = sum(v.get('analytics', {}).get('views', 0) for v in theme_videos)
-            total_likes = sum(v.get('analytics', {}).get('likes', 0) for v in theme_videos)
-            retention_rates = [v.get('analytics', {}).get('retention_rate', 0) for v in theme_videos if v.get('analytics')]
-            view_durations = [v.get('analytics', {}).get('avg_view_duration', 0) for v in theme_videos if v.get('analytics')]
+            total_views = sum(v.get("analytics", {}).get("views", 0) for v in theme_videos)
+            total_likes = sum(v.get("analytics", {}).get("likes", 0) for v in theme_videos)
+            retention_rates = [v.get("analytics", {}).get("retention_rate", 0) for v in theme_videos if v.get("analytics")]
+            view_durations = [v.get("analytics", {}).get("avg_view_duration", 0) for v in theme_videos if v.get("analytics")]
 
             positive_count = 0
             negative_count = 0
             for v in theme_videos:
-                for fb in v.get('manual_feedback', []):
-                    if fb['positive']:
+                for fb in v.get("manual_feedback", []):
+                    if fb["positive"]:
                         positive_count += 1
                     else:
                         negative_count += 1
 
             return {
-                'theme_name': theme_name,
-                'video_count': len(theme_videos),
-                'total_views': total_views,
-                'total_likes': total_likes,
-                'avg_retention_rate': sum(retention_rates) / len(retention_rates) if retention_rates else 0.0,
-                'avg_view_duration': sum(view_durations) / len(view_durations) if view_durations else 0.0,
-                'positive_feedback_count': positive_count,
-                'negative_feedback_count': negative_count,
+                "theme_name": theme_name,
+                "video_count": len(theme_videos),
+                "total_views": total_views,
+                "total_likes": total_likes,
+                "avg_retention_rate": sum(retention_rates) / len(retention_rates) if retention_rates else 0.0,
+                "avg_view_duration": sum(view_durations) / len(view_durations) if view_durations else 0.0,
+                "positive_feedback_count": positive_count,
+                "negative_feedback_count": negative_count,
             }
 
         except Exception as e:
@@ -213,7 +213,7 @@ class VideoFeedbackCollector:
         themes = self.theme_manager.themes.keys()
         for theme_name in themes:
             summary = self.get_theme_performance_summary(theme_name)
-            if summary.get('video_count', 0) == 0:
+            if summary.get("video_count", 0) == 0:
                 continue
 
             print(f"\nテーマ: {theme_name}")
@@ -253,14 +253,14 @@ if __name__ == "__main__":
     collector.update_analytics(
         test_video_id,
         {
-            'views': 1000,
-            'likes': 80,
-            'dislikes': 5,
-            'comments': 15,
-            'avg_view_duration': 240.5,
-            'avg_view_percentage': 80.2,
-            'retention_rate': 75.5,
-            'click_through_rate': 12.3,
+            "views": 1000,
+            "likes": 80,
+            "dislikes": 5,
+            "comments": 15,
+            "avg_view_duration": 240.5,
+            "avg_view_percentage": 80.2,
+            "retention_rate": 75.5,
+            "click_through_rate": 12.3,
         }
     )
 

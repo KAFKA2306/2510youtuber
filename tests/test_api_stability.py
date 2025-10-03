@@ -8,11 +8,11 @@
 """
 
 import os
-import sys
+
 from dotenv import load_dotenv
 
 # .envファイルを読み込み
-load_dotenv('secret/.env')
+load_dotenv("secret/.env")
 
 print("=" * 60)
 print("🧪 API安定性機能 - 導通テスト")
@@ -30,9 +30,9 @@ try:
     # Geminiキーを登録
     gemini_keys = []
     for i in range(1, 6):
-        key_name = f'GEMINI_API_KEY_{i}' if i > 1 else 'GEMINI_API_KEY'
+        key_name = f"GEMINI_API_KEY_{i}" if i > 1 else "GEMINI_API_KEY"
         key = os.getenv(key_name)
-        if key and 'your-' not in key:  # プレースホルダーを除外
+        if key and "your-" not in key:  # プレースホルダーを除外
             gemini_keys.append(key)
 
     if gemini_keys:
@@ -58,13 +58,13 @@ print("\n【Test 2】NewsAPI.org フォールバック")
 print("-" * 60)
 
 try:
-    newsapi_key = os.getenv('NEWSAPI_API_KEY')
+    newsapi_key = os.getenv("NEWSAPI_API_KEY")
 
-    if newsapi_key and newsapi_key != 'your_newsapi_key':
+    if newsapi_key and newsapi_key != "your_newsapi_key":
         from app.search_news import NewsCollector
 
         collector = NewsCollector()
-        print(f"✓ NewsCollector初期化完了")
+        print("✓ NewsCollector初期化完了")
 
         # NewsAPI経由でニュース収集テスト（実際のAPI呼び出し）
         print("  - NewsAPIから経済ニュースを取得中...")

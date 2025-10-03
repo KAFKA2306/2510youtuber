@@ -4,17 +4,17 @@ Gemini、Perplexityなどの異なるAI APIを統一インターフェースで�
 """
 
 import logging
+import os  # 追加
 import random
 import time
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 
 import google.generativeai as genai
 import httpx
-import os # 追加
 
+from app.api_rotation import get_rotation_manager  # 追加
 from app.config.settings import settings
-from app.api_rotation import get_rotation_manager, APIKey # 追加
 
 logger = logging.getLogger(__name__)
 
@@ -200,13 +200,13 @@ class GeminiClient(AIClient):
         # JSON部分を抽出
         try:
             # ```json ... ``` のパターンを探す
-            match = re.search(r'```json\n(.*?)\n```', response_text, re.DOTALL)
+            match = re.search(r"```json\n(.*?)\n```", response_text, re.DOTALL)
             if match:
                 json_str = match.group(1)
             else:
                 # フォールバック: 最初と最後の{}を探す
-                start = response_text.find('{')
-                end = response_text.rfind('}') + 1
+                start = response_text.find("{")
+                end = response_text.rfind("}") + 1
                 if start != -1 and end != 0:
                     json_str = response_text[start:end]
                 else:
@@ -316,18 +316,18 @@ Output your response in valid JSON format.
 
         # JSON抽出（Geminiと同じロジック）
         try:
-            match = re.search(r'```json\n(.*?)\n```', response_text, re.DOTALL)
+            match = re.search(r"```json\n(.*?)\n```", response_text, re.DOTALL)
             if match:
                 json_str = match.group(1)
             else:
-                start = response_text.find('[')
-                end = response_text.rfind(']') + 1
+                start = response_text.find("[")
+                end = response_text.rfind("]") + 1
                 if start != -1 and end != 0:
                     json_str = response_text[start:end]
                 else:
                     # {} で試す
-                    start = response_text.find('{')
-                    end = response_text.rfind('}') + 1
+                    start = response_text.find("{")
+                    end = response_text.rfind("}") + 1
                     if start != -1 and end != 0:
                         json_str = response_text[start:end]
                     else:
@@ -487,19 +487,19 @@ class AIClientFactory:
         if use_fallback:
             # FallbackAIClientを使用（推奨）
             return FallbackAIClient(
-                gemini_model=agent_config.get('model', 'gemini-2.0-flash-exp'),
-                perplexity_model='sonar',
-                temperature=agent_config.get('temperature', 0.7),
-                max_tokens=agent_config.get('max_tokens', 4096),
-                timeout_seconds=agent_config.get('timeout_seconds', 300)
+                gemini_model=agent_config.get("model", "gemini-2.0-flash-exp"),
+                perplexity_model="sonar",
+                temperature=agent_config.get("temperature", 0.7),
+                max_tokens=agent_config.get("max_tokens", 4096),
+                timeout_seconds=agent_config.get("timeout_seconds", 300)
             )
         else:
             # Geminiのみ（フォールバックなし）
             return GeminiClient(
-                model=agent_config.get('model', 'gemini-2.0-flash-exp'),
-                temperature=agent_config.get('temperature', 0.7),
-                max_tokens=agent_config.get('max_tokens', 4096),
-                timeout_seconds=agent_config.get('timeout_seconds', 300)
+                model=agent_config.get("model", "gemini-2.0-flash-exp"),
+                temperature=agent_config.get("temperature", 0.7),
+                max_tokens=agent_config.get("max_tokens", 4096),
+                timeout_seconds=agent_config.get("timeout_seconds", 300)
             )
 
 
@@ -526,9 +526,10 @@ def get_perplexity_client(model: str = "sonar", **kwargs) -> PerplexityClient:
 # ===================================
 
 try:
-    from langchain_core.language_models.llms import LLM as BaseLLM
+    from typing import Any, List, Optional
+
     import google.generativeai as genai_sdk
-    from typing import Optional, List, Any
+    from langchain_core.language_models.llms import LLM as BaseLLM
 
     class GeminiDirectLLM(BaseLLM):
         """Direct Gemini SDK LLM - bypasses ALL LiteLLM/Vertex AI routing"""
@@ -571,14 +572,14 @@ try:
         """CrewAI用のGemini LLM（Direct SDK - NO LiteLLM/Vertex AI）"""
         # モデル名の正規化 - Google AI Studio API compatible names
         model_mapping = {
-            'gemini-2.0-flash-exp': 'gemini-2.0-flash-exp',
-            'gemini-2.5-flash': 'gemini-2.5-flash', # 最新のモデル名に修正
-            'gemini-pro': 'gemini-1.5-pro-latest',
-            'gemini-1.5-pro': 'gemini-1.5-pro-latest',
-            'gemini-1.5-flash': 'gemini-1.5-flash-latest',
+            "gemini-2.0-flash-exp": "gemini-2.0-flash-exp",
+            "gemini-2.5-flash": "gemini-2.5-flash", # 最新のモデル名に修正
+            "gemini-pro": "gemini-1.5-pro-latest",
+            "gemini-1.5-pro": "gemini-1.5-pro-latest",
+            "gemini-1.5-flash": "gemini-1.5-flash-latest",
         }
 
-        clean_model = model.replace('models/', '') if model.startswith('models/') else model
+        clean_model = model.replace("models/", "") if model.startswith("models/") else model
         final_model = model_mapping.get(clean_model, clean_model)
 
         logger.info(f"CrewAI LLM: {model} -> {final_model} (Direct Gemini SDK)")

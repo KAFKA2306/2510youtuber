@@ -8,10 +8,9 @@ import json
 import logging
 import os
 import random
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -74,14 +73,14 @@ class BackgroundThemeManager:
         """テーマ定義を読み込み"""
         if os.path.exists(self.themes_file):
             try:
-                with open(self.themes_file, 'r', encoding='utf-8') as f:
+                with open(self.themes_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     for name, theme_data in data.items():
                         # Convert lists to tuples where needed
-                        if 'gradient_colors' in theme_data:
-                            theme_data['gradient_colors'] = [tuple(c) for c in theme_data['gradient_colors']]
-                        if 'robot_icon_size' in theme_data:
-                            theme_data['robot_icon_size'] = tuple(theme_data['robot_icon_size'])
+                        if "gradient_colors" in theme_data:
+                            theme_data["gradient_colors"] = [tuple(c) for c in theme_data["gradient_colors"]]
+                        if "robot_icon_size" in theme_data:
+                            theme_data["robot_icon_size"] = tuple(theme_data["robot_icon_size"])
                         self.themes[name] = BackgroundTheme(**theme_data)
                 logger.info(f"Loaded {len(self.themes)} background themes")
             except Exception as e:
@@ -225,11 +224,11 @@ class BackgroundThemeManager:
             for name, theme in self.themes.items():
                 theme_dict = asdict(theme)
                 # Convert tuples to lists for JSON serialization
-                theme_dict['gradient_colors'] = [list(c) for c in theme_dict['gradient_colors']]
-                theme_dict['robot_icon_size'] = list(theme_dict['robot_icon_size'])
+                theme_dict["gradient_colors"] = [list(c) for c in theme_dict["gradient_colors"]]
+                theme_dict["robot_icon_size"] = list(theme_dict["robot_icon_size"])
                 data[name] = theme_dict
 
-            with open(self.themes_file, 'w', encoding='utf-8') as f:
+            with open(self.themes_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             logger.info(f"Saved {len(self.themes)} themes to {self.themes_file}")
         except Exception as e:
@@ -239,17 +238,17 @@ class BackgroundThemeManager:
         """アナリティクスデータを読み込み"""
         if os.path.exists(self.analytics_file):
             try:
-                with open(self.analytics_file, 'r', encoding='utf-8') as f:
+                with open(self.analytics_file, "r", encoding="utf-8") as f:
                     analytics = json.load(f)
                     for name, stats in analytics.items():
                         if name in self.themes:
                             theme = self.themes[name]
-                            theme.usage_count = stats.get('usage_count', 0)
-                            theme.positive_feedback = stats.get('positive_feedback', 0)
-                            theme.negative_feedback = stats.get('negative_feedback', 0)
-                            theme.avg_view_duration = stats.get('avg_view_duration', 0.0)
-                            theme.avg_retention_rate = stats.get('avg_retention_rate', 0.0)
-                            theme.last_used = stats.get('last_used')
+                            theme.usage_count = stats.get("usage_count", 0)
+                            theme.positive_feedback = stats.get("positive_feedback", 0)
+                            theme.negative_feedback = stats.get("negative_feedback", 0)
+                            theme.avg_view_duration = stats.get("avg_view_duration", 0.0)
+                            theme.avg_retention_rate = stats.get("avg_retention_rate", 0.0)
+                            theme.last_used = stats.get("last_used")
                 logger.info(f"Loaded analytics for {len(analytics)} themes")
             except Exception as e:
                 logger.error(f"Failed to load analytics: {e}")
@@ -261,15 +260,15 @@ class BackgroundThemeManager:
             analytics = {}
             for name, theme in self.themes.items():
                 analytics[name] = {
-                    'usage_count': theme.usage_count,
-                    'positive_feedback': theme.positive_feedback,
-                    'negative_feedback': theme.negative_feedback,
-                    'avg_view_duration': theme.avg_view_duration,
-                    'avg_retention_rate': theme.avg_retention_rate,
-                    'last_used': theme.last_used,
+                    "usage_count": theme.usage_count,
+                    "positive_feedback": theme.positive_feedback,
+                    "negative_feedback": theme.negative_feedback,
+                    "avg_view_duration": theme.avg_view_duration,
+                    "avg_retention_rate": theme.avg_retention_rate,
+                    "last_used": theme.last_used,
                 }
 
-            with open(self.analytics_file, 'w', encoding='utf-8') as f:
+            with open(self.analytics_file, "w", encoding="utf-8") as f:
                 json.dump(analytics, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Failed to save analytics: {e}")
@@ -285,7 +284,7 @@ class BackgroundThemeManager:
 
         # スコア計算: (positive - negative) * retention_rate
         best_theme = None
-        best_score = -float('inf')
+        best_score = -float("inf")
 
         for theme in self.themes.values():
             if theme.usage_count < 3:  # 最低3回使用されたテーマのみ評価
@@ -363,18 +362,18 @@ class BackgroundThemeManager:
                 score = feedback_score * retention_weight
 
             rankings.append({
-                'name': theme.name,
-                'description': theme.description,
-                'usage_count': theme.usage_count,
-                'positive_feedback': theme.positive_feedback,
-                'negative_feedback': theme.negative_feedback,
-                'avg_retention_rate': theme.avg_retention_rate,
-                'score': score,
-                'last_used': theme.last_used,
+                "name": theme.name,
+                "description": theme.description,
+                "usage_count": theme.usage_count,
+                "positive_feedback": theme.positive_feedback,
+                "negative_feedback": theme.negative_feedback,
+                "avg_retention_rate": theme.avg_retention_rate,
+                "score": score,
+                "last_used": theme.last_used,
             })
 
         # スコア順にソート
-        rankings.sort(key=lambda x: x['score'], reverse=True)
+        rankings.sort(key=lambda x: x["score"], reverse=True)
         return rankings
 
     def print_analytics_report(self):
@@ -391,7 +390,7 @@ class BackgroundThemeManager:
             print(f"   ネガティブフィードバック: {rank['negative_feedback']}")
             print(f"   平均視聴維持率: {rank['avg_retention_rate']:.1f}%")
             print(f"   総合スコア: {rank['score']:.2f}")
-            if rank['last_used']:
+            if rank["last_used"]:
                 print(f"   最終使用: {rank['last_used']}")
 
         print("\n" + "="*70)

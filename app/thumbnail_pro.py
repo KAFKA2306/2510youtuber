@@ -13,7 +13,7 @@ import os
 import textwrap
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,6 @@ class ProThumbnailGenerator:
             return self._generate_fallback_thumbnail(title, output_path)
 
         try:
-            from PIL import Image, ImageDraw, ImageEnhance
 
             # 出力パス設定
             if not output_path:
@@ -167,11 +166,11 @@ class ProThumbnailGenerator:
 
         # タイトルから数字を抽出
         patterns = [
-            r'([+\-]?\d+\.?\d*[%％])',  # パーセンテージ
-            r'(\d+\.?\d*[兆億万千百十]+円)',  # 金額
-            r'(\d+\.?\d*倍)',  # 倍率
-            r'([+\-]\d+\.?\d*円)',  # 価格変動
-            r'(\d+年)',  # 年数
+            r"([+\-]?\d+\.?\d*[%％])",  # パーセンテージ
+            r"(\d+\.?\d*[兆億万千百十]+円)",  # 金額
+            r"(\d+\.?\d*倍)",  # 倍率
+            r"([+\-]\d+\.?\d*円)",  # 価格変動
+            r"(\d+年)",  # 年数
         ]
 
         for pattern in patterns:
@@ -192,7 +191,7 @@ class ProThumbnailGenerator:
 
     def _apply_number_focused_layout(self, image, title: str, key_number: str, mode: str):
         """数字を中心としたレイアウト（インパクト重視）"""
-        from PIL import ImageDraw, ImageFont
+        from PIL import ImageDraw
 
         draw = ImageDraw.Draw(image)
         width, height = self.output_size

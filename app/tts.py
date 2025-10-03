@@ -5,18 +5,17 @@ ElevenLabs TTSを使用して台本テキストを音声に変換します。
 """
 
 import asyncio
-import hashlib
 import logging
 import os
 import re
 import subprocess
 from datetime import datetime
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pyttsx3
 import requests
-from elevenlabs import Voice, VoiceSettings
+from elevenlabs import VoiceSettings
 from elevenlabs.client import AsyncElevenLabs
 from gtts import gTTS
 from pydub import AudioSegment
@@ -54,7 +53,7 @@ class TTSManager:
             logger.info("TTS Manager initialized with ElevenLabs")
 
         # Initialize OpenAI client if available
-        if openai and os.getenv('OPENAI_API_KEY'):
+        if openai and os.getenv("OPENAI_API_KEY"):
             self.openai_client = OpenAI()
 
         logger.info(f"TTS Manager initialized (default concurrency: {self.max_concurrent})")
@@ -123,13 +122,13 @@ class TTSManager:
     def _voicevox_nemo_synthesize(self, text: str, output_path: str) -> bool:
         """VOICEVOX Nemo による音声合成"""
         try:
-            health_response = requests.get(f'http://localhost:{self.voicevox_port}/health', timeout=3)
+            health_response = requests.get(f"http://localhost:{self.voicevox_port}/health", timeout=3)
             if health_response.status_code != 200:
                 raise Exception("VOICEVOX Nemo not running or unhealthy")
 
-            query_params = {'text': text, 'speaker': self.voicevox_speaker}
+            query_params = {"text": text, "speaker": self.voicevox_speaker}
             query_response = requests.post(
-                f'http://localhost:{self.voicevox_port}/audio_query',
+                f"http://localhost:{self.voicevox_port}/audio_query",
                 params=query_params,
                 timeout=10
             )
@@ -137,16 +136,16 @@ class TTSManager:
             if query_response.status_code != 200:
                 raise Exception(f"Query failed: {query_response.status_code}")
 
-            synthesis_params = {'speaker': self.voicevox_speaker}
+            synthesis_params = {"speaker": self.voicevox_speaker}
             synthesis_response = requests.post(
-                f'http://localhost:{self.voicevox_port}/synthesis',
+                f"http://localhost:{self.voicevox_port}/synthesis",
                 params=synthesis_params,
                 json=query_response.json(),
                 timeout=30
             )
 
             if synthesis_response.status_code == 200:
-                with open(output_path, 'wb') as f:
+                with open(output_path, "wb") as f:
                     f.write(synthesis_response.content)
                 logger.info("VOICEVOX Nemo synthesis successful")
                 return True
@@ -163,12 +162,12 @@ class TTSManager:
     def _gtts_synthesize(self, text: str, output_path: str) -> bool:
         """Google TTS (gTTS) による音声合成"""
         try:
-            tts = gTTS(text=text, lang='ja')
+            tts = gTTS(text=text, lang="ja")
             audio_buffer = BytesIO()
             tts.write_to_fp(audio_buffer)
             audio_buffer.seek(0)
 
-            with open(output_path, 'wb') as f:
+            with open(output_path, "wb") as f:
                 f.write(audio_buffer.read())
 
             logger.info("gTTS synthesis successful")
@@ -183,8 +182,8 @@ class TTSManager:
         """Coqui TTS による音声合成"""
         try:
             result = subprocess.run([
-                'tts', '--text', text, '--out_path', output_path,
-                '--model_name', 'tts_models/ja/kokoro/tacotron2-DDC'
+                "tts", "--text", text, "--out_path", output_path,
+                "--model_name", "tts_models/ja/kokoro/tacotron2-DDC"
             ], capture_output=True, text=True, timeout=60)
 
             if result.returncode == 0 and os.path.exists(output_path):
@@ -213,7 +212,7 @@ class TTSManager:
                 input=text
             )
 
-            with open(output_path, 'wb') as f:
+            with open(output_path, "wb") as f:
                 f.write(response.content)
 
             logger.info("OpenAI TTS synthesis successful")
@@ -230,21 +229,21 @@ class TTSManager:
             if self.pyttsx3_engine is None:
                 self.pyttsx3_engine = pyttsx3.init()
 
-            voices = self.pyttsx3_engine.getProperty('voices')
+            voices = self.pyttsx3_engine.getProperty("voices")
             if voices:
                 japanese_voice = None
                 for voice in voices:
-                    if 'japanese' in voice.name.lower() or 'ja' in voice.id.lower():
+                    if "japanese" in voice.name.lower() or "ja" in voice.id.lower():
                         japanese_voice = voice
                         break
 
                 if japanese_voice:
-                    self.pyttsx3_engine.setProperty('voice', japanese_voice.id)
+                    self.pyttsx3_engine.setProperty("voice", japanese_voice.id)
                 else:
-                    self.pyttsx3_engine.setProperty('voice', voices[0].id)
+                    self.pyttsx3_engine.setProperty("voice", voices[0].id)
 
-            self.pyttsx3_engine.setProperty('rate', 150)
-            self.pyttsx3_engine.setProperty('volume', 0.9)
+            self.pyttsx3_engine.setProperty("rate", 150)
+            self.pyttsx3_engine.setProperty("volume", 0.9)
 
             self.pyttsx3_engine.save_to_file(text, output_path)
             self.pyttsx3_engine.runAndWait()
@@ -451,21 +450,21 @@ class TTSManager:
             combined = AudioSegment.empty()
             # Create a map from chunk_id to its original order for sorting
             chunk_order_map = {chunk["id"]: chunk["order"] for chunk in chunks}
-            
+
             # Create a map from output_path to chunk_id to link paths back to original chunks
             # This assumes audio_paths are generated in the order of chunks, or we need a more robust mapping
             # For now, let's assume audio_paths correspond to chunks in order of successful synthesis
-            
+
             # Re-sort audio_paths based on original chunk order
             sorted_audio_paths_with_chunks = []
             for path in audio_paths:
                 # Extract chunk_id from path (e.g., temp/tts_chunk_田中_0_0.mp3 -> 田中_0_0)
-                chunk_id_match = re.search(r'tts_chunk_(.+?)\.mp3', path)
+                chunk_id_match = re.search(r"tts_chunk_(.+?)\.mp3", path)
                 if chunk_id_match:
                     chunk_id = chunk_id_match.group(1)
                     if chunk_id in chunk_order_map:
                         sorted_audio_paths_with_chunks.append((chunk_order_map[chunk_id], path))
-            
+
             sorted_audio_paths_with_chunks.sort(key=lambda x: x[0])
             sorted_audio_paths = [path for order, path in sorted_audio_paths_with_chunks]
 

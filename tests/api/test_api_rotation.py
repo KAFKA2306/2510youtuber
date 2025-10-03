@@ -1,8 +1,10 @@
 """API Key Rotationのテスト"""
 
 import os
+
 import pytest
-from app.api_rotation import APIKey # APIKeyをファイルの先頭でインポート
+
+from app.api_rotation import APIKey  # APIKeyをファイルの先頭でインポート
 
 
 @pytest.mark.api
@@ -30,21 +32,21 @@ def test_gemini_key_registration(has_gemini_key):
     # Geminiキーとキー名を収集 (GEMINI_API_KEY_2から5を対象)
     gemini_keys_with_names = []
     for i in range(2, 6): # GEMINI_API_KEY_1はスキップ
-        key_name = f'GEMINI_API_KEY_{i}'
+        key_name = f"GEMINI_API_KEY_{i}"
         key_value = os.getenv(key_name)
-        if key_value and 'your-' not in key_value:
+        if key_value and "your-" not in key_value:
             gemini_keys_with_names.append((key_name, key_value))
 
     if gemini_keys_with_names:
         manager.register_keys("gemini", gemini_keys_with_names)
         stats = manager.get_stats("gemini")
 
-        assert stats['total_keys'] == len(gemini_keys_with_names), "登録されたキー数が一致しません"
-        assert stats['available_keys'] > 0, "利用可能なキーがありません"
-        
+        assert stats["total_keys"] == len(gemini_keys_with_names), "登録されたキー数が一致しません"
+        assert stats["available_keys"] > 0, "利用可能なキーがありません"
+
         # 登録されたキーのkey_nameが正しく設定されていることを確認
         for i, key_obj in enumerate(manager.key_pools["gemini"]):
-            expected_key_name = f'GEMINI_API_KEY_{i+2}' # インデックス調整
+            expected_key_name = f"GEMINI_API_KEY_{i+2}" # インデックス調整
             assert key_obj.key_name == expected_key_name, f"キー {key_obj.key} のkey_nameが正しくありません"
     else:
         pytest.skip("GEMINI_API_KEY_2から5が設定されていません")
@@ -64,9 +66,9 @@ def test_rotation_manager_stats():
     stats = manager.get_stats("test_service")
 
     assert stats is not None, "統計情報が取得できませんでした"
-    assert 'total_keys' in stats, "統計情報にtotal_keysがありません"
-    assert 'available_keys' in stats, "統計情報にavailable_keysがありません"
-    assert stats['total_keys'] == 3, "登録されたキー数が一致しません"
+    assert "total_keys" in stats, "統計情報にtotal_keysがありません"
+    assert "available_keys" in stats, "統計情報にavailable_keysがありません"
+    assert stats["total_keys"] == 3, "登録されたキー数が一致しません"
 
 
 @pytest.mark.api
@@ -97,9 +99,10 @@ def test_key_rotation_mechanism():
 @pytest.mark.api
 def test_gemini_daily_quota_limit_exceeded():
     """Geminiの日次クォータ制限に達したときにExceptionが発生することを確認"""
-    from app.api_rotation import APIKeyRotationManager
-    from unittest.mock import MagicMock
     import datetime
+    from unittest.mock import MagicMock
+
+    from app.api_rotation import APIKeyRotationManager
 
     manager = APIKeyRotationManager()
     manager.register_keys("gemini", [("GEMINI_API_KEY_2", "key2")]) # GEMINI_API_KEY_2を使用
@@ -122,9 +125,10 @@ def test_gemini_daily_quota_limit_exceeded():
 @pytest.mark.api
 def test_gemini_daily_quota_reset():
     """日付が変わるとGeminiの日次クォータがリセットされることを確認"""
-    from app.api_rotation import APIKeyRotationManager
-    from unittest.mock import MagicMock
     import datetime
+    from unittest.mock import MagicMock
+
+    from app.api_rotation import APIKeyRotationManager
 
     manager = APIKeyRotationManager()
     manager.register_keys("gemini", [("GEMINI_API_KEY_2", "key2")]) # GEMINI_API_KEY_2を使用
@@ -143,9 +147,10 @@ def test_gemini_daily_quota_reset():
 @pytest.mark.api
 def test_log_output_contains_key_name(caplog):
     """ログ出力にkey_nameが含まれることを確認"""
-    from app.api_rotation import APIKeyRotationManager
-    from unittest.mock import MagicMock
     import logging
+    from unittest.mock import MagicMock
+
+    from app.api_rotation import APIKeyRotationManager
 
     manager = APIKeyRotationManager()
     manager.key_pools["test_service"] = [

@@ -7,15 +7,15 @@ SEO最適化と視聴者エンゲージメント向上を目的とした高品�
 
 import json
 import logging
+import os  # 追加
 import re
 from datetime import datetime
 from typing import Any, Dict, List
 
 import google.generativeai as genai
-import os # 追加
 
+from .api_rotation import get_rotation_manager  # 追加
 from .config import cfg
-from .api_rotation import get_rotation_manager # 追加
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class MetadataGenerator:
 
             gemini_keys_with_names = []
             for i in range(1, 6):
-                key_name = f'GEMINI_API_KEY_{i}' if i > 1 else 'GEMINI_API_KEY'
+                key_name = f"GEMINI_API_KEY_{i}" if i > 1 else "GEMINI_API_KEY"
                 key_value = os.getenv(key_name)
                 if key_value:
                     gemini_keys_with_names.append((key_name, key_value))
@@ -286,24 +286,24 @@ class MetadataGenerator:
         wow_elements = []
 
         # パーセンテージ抽出
-        percent_match = re.search(r'([+\-]?\d+\.?\d*[%％])', text)
+        percent_match = re.search(r"([+\-]?\d+\.?\d*[%％])", text)
         if percent_match:
             wow_elements.append(f"{percent_match.group(1)}変動")
 
         # 倍率抽出
-        bai_match = re.search(r'(\d+\.?\d*倍)', text)
+        bai_match = re.search(r"(\d+\.?\d*倍)", text)
         if bai_match:
             wow_elements.append(bai_match.group(1))
 
         # 変動表現
-        trend_patterns = ['急騰', '暴落', '急落', '高騰', '急上昇', '急降下', '史上最高', '最安値', '年初来高値', '年初来安値']
+        trend_patterns = ["急騰", "暴落", "急落", "高騰", "急上昇", "急降下", "史上最高", "最安値", "年初来高値", "年初来安値"]
         for pattern in trend_patterns:
             if pattern in text:
                 wow_elements.append(pattern)
                 break
 
         # 緊急性表現
-        urgent_patterns = ['速報', '緊急', '衝撃', '警告', '注目', '重大']
+        urgent_patterns = ["速報", "緊急", "衝撃", "警告", "注目", "重大"]
         for pattern in urgent_patterns:
             if pattern in text:
                 wow_elements.append(pattern)

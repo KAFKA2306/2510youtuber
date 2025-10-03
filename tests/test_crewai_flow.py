@@ -18,7 +18,7 @@ from app.crew.flows import create_wow_script_crew
 # ロギング設定
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 logger = logging.getLogger(__name__)
@@ -88,18 +88,18 @@ async def test_crewai_flow():
         logger.info("✅ テスト完了")
         logger.info("=" * 60)
 
-        if result.get('success'):
+        if result.get("success"):
             logger.info("\n🎉 SUCCESS!")
             logger.info(f"\n📝 生成された台本 ({len(result.get('final_script', ''))} 文字):")
             logger.info("-" * 60)
-            print(result.get('final_script', ''))
+            print(result.get("final_script", ""))
             logger.info("-" * 60)
 
             # 結果をファイルに保存
             output_file = project_root / "output" / "test_crewai_script.txt"
             output_file.parent.mkdir(exist_ok=True)
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(result.get('final_script', ''))
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(result.get("final_script", ""))
             logger.info(f"\n💾 台本を保存: {output_file}")
 
         else:

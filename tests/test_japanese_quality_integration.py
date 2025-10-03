@@ -4,16 +4,17 @@
 日本語品質チェックが適切に機能することを確認します。
 """
 
-import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.japanese_quality import (
     check_script_japanese_purity,
-    improve_japanese_quality,
-    validate_subtitle_text,
     clean_subtitle_text,
-    japanese_quality_checker
+    improve_japanese_quality,
+    japanese_quality_checker,
+    validate_subtitle_text,
 )
 
 
@@ -175,10 +176,10 @@ def test_end_to_end():
 
     # 結果サマリー
     print("\n5. Summary:")
-    print(f"   ✓ Script generation completed")
+    print("   ✓ Script generation completed")
     print(f"   ✓ Quality check: {purity_result['purity_score']:.1f}/100")
     if japanese_quality_checker and not purity_result["is_pure_japanese"]:
-        print(f"   ✓ Auto-improvement applied")
+        print("   ✓ Auto-improvement applied")
     print(f"   ✓ Subtitle validation: {valid_count}/{len(sample_subtitles)} passed")
     print("\n   Final script (first 200 chars):")
     print(f"   {final_script[:200]}...")

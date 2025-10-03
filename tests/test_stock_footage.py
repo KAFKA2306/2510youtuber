@@ -13,9 +13,10 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from app.services.media import StockFootageManager, VisualMatcher, BRollGenerator
+from app.services.media import BRollGenerator, StockFootageManager, VisualMatcher
 
 
 def test_config():
@@ -104,7 +105,7 @@ def test_stock_footage_manager():
 
         # Test download of first clip
         if results:
-            print(f"\n📥 Testing download of first clip...")
+            print("\n📥 Testing download of first clip...")
             path = manager.download_clip(results[0])
             if path:
                 file_size_mb = os.path.getsize(path) / (1024 * 1024)

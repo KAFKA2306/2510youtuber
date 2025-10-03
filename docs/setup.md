@@ -1,395 +1,236 @@
-# 環境構築とセットアップガイド
-
-## 🎉 最新アップデート
-
-### 🆕 Phase 3完了: CrewAI出力品質修正（2025年10月3日）
-
-**CrewAI台本生成の品質問題を修正しました:**
-
-#### 修正内容
-
-1. **CrewAI Agent出力汚染の修正**
-   - **問題**: Agent 6-7が評価結果のJSON出力時に、内部の思考プロセスや分析を英語で含めていた
-   - **影響**: 最終台本に数百個の英単語（"json", "wow_score", "Task", "Agent"等）が混入
-   - **修正**: `app/config_prompts/prompts/quality_check.yaml`のTask 6-7に明示的な指示を追加
-     - "最終出力は、以下のJSON形式のみを出力してください。説明文、分析、コメント等は一切含めないでください"
-     - "あなたの思考プロセスは含めず、JSONのみを出力してください"
-
-2. **Fallback動画生成エラーの修正**
-   - **問題**: `app/video.py:616-617` でffmpegパラメータ衝突（`preset`、`crf`等の重複指定）
-   - **影響**: メイン動画生成失敗時のフォールバックも失敗し、動画が全く生成されない
-   - **修正**: 全ての動画生成パス（main/stock/fallback）で`_get_quality_settings()`のみを使用し、パラメータ重複を排除
-
-3. **字幕の日本語純度向上**
-   - CrewAI出力のクリーニングにより、字幕に混入する英語が大幅に削減
-   - `app/japanese_quality.py`の英語検出が正常に機能するようになった
-
-#### 期待される効果
-
-| 指標 | 修正前 | 修正後 |
-|------|--------|--------|
-| 台本の日本語純度 | 60-70% | 95%+ |
-| 字幕の英語混入 | 200-500単語 | 0-10単語 |
-| 動画生成成功率 | 50% | 95%+ |
-| フォールバック動作 | 失敗 | 正常動作 |
-
-#### 関連ファイル
-
-- `app/config_prompts/prompts/quality_check.yaml`: Task 6-7のプロンプト修正
-- `app/video.py`: Fallback動画生成の修正
-- `app/crew/flows.py`: JSON解析ロジック（変更なし、正常動作）
-
-詳細は本ドキュメント末尾の「トラブルシューティング」セクションを参照してください。
+# **YouTube動画自動生成システム 完全構築マニュアル**
+## **目次**
+1. システム概要とアーキテクチャ
+2. 開発フェーズと実装状況
+3. 事前準備
+4. 外部サービス連携設定
+5. 環境構築
+6. システム検証
+7. 自動実行設定
+8. トラブルシューティング
+9. 運用と監視
+10. API仕様と料金体系
+***
+## **1. システム概要とアーキテクチャ**
+本システムは、AIを活用してYouTube動画を完全自動生成するエンドツーエンドのパイプラインです。
+### **主要コンポーネント**
+**情報収集層:**
+- Perplexity AI（プライマリ）
+- NewsAPI.org（フォールバック）
+- 3段階フォールバック機構
+**AI台本生成層:**
+- CrewAI WOW Script Creation Crew（7つの専門エージェント）
+- Google Gemini API（複数キーローテーション）
+- 3段階品質チェックシステム
+**音声合成層:**
+- ElevenLabs TTS（高品質）
+- VOICEVOX Nemo（無料バックアップ）
+- gTTS/pyttsx3（最終フォールバック）
+**動画生成層:**
+- FFmpeg（動画エンコード）
+- Pexels/Pixabay（HD/4K B-roll映像）
+- 動的トランジション・エフェクト
+**データ管理層:**
+- Google Sheets（実行履歴・プロンプト管理）
+- Google Drive（動画バックアップ）
+- ローカルキャッシュ（TTL 24時間）
+**配信層:**
+- YouTube Data API v3（OAuth 2.0認証）
+- 自動サムネイル生成
+- メタデータ最適化
+**通知層:**
+- Discord/Slack Webhook
+- エラーアラート
+- 実行レポート
+***
+## **2. 開発フェーズと実装状況**
+### **Phase 1: CrewAI統合（完了）**
+**WOW Script Creation Crewの7つのAIエージェント:**
+1. **deep_news_analyzer**: ニュースの深層分析と文脈抽出
+2. **curiosity_gap_researcher**: 視聴者の知的好奇心を刺激する構成研究
+3. **emotional_story_architect**: 感情的な物語設計
+4. **script_writer**: 対談形式の台本執筆
+5. **engagement_optimizer**: エンゲージメント最適化
+6. **quality_guardian**: 品質保証（WOWスコア評価）
+7. **japanese_purity_polisher**: 日本語純度向上（英語混入除去）
+**目標:** 視聴維持率50%+を達成する高品質台本の自動生成
+### **Phase 2: API安定性強化（2025年10月3日完了）**
+**実装機能:**
+1. **API Key Rotation**
+   - Gemini/Perplexity複数キー自動ローテーション
+   - 429エラー検知 → 5分待機 → 別キーで継続
+   - 成功率ベースの最適キー選択
+   - 連続5回失敗キーは10分間休止
+2. **NewsAPI.org フォールバック**
+   - 3段階フォールバック: Perplexity → NewsAPI → ダミーニュース
+   - 無料枠: 100リクエスト/日
+   - 自動切替機構
+4. **Google Sheetsローカルキャッシュ**
+   - TTL 24時間
+   - Sheets障害時の自動フォールバック
+   - オフライン実行可能
+### **Stock Footage統合（完了）**
+**プロフェッショナルなB-roll映像機能:**
+- Pexels API: HD/4K無制限・商用利用可
+- Pixabay API: フォールバック用
+- 自動キーワード抽出（日本語→英語変換）
+- Ken Burns効果、クロスフェード、カラーグレーディング
+- 3段階フォールバック: Stock → Static → Simple
 
 ---
-
-### Phase 1完了: CrewAI統合済み
-
-このシステムは**WOW Script Creation Crew**を搭載しています。7つのAIエージェントが協力して、視聴維持率50%+を目指す高品質な台本を自動生成します。
-
-### 🆕 Phase 2完了: API安定性強化（2025年10月3日）
-
-**動作安定性を大幅に向上させる4つの新機能を実装しました:**
-
-#### 1. API Key Rotation（自動ローテーション）
-- **Gemini/Perplexity**: 複数キーをプールして自動切替
-- **Rate limit対策**: 429エラー検知→5分待機→別キーで継続
-- **成功率ベース選択**: 最適なキーを自動選択
-- **詳細**: `app/api_rotation.py`
-
-#### 2. NewsAPI.org フォールバック
-- **3段階フォールバック**: Perplexity → NewsAPI → ダミーニュース
-- **無料**: 100リクエスト/日（開発用十分）
-- **自動切替**: Perplexity全失敗時に自動でNewsAPIへ
-
-#### 3. TTS並列度の動的調整
-- **短い動画（5分未満）**: 4並列（高速）
-- **中程度（5-15分）**: 3並列（バランス）
-- **長い動画（15分以上）**: 2並列（安定性重視）
-- **自動最適化**: 動画長から推定して自動調整
-
-#### 4. Google Sheets プロンプトのローカルキャッシュ
-- **TTL 24時間**: Sheets取得成功時に自動保存
-- **自動フォールバック**: Sheets失敗時にキャッシュから読込
-- **高可用性**: Sheets接続なしでも実行可能
-
-**期待される改善効果:**
-- ニュース収集可用性: 99% → 99.99%
-- 台本生成可用性: 95% → 99.5%
-- プロンプト可用性: 90% → 99.9%
-- TTS安定性向上: 動的並列度調整
-
-詳細は [`IMPLEMENTATION_SUMMARY.md`](../IMPLEMENTATION_SUMMARY.md) を参照
-
-## 事前準備チェックリスト
-
-### 必要なアカウント
-
-**注意**: SerpAPIは認証が複雑なため使用しません。ニュース収集にはPerplexity/NewsAPIを使用します。
-
-- [ ] **Perplexity**: ニュース収集用（推奨）
-  - 🆕 **推奨**: 複数アカウント（Rate limit対策・自動ローテーション）
-  - 取得先: https://www.perplexity.ai/
-- [ ] **NewsAPI.org**: Perplexityフォールバック用（無料100リクエスト/日）🆕
-  - 取得先: https://newsapi.org/register
-- [ ] **Google Cloud**: Gemini API・Sheets・Drive・YouTube Data API用
-  - ⚠️ **重要**: Vertex AI APIまたは直接のGemini API（CrewAI用）
-  - 🆕 **推奨**: 複数Geminiキー（Rate limit対策・自動ローテーション）
-- [ ] **ElevenLabs**: TTS（音声合成）用
-- [ ] **Pexels**: 無料ストック映像API用 🆕
-- [ ] **Pixabay**: 無料ストック映像API用（オプション）🆕
-- [ ] **Discord**: 運用通知用（Webhook URL）
-- [ ] **Render**: 実行基盤（Cronジョブ）用（オプション）
-- [ ] **GitHub**: コード管理・自動デプロイ用（オプション）
-
-### 技術要件
-
+## **3. 事前準備**
+### **必要なアカウント一覧**
+| サービス | 用途 | 料金 | 優先度 | 複数キー推奨 |
+|---------|------|------|--------|-------------|
+| Perplexity | ニュース収集 | 有料 | 必須 | ✅ 3キー |
+| NewsAPI.org | フォールバック | 無料100req/日 | 推奨 | - |
+| Google Cloud | Gemini/Sheets/Drive/YouTube | 従量課金 | 必須 | ✅ 3-5キー |
+| ElevenLabs | 音声合成 | $5/月〜 | 必須 | - |
+| Pexels | B-roll映像 | 無料無制限 | 推奨 | - |
+| Pixabay | B-roll映像 | 無料 | オプション | - |
+| Discord | 通知 | 無料 | 推奨 | - |
+**注意:** SerpAPIは認証が複雑なため使用しません。ニュース収集はPerplexity/NewsAPIで行います。
+### **技術要件**
 - Python 3.8以上
+- FFmpeg（動画エンコード）
+- Docker（VOICEVOX Nemo用、オプション）
+- WSL2（Windows環境の場合）
 - Git基本操作
-- 基本的なAPIキー管理知識
-
-## APIキー取得手順
-
-**重要**: SerpAPIは認証が複雑なため使用しません。ニュース収集はPerplexity/NewsAPIで行います。
-
-### 1. Perplexity API（ニュース収集・推奨）
-
-1. [Perplexity AI](https://www.perplexity.ai/)にアクセス
-2. アカウント作成・ログイン
-3. Settings -> API Keysセクションで新しいキーを生成
-4. **メモ**: `PERPLEXITY_API_KEY=pplx-...`
-
-#### 🆕 複数キー設定（Rate limit対策）
-
-**推奨**: 3つのキーを用意すると安定性が向上します
-
-1. 追加アカウントを作成（または複数キーを発行）
-2. `.env`に追加:
-   ```bash
-   PERPLEXITY_API_KEY=pplx-key1
-   PERPLEXITY_API_KEY_2=pplx-key2
-   PERPLEXITY_API_KEY_3=pplx-key3
-   ```
-
-**動作**:
+- 基本的なLinuxコマンド知識
+***
+## **4. 外部サービス連携設定**
+### **4.1. Perplexity API（ニュース収集）**
+**取得手順:**
+1. [Perplexity AI](https://www.perplexity.ai/) でアカウント作成
+2. Settings → API Keys → 新しいキーを生成
+**複数キー設定:**
+```bash
+PERPLEXITY_API_KEY=pplx-key1
+```
+**動作:**
 - Rate limit検知時に自動的に次のキーに切り替え
 - 成功率ベースで最適なキーを選択
 - 連続5回失敗したキーは10分間休止
 
-### 2. NewsAPI.org（フォールバック）🆕
-
-**Perplexityのバックアップとして設定推奨**
-
-1. [NewsAPI.org](https://newsapi.org/register)にアクセス
-2. 無料アカウント作成（クレジットカード不要）
-3. APIキーをコピー
-4. **メモ**: `NEWSAPI_API_KEY=your_key`
-
-**無料枠**:
-- 100リクエスト/日
-- 開発用途は十分
-
-**動作**:
-- Perplexity全失敗時に自動的にNewsAPIへフォールバック
+### **4.2. NewsAPI.org（フォールバック）**
+**取得手順:**
+1. [NewsAPI.org](https://newsapi.org/register) で無料アカウント作成
+2. APIキーをコピー
+**制限:**
+- 100リクエスト/日（開発用十分）
+- クレジットカード不要
+```bash
+NEWSAPI_API_KEY=your_newsapi_key
+```
+**フォールバック動作:**
+- Perplexity全失敗時に自動的にNewsAPIへ切替
 - 日本語ニュースを自動収集
 
-### 3. Google Cloud Platform
-
-#### Gemini API（CrewAI統合対応）
-
-**CrewAI WOW Script Creation Crewを使用するには、以下のいずれかが必要です:**
-
-##### オプションA: Google AI Studio（推奨・簡単）
-
-1. [Google AI Studio](https://makersuite.google.com/)にアクセス
+### **4.3. Google Cloud Platform**
+#### **A. Gemini API設定（台本生成用）**
+**オプション1: Google AI Studio（推奨・簡単）**
+1. [Google AI Studio](https://makersuite.google.com/) にアクセス
 2. 新しいAPIキーを作成
-3. **メモ**: `GEMINI_API_KEY=AIza...`
-
-**利点**:
-- セットアップが簡単
-- すぐに使える
-- 無料枠が大きい
-
-**注意**:
-- 一部の最新モデル（gemini-2.0-flash-exp等）はVertex AI経由でのみ利用可能な場合があります
-
-#### 🆕 複数Geminiキー設定（Rate limit対策）
-
-**推奨**: 3-5個のキーを用意すると台本生成の安定性が向上
-
-1. 複数のGoogle AI StudioプロジェクトでAPIキーを発行
-2. `.env`に追加:
-   ```bash
-   GEMINI_API_KEY=AIza-key1
-   GEMINI_API_KEY_2=AIza-key2
-   GEMINI_API_KEY_3=AIza-key3
-   GEMINI_API_KEY_4=AIza-key4
-   GEMINI_API_KEY_5=AIza-key5
-   ```
-
-**動作**:
+3. **推奨:** 3-5個のキーを発行（台本生成安定化）
+```bash
+GEMINI_API_KEY=AIza-key1
+GEMINI_API_KEY_2=AIza-key2
+GEMINI_API_KEY_3=AIza-key3
+GEMINI_API_KEY_4=AIza-key4
+GEMINI_API_KEY_5=AIza-key5
+```
+**複数キー動作:**
 - Rate limit/504タイムアウト検知時に自動キー切替
-- 成功率が高いキーを優先使用
-- 台本生成の失敗率が大幅に低下
-
-##### オプションB: Vertex AI API（本番環境推奨）
-
-**必要な手順**:
-
-1. **Google Cloud Consoleでプロジェクト作成**
-   ```
-   https://console.cloud.google.com/
-   ```
-
-2. **Vertex AI APIを有効化**
-   ```
-   https://console.cloud.google.com/apis/library/aiplatform.googleapis.com
-   ```
-   - プロジェクトを選択
-   - 「APIを有効にする」をクリック
-
-3. **サービスアカウント認証設定**
-   - 既存のサービスアカウントにVertex AI権限を追加
-   - または新規サービスアカウント作成
-   - 必要な権限: `Vertex AI User`
-
-4. **.envファイルに追加**
-   ```env
-   GOOGLE_APPLICATION_CREDENTIALS=secret/probable-setup-435816-r8-96a2fbb8608e.json
-   GEMINI_API_KEY=AIza...  # Google AI Studio のキーも併用可能
-   ```
-
-**利点**:
-- 最新モデルへのアクセス
-- エンタープライズグレードのSLA
-- 高度な管理・監視機能
-
-**現在のエラーと解決方法**:
-
-テスト実行時に以下のエラーが出た場合:
-```
-Vertex AI API has not been used in project probable-setup-435816-r8
-```
-
-**解決策**:
-1. 上記のVertex AI APIを有効化
-2. または、直接Gemini APIを使用するよう設定変更（下記参照）
-
-##### CrewAI設定の切り替え
-
-**Vertex AIを使わない場合（簡易設定）**:
-
-`app/config_prompts/prompts/agents.yaml` を編集:
-```yaml
-agents:
-  deep_news_analyzer:
-    model: gemini-pro  # gemini-2.0-flash-exp から変更
-    # ...
-```
-
-または環境変数で制御:
-```env
-# CrewAIを一時的に無効化（従来の3段階チェック使用）
-USE_CREWAI_SCRIPT_GENERATION=false
-```
-
-#### Google Services（Sheets, Drive, YouTube）
-
-1. [Google Cloud Console](https://console.cloud.google.com/)でプロジェクト作成
-2. 以下のAPIを有効化：
+#### **B. Google Services設定（Sheets/Drive/YouTube）**
+**Google Sheets/Drive用サービスアカウント:**
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクト作成
+2. 以下のAPIを有効化:
    - Google Sheets API
    - Google Drive API
    - YouTube Data API v3
-3. 「認証情報」→「サービスアカウント」を作成
-4. JSON認証ファイルをダウンロード
-5. **メモ**: `GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json`
-
-#### YouTube Data API設定 🎥
-
-**重要**: YouTube動画アップロードにはOAuth 2.0クライアントIDが必要です（サービスアカウントでは不可）
-
-##### 手順
-
-1. **Google Cloud Console にアクセス**
-   ```
-   https://console.cloud.google.com/apis/credentials?project=probable-setup-435816-r8
+3. 「認証情報」→「サービスアカウント」作成
+4. JSON認証ファイルをダウンロード → `secret/service-account-key.json`に配置
+5. `.env`に設定:
+   ```bash
+   GOOGLE_APPLICATION_CREDENTIALS=secret/service-account-key.json
    ```
 
-2. **OAuth 2.0 クライアント ID を作成**
-   - 「+ 認証情報を作成」→「OAuth クライアント ID」をクリック
+#### **C. YouTube Data API設定（重要）**
+**⚠️ 注意:** YouTube動画アップロードにはOAuth 2.0クライアントIDが必要です（サービスアカウントでは不可）
+**手順:**
+1. **Google Cloud Consoleにアクセス**
+   ```
+   https://console.cloud.google.com/apis/credentials?project=your-project-id
+   ```
+2. **OAuth 2.0 クライアントIDを作成**
+   - 「+ 認証情報を作成」→「OAuth クライアント ID」
    - アプリケーションの種類: **「デスクトップ アプリ」**を選択
    - 名前: `YouTuber Automation`
    - 「作成」をクリック
-
 3. **JSONファイルをダウンロード**
    - ダウンロードボタン（↓）をクリック
    - ファイルを `secret/youtube_oauth_client.json` として保存
-
 4. **.envファイルを更新**
-   ```env
+   ```bash
    YOUTUBE_CLIENT_SECRET=secret/youtube_oauth_client.json
    ```
-
-##### 初回認証（一度だけ必要）
-
-最初にYouTube動画をアップロードする際、ブラウザ認証が必要です：
-
+**初回認証（一度だけ必要）:**
 ```bash
 # セットアップスクリプトを実行
 uv run python setup_youtube_oauth.py
-
 # またはテストアップロードで認証
 uv run python test_upload.py
 ```
-
-**認証フロー**:
-1. ブラウザが自動的に開きます
+**認証フロー:**
+1. ブラウザが自動的に開く
 2. YouTubeチャンネルのGoogleアカウントでサインイン
 3. アプリケーションに権限を付与（動画のアップロードと管理）
-4. 認証完了後、`token.pickle`ファイルが作成されます
-5. 以降は自動的に認証されます（トークンは自動更新）
-
-**重要な注意事項**:
+4. 認証完了後、`token.pickle`ファイルが作成される
+5. 以降は自動的に認証される（トークンは自動更新）
+**重要な注意事項:**
 - ⚠️ `token.pickle`は秘密情報です。Gitにコミットしないでください
 - ⚠️ サービスアカウントのJSONファイルはYouTube APIに使用できません
 - ✅ OAuth clientの形式: `{"installed": {...}}` または `{"web": {...}}`
-- ❌ サービスアカウントの形式: `{"type": "service_account", ...}` （これは使えません）
+- ❌ サービスアカウントの形式: `{"type": "service_account", ...}`（これは使えません）
 
-##### トラブルシューティング
-
-**エラー**: "Service account credentials cannot be used for YouTube uploads"
-- **原因**: サービスアカウントのJSONを使用している
-- **解決**: 上記手順でOAuth 2.0クライアントIDを作成してください
-
-**エラー**: "OAuth client file not found"
-- **解決**: ファイルパスが正しいか確認してください
-  ```bash
-  ls -la secret/youtube_oauth_client.json
-  ```
-
-**認証トークンをリセットする場合**:
+### **4.4. ElevenLabs TTS（音声合成）**
+**取得手順:**
+1. [ElevenLabs](https://elevenlabs.io/) でアカウント作成
+2. Settings → API Keys からキーを取得
 ```bash
-rm token.pickle
-uv run python test_upload.py
+ELEVENLABS_API_KEY=sk_your_key
+```
+**推奨プラン:** Starter（$5/月、30,000文字）
+**音声ID（Voice ID）の取得:**
+1. ElevenLabsの「Voices」タブから音声を選択
+2. Voice IDをコピー
+3. `.env`に設定:
+```bash
+TTS_VOICE_TANAKA=voice_id_here
+TTS_VOICE_SUZUKI=voice_id_here
+TTS_VOICE_NARRATOR=voice_id_here
 ```
 
-### 4. ElevenLabs TTS（音声合成）
-
-1. [ElevenLabs](https://elevenlabs.io/)でアカウント作成
-2. SettingsのAPI Keysからキーを取得
-3. **メモ**: `ELEVENLABS_API_KEY=...`
-
-**プラン**:
-- **Free**: 10,000文字/月（開発・テスト用）
-- **Starter**: $5/月、30,000文字（小規模運用）
-- **Creator**: $22/月、100,000文字（中規模運用）
-
-**音声ID（Voice ID）の取得方法**:
-1. ElevenLabsにログイン
-2. 「Voices」タブから使用したい音声を選択
-3. 音声の「Voice ID」をコピー
-4. `.env`ファイルに設定:
-   ```bash
-   TTS_VOICE_TANAKA=voice_id_here
-   TTS_VOICE_SUZUKI=voice_id_here
-   TTS_VOICE_NARRATOR=voice_id_here
-   ```
-
-### 5. Discord Webhook（通知）
-
-1. Discordサーバーで「サーバー設定」→「連携サービス」→「ウェブフック」を開く
-2. 「新しいウェブフック」をクリック
-3. ウェブフック名とチャンネルを設定
-4. 「ウェブフックURLをコピー」をクリック
-5. **メモ**: `DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...`
-
-### 6. Stock Footage APIs（無料・推奨）🎬
-
-**動画背景を自動的にプロフェッショナルなB-roll映像にアップグレード！**
-
-#### Pexels API（推奨）
-
-1. [Pexels API](https://www.pexels.com/api/)にアクセス
-2. 「Get API Key」をクリック
-3. アカウント登録（無料）
-4. APIキーをコピー
-5. **メモ**: `PEXELS_API_KEY=YOUR_KEY_HERE`
-
+### **4.5. Stock Footage APIs（完全無料）**
+#### **Pexels API（推奨）**
+1. [Pexels API](https://www.pexels.com/api/) で無料登録
+2. APIキーをコピー
+```bash
+PEXELS_API_KEY=YOUR_PEXELS_KEY
+```
 **特徴:**
 - ✅ 完全無料・無制限
 - ✅ HD/4K品質のストック映像
 - ✅ 商用利用可能
 - ✅ 著作権表示不要
 
-#### Pixabay API（オプション・フォールバック）
-
-1. [Pixabay API](https://pixabay.com/api/docs/)にアクセス
-2. アカウント登録
-3. APIキーを取得
-4. **メモ**: `PIXABAY_API_KEY=YOUR_KEY_HERE`
-
+#### **Pixabay API（フォールバック）**
+1. [Pixabay API](https://pixabay.com/api/docs/) で登録
+2. APIキーをコピー
+```bash
+PIXABAY_API_KEY=YOUR_PIXABAY_KEY
+```
 **動作の仕組み:**
-
 1. スクリプトから自動的にキーワードを抽出（例：「経済」→ "economy, finance, business"）
 2. Pexels/Pixabay APIから関連する映像を検索
 3. 複数クリップを自動ダウンロード
@@ -399,24 +240,103 @@ uv run python test_upload.py
    - カラーグレーディング
 5. 音声+字幕を合成して最終動画を出力
 
-**フォールバック動作:**
+### **4.6. VOICEVOX Nemo（無料TTSバックアップ）**
+**推奨:** ElevenLabs制限時の無料バックアップとして設定
+VOICEVOX Nemoは完全無料のオープンソース日本語音声合成エンジンです。Dockerで実行します。
+**クイックスタート:**
+```bash
+# VOICEVOX Nemo専用管理スクリプトを使用
+# 起動
+./scripts/voicevox_manager.sh start
+# 停止
+./scripts/voicevox_manager.sh stop
+# ステータス確認
+./scripts/voicevox_manager.sh status
+# 再起動
+./scripts/voicevox_manager.sh restart
+# ログ表示
+./scripts/voicevox_manager.sh logs
+# 音声合成テスト
+./scripts/voicevox_manager.sh test
+```
+**設定（`config.yaml`）:**
+```yaml
+tts:
+  voicevox:
+    enabled: true
+    port: 50121
+    speaker: 1  # 話者ID（1: 四国めたん）
+```
+**特徴:**
+- ✅ 完全無料・オープンソース
+- ✅ 日本語音声合成に最適
+- ✅ ElevenLabs失敗時に自動フォールバック
+- ✅ 専用管理スクリプトで安定稼働
+- ✅ ログ管理・ヘルスチェック機能付き
 
-ストック映像の取得に失敗した場合、自動的に既存の静的背景（テーマベース・A/Bテスト済み）にフォールバックします。
+#### **Docker Engine インストール（WSL2環境）**
+**前提条件:**
+- WSL2 Ubuntu 22.04以上
+**リポジトリのセットアップ:**
+```bash
+# GPGキーの追加
+sudo apt-get update
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+# aptリポジトリの追加
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+```
+**Dockerパッケージのインストール:**
+```bash
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+**動作確認:**
+```bash
+sudo docker run hello-world
+```
+**権限設定（重要）:**
+```bash
+# dockerグループにユーザーを追加
+sudo usermod -aG docker $USER
+# グループ変更を即座に反映
+newgrp docker
+# docker.sockのパーミッション設定
+sudo chown root:docker /var/run/docker.sock
+sudo chmod 660 /var/run/docker.sock
+# 動作確認（sudoなしで実行できることを確認）
+docker ps
+```
+### **4.7. Discord Webhook（通知）**
+**取得手順:**
+1. Discordサーバーで「サーバー設定」→「連携サービス」→「ウェブフック」を開く
+2. 「新しいウェブフック」をクリック
+3. ウェブフック名とチャンネルを設定
+4. 「ウェブフックURLをコピー」をクリック
+```bash
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your_webhook
+```
 
-## Google Sheetsセットアップ
-
-### 1. スプレッドシート作成
-
-1. [Google Sheets](https://sheets.google.com/)で新しいシートを作成
+***
+## **5. 環境構築**
+### **5.1. Google Sheetsセットアップ**
+#### **スプレッドシート作成**
+1. [Google Sheets](https://sheets.google.com/) で新しいシートを作成
 2. シート名を設定（例：「YouTuber Automation」）
 3. スプレッドシートIDをURLから取得
    - URL: `https://docs.google.com/spreadsheets/d/[SHEET_ID]/edit`
-4. **メモ**: `GOOGLE_SHEET_ID=[SHEET_ID]`
+4. `.env`に設定:
+   ```bash
+   GOOGLE_SHEET_ID=[SHEET_ID]
+   ```
 
-### 2. runsシート設計
-
+#### **runsシート設計**
 シート名：`runs`
-
 | カラム名 | 説明 | データ型 |
 |---------|------|---------|
 | run_id | 実行ID | 文字列 |
@@ -439,10 +359,8 @@ uv run python test_upload.py
 | first_comment | 最初のコメント | 文字列 |
 | error_log | エラーログ | 文字列 |
 
-### 3. promptsシート設計
-
+#### **promptsシート設計**
 シート名：`prompts`
-
 | カラム名 | 説明 | 初期値例 |
 |---------|------|---------|
 | prompt_a | ニュース収集 | 「今日の重要な経済ニュースを3-5件収集し、各項目について...」 |
@@ -450,1138 +368,113 @@ uv run python test_upload.py
 | prompt_c | メタ生成 | 「動画のタイトル、説明文、タグを生成してください...」 |
 | prompt_d | コメント生成 | 「この動画を聞いている女の子の立場で、最初のコメントを...」 |
 
-### 4. 権限設定
-
+#### **権限設定**
 1. サービスアカウントにシートへの編集権限を付与
 2. シートの共有設定で、サービスアカウントのメールアドレスを追加
 3. 権限：「編集者」に設定
 
-## Google Drive設定
-
-### フォルダ作成と権限
-
+### **5.2. Google Drive設定**
+**フォルダ作成と権限:**
 1. Google Driveで専用フォルダを作成（例：「YouTuber Content」）
 2. フォルダIDをURLから取得
    - URL: `https://drive.google.com/drive/folders/[FOLDER_ID]`
-3. **メモ**: `GOOGLE_DRIVE_FOLDER_ID=[FOLDER_ID]`
+3. `.env`に設定:
+   ```bash
+   GOOGLE_DRIVE_FOLDER_ID=[FOLDER_ID]
+   ```
 4. サービスアカウントにフォルダの編集権限を付与
 
-## 環境変数設定
-
-### .env ファイルテンプレート
-
+### **5.3. 環境変数設定（.envファイル）**
+プロジェクトのルートディレクトリに`.env`ファイルを作成します。
+**完全な.envファイルテンプレート:**
 ```bash
 # ===== AI APIs =====
 # 注意: SerpAPIは認証が複雑なため使用しません
-
 # Perplexity（ニュース収集 - 推奨）
-PERPLEXITY_API_KEY=pplx-...
-
-# 🆕 API Key Rotation（複数キー設定で自動ローテーション）
-# Perplexity 複数キー（Rate limit対策）
-PERPLEXITY_API_KEY_2=pplx-...
-PERPLEXITY_API_KEY_3=pplx-...
-
-# Gemini API（台本生成・CrewAI）
-GEMINI_API_KEY=AIza...
-
-# Gemini 複数キー（Rate limit対策・自動ローテーション）
-GEMINI_API_KEY_2=AIza...
-GEMINI_API_KEY_3=AIza...
-GEMINI_API_KEY_4=AIza...
-GEMINI_API_KEY_5=AIza...
-
-# 🆕 NewsAPI.org（Perplexityフォールバック - 無料100リクエスト/日）
-# 取得先: https://newsapi.org/register
-NEWSAPI_API_KEY=your_newsapi_key
-
-# ElevenLabs（音声合成）
-ELEVENLABS_API_KEY=sk_...
-
-# ===== Stock Footage APIs（無料・無制限） =====
-# Pexels API（プロフェッショナルなB-roll映像）
-# 取得先: https://www.pexels.com/api/
-PEXELS_API_KEY=YOUR_PEXELS_API_KEY
-
-# Pixabay API（フォールバック用）
-# 取得先: https://pixabay.com/api/docs/
-PIXABAY_API_KEY=YOUR_PIXABAY_API_KEY
-
-# ===== Google Cloud Services =====
-# サービスアカウント認証（Sheets, Drive, Vertex AI）
-GOOGLE_APPLICATION_CREDENTIALS=secret/service-account-key.json
-
-# Google Sheets（実行履歴・プロンプト管理）
-GOOGLE_SHEET_ID=1ABC...
-
-# Google Drive（動画バックアップ）
-GOOGLE_DRIVE_FOLDER_ID=1DEF...
-
-# YouTube（動画アップロード - OAuth必須）
-YOUTUBE_CLIENT_SECRET=secret/youtube_oauth_client.json
-# または JSON 文字列を直接設定 (推奨: ファイルパス)
-# YOUTUBE_CLIENT_SECRET='{"web": {"client_id": "...", "client_secret": "...", ...}}'
-
-# ===== CrewAI設定 =====
-# CrewAI WOW Script Creation Crew の有効化
-USE_CREWAI_SCRIPT_GENERATION=true
-
-# 従来の3段階品質チェック（CrewAI無効時のみ）
-USE_THREE_STAGE_QUALITY_CHECK=true
-
-# 品質基準（オプション - config.yamlで設定推奨）
-# WOW_SCORE_MIN=8.0
-# JAPANESE_PURITY_MIN=95.0
-# RETENTION_PREDICTION_MIN=50.0
-
-# ===== Video Generation Settings =====
-# ストック映像B-rollを使用するか（無料、プロフェッショナル品質）
-ENABLE_STOCK_FOOTAGE=true
-
-# 動画あたりのストック映像クリップ数（1-10推奨）
-STOCK_CLIPS_PER_VIDEO=5
-
-# ===== 通知 =====
-# Discord Webhook（実行結果通知）
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-
-# Slack（オプション）
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
-
-# ===== 開発設定 =====
-DEBUG=true
-LOG_LEVEL=INFO
-
-# ローカルストレージ
-LOCAL_OUTPUT_DIR=output
-SAVE_LOCAL_BACKUP=true
-```
-
-### 本番環境での設定
-
-#### Render環境変数
-
-1. Renderダッシュボードでサービスを選択
-2. Environment Variablesセクションで上記の変数を設定
-3. JSONファイルは内容をそのまま環境変数として設定
-
-#### GitHub Secretsの設定
-
-1. GitHubリポジトリのSettings → Secrets and variables → Actions
-2. Repository secretsに必要な変数を設定
-
-## Python環境セットアップ
-
-### requirements.txt
-
-```txt
-google-api-python-client==2.108.0
-google-auth==2.23.4
-google-auth-oauthlib==1.1.0
-google-auth-httplib2==0.1.1
-httpx==0.25.1
-elevenlabs==0.3.0
-pydub==0.25.1
-ffmpeg-python==0.2.0
-Pillow==10.1.0
-python-slugify==8.0.1
-rapidfuzz==3.5.2
-pandas==2.1.3
-requests==2.31.0
-python-dotenv==1.0.0
-```
-
-### ローカル開発環境
-
-```bash
-# 仮想環境作成
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# または
-venv\Scripts\activate  # Windows
-
-# 依存関係インストール
-pip install -r requirements.txt
-
-# FFmpegのインストール（OS別）
-# Ubuntu/Debian
-sudo apt update && sudo apt install ffmpeg
-
-# macOS
-brew install ffmpeg
-
-# Windows
-# https://ffmpeg.org/download.html からダウンロード
-```
-
-### 設定確認スクリプト
-
-```python
-# test_setup.py
-import os
-from google.oauth2 import service_account
-import httpx
-
-def test_apis():
-    """API接続テスト"""
-
-    # Perplexity
-    perplexity_key = os.getenv('PERPLEXITY_API_KEY')
-    print(f"✓ Perplexity API Key: {'設定済み' if perplexity_key else '未設定'}")
-
-    # Google Credentials
-    creds_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-    if creds_path and os.path.exists(creds_path):
-        print("✓ Google Credentials: 設定済み")
-    else:
-        print("✗ Google Credentials: 未設定または不正なパス")
-
-    # Gemini
-    gemini_key = os.getenv('GEMINI_API_KEY')
-    print(f"✓ Gemini API Key: {'設定済み' if gemini_key else '未設定'}")
-
-    # ElevenLabs
-    elevenlabs_key = os.getenv('ELEVENLABS_API_KEY')
-    print(f"✓ ElevenLabs API Key: {'設定済み' if elevenlabs_key else '未設定'}")
-
-    # Discord
-    discord_url = os.getenv('DISCORD_WEBHOOK_URL')
-    print(f"✓ Discord Webhook: {'設定済み' if discord_url else '未設定'}")
-
-if __name__ == "__main__":
-    test_apis()
-```
-
-### 実行テスト
-
-```bash
-# 設定確認
-python test_setup.py
-
-# 依存関係テスト
-python -c "import google.oauth2.service_account; print('Google Auth OK')"
-python -c "import elevenlabs; print('ElevenLabs OK')"
-python -c "import pydub; print('Pydub OK')"
-python -c "import crewai; print('CrewAI OK')"
-
-# CrewAI統合テスト（推奨）
-python3 test_crewai_flow.py
-```
-
-**期待される出力**:
-```
-============================================================
-🧪 CrewAI WOW Script Creation Flow テスト開始
-============================================================
-
-📋 テストニュース:
-  1. 日銀、金融政策の転換を示唆
-  2. 新NISAが投資ブームを加速
-  3. AI関連株が市場を牽引
-
-🚀 CrewAI実行中...
-✅ Created agent: deep_news_analyzer
-✅ Created agent: curiosity_gap_researcher
-✅ Created agent: emotional_story_architect
-✅ Created agent: script_writer
-✅ Created agent: engagement_optimizer
-✅ Created agent: quality_guardian
-✅ Created agent: japanese_purity_polisher
-✅ WOW Script Creation Crew: All 7 agents created successfully
-✅ Created 7 tasks for WOW Script Creation Crew
-🚀 Starting WOW Script Creation Crew execution...
-```
-
-## CrewAI統合のトラブルシューティング
-
-### エラー: "Vertex AI API has not been used"
-
-**完全なエラーメッセージ**:
-```
-Vertex AI API has not been used in project probable-setup-435816-r8
-before or it is disabled.
-```
-
-**解決策（3つの選択肢）**:
-
-#### 解決策1: Vertex AI APIを有効化（推奨）
-
-1. 以下のURLにアクセス:
-   ```
-   https://console.developers.google.com/apis/api/aiplatform.googleapis.com/overview?project=probable-setup-435816-r8
-   ```
-
-2. 「APIを有効にする」をクリック
-
-3. 数分待ってから再実行:
-   ```bash
-   python3 test_crewai_flow.py
-   ```
-
-#### 解決策2: 直接Gemini APIを使用（簡単）
-
-`app/config_prompts/prompts/agents.yaml` を編集:
-```yaml
-agents:
-  deep_news_analyzer:
-    model: gemini-pro  # または gemini-1.5-pro
-    temperature: 0.7
-    # ...他のエージェントも同様に変更
-```
-
-#### 解決策3: CrewAIを一時的に無効化
-
-`.env` ファイルに追加:
-```env
-USE_CREWAI_SCRIPT_GENERATION=false
-```
-
-この場合、従来の3段階品質チェックシステムが使用されます。
-
-### エラー: "Agent creation failed"
-
-**原因**: プロンプトファイルが見つからない
-
-**解決策**:
-```bash
-# プロンプトディレクトリの確認
-ls -la app/config_prompts/prompts/
-
-# 必要なファイル:
-# - agents.yaml
-# - analysis.yaml
-# - script_generation.yaml
-# - quality_check.yaml
-```
-
-ファイルが存在しない場合、Gitから最新版を取得してください。
-
-### エラー: "ModuleNotFoundError: No module named 'crewai'"
-
-**解決策**:
-```bash
-# CrewAIをインストール
-pip install crewai crewai-tools
-
-# または requirements.txt から
-pip install -r requirements.txt
-```
-
-### CrewAI パフォーマンスの問題
-
-**症状**: 台本生成に時間がかかりすぎる
-
-**解決策**:
-
-1. **並列処理を有効化**:
-   `config.yaml` を編集:
-   ```yaml
-   crew:
-     parallel_analysis: true
-   ```
-
-2. **より高速なモデルを使用**:
-   ```yaml
-   agents:
-     deep_news_analyzer:
-       model: gemini-1.5-flash  # より高速
-   ```
-
-3. **品質ループ回数を調整**:
-   ```yaml
-   crew:
-     max_quality_iterations: 1  # デフォルト: 2
-   ```
-
-## トラブルシューティング
-
-### Phase 3関連の問題（2025年10月3日対応）
-
-#### 字幕に英語が大量に混入する
-
-**症状**:
-```
-Subtitle contains English: 'The user has provided a detailed task description'
-Could not clean all English from subtitle: ['user', 'has', 'provided', 'Task', 'Agent', 'json', 'wow_score']
-```
-
-**原因**: CrewAI Agent（特にTask 6-7）が内部の思考プロセスをJSON出力に含めている
-
-**解決済み**: `app/config_prompts/prompts/quality_check.yaml` を最新版に更新
-```bash
-git pull origin main
-# または手動で quality_check.yaml を編集
-```
-
-**確認方法**:
-```bash
-# Task 7のプロンプトに以下が含まれているか確認
-grep -A 5 "最終出力は、以下のJSON形式のみを出力" app/config_prompts/prompts/quality_check.yaml
-```
-
-期待される出力:
-```yaml
-【重要】最終出力は、以下のJSON形式のみを出力してください。説明文、分析、コメント等は一切含めないでください。
-必ずMarkdownのコードブロック（```json ... ```）で囲んでください。
-
-あなたの思考プロセスや分析は含めず、JSONのみを出力してください。
-```
-
-#### 動画生成が完全に失敗する
-
-**症状**:
-```
-Video generation failed: ffmpeg error (see stderr output for detail)
-Generating fallback video...
-Fallback video generation error: 'preset'
-# または
-Fallback video generation error: 'crf'
-Step 6 failed: Video generation failed
-```
-
-**原因**: ffmpegパラメータが重複指定されている
-- `_get_quality_settings()`は既に`preset`、`crf`、`c:v`、`c:a`等を含む
-- 明示的に`crf=28`や`vcodec='libx264'`等を追加すると衝突する
-
-**解決済み**: `app/video.py` の全ての動画生成パスを修正
-- `_generate_fallback_video` (line 616-618)
-- `_generate_with_stock_footage` (line 573-578)
-
-**確認方法**:
-```bash
-# 3箇所全てで _get_quality_settings() のみが使われているか確認
-grep -B 2 -A 2 "\*\*self._get_quality_settings()" app/video.py
-```
-
-期待される出力（3箇所）:
-```python
-# 1. Main generation (line 119-125)
-stream = ffmpeg.output(
-    stream,
-    audio_stream,
-    output_path,
-    vf=self._build_subtitle_filter(subtitle_path),
-    **self._get_quality_settings(),
-).overwrite_output()
-
-# 2. Stock footage (line 573-578)
-output = ffmpeg.output(
-    video_with_subs,
-    audio_stream,
-    output_path,
-    **self._get_quality_settings(),
-).overwrite_output()
-
-# 3. Fallback (line 616-618)
-stream = ffmpeg.output(
-    stream, audio_stream, output_path, **quality_settings
-).overwrite_output()
-```
-
-#### スクリプトが話者形式でない
-
-**症状**:
-```
-Script does not have proper speaker format
-This indicates CrewAI did not follow the output format instructions.
-No speaker format detected, treating entire text as narrator
-```
-
-**原因**: Agent 7のfinal_scriptフィールドに話者形式が含まれていない
-
-**対処方法**:
-1. `app/config_prompts/prompts/quality_check.yaml` のTask 7が最新版であることを確認
-2. 以下の行が含まれているか確認:
-```yaml
-"final_script": "日本語純度100%の最終完成台本（必ず「田中: セリフ」形式）",
-```
-3. Agent promptにも明示:
-```yaml
-- final_scriptは必ず「話者名: セリフ」の形式で記述してください。**（重要：JSON内の`final_script`の値もこの形式を厳守すること）**
-```
-
-### VOICEVOX Nemo関連の問題
-
-**詳細なトラブルシューティングは [`VOICEVOX_SETUP.md`](./VOICEVOX_SETUP.md) を参照してください。**
-
-#### 問題: Dockerコマンドが見つからない（WSL2環境）
-
-**症状:**
-```bash
-The command 'docker' could not be found in this WSL 2 distro.
-```
-
-**解決策:**
-1. Docker Desktop for Windowsを起動
-2. Settings → Resources → WSL Integration
-3. 使用中のWSL2ディストリビューションにチェック
-4. Apply & Restart
-
-**詳細**: [VOICEVOX_SETUP.md - 問題1](./VOICEVOX_SETUP.md#問題1-dockerコマンドが見つからない)
-
-#### 問題: VOICEVOX Nemoが起動しない
-
-**解決策:**
-```bash
-# ステータス確認
-./scripts/voicevox_manager.sh status
-
-# ログ確認
-./scripts/voicevox_manager.sh logs
-
-# 再起動
-./scripts/voicevox_manager.sh restart
-```
-
-**詳細**: [VOICEVOX_SETUP.md - トラブルシューティング](./VOICEVOX_SETUP.md#トラブルシューティング)
-
-#### 代替手段: Dockerが使えない場合
-
-システムは自動的に以下のTTSにフォールバックします：
-- gTTS（Google TTS Free）
-- pyttsx3（オフライン）
-
-**確認:**
-```bash
-python -m app.verify
-# 出力: ⚠️ VOICEVOX Nemo not available - will use fallback TTS
-```
-
-### よくある問題
-
-1. **Google認証エラー**
-   - サービスアカウントキーファイルのパスを確認
-   - 権限設定（SheetsとDriveへのアクセス）を確認
-   - **YouTube APIの場合**: OAuth 2.0 クライアントIDのJSONファイルが正しい形式（トップレベルが `web` または `installed`）であることを確認してください。サービスアカウントキーのJSONファイルはYouTube APIの認証には使用できません。
-
-2. **API制限エラー**
-   - 各APIの使用量制限を確認
-   - 複数キーの設定を検討
-
-3. **FFmpegエラー**
-   - システムにFFmpegがインストールされているか確認
-   - PATHが正しく設定されているか確認
-
-## 自動実行の設定（ローカル環境）
-
-### 概要
-
-YouTube動画の自動生成・アップロードを毎日定時実行するシステムです。
-
-### セットアップ方法
-
-#### 方法1: Systemd Timer（推奨 - Linux）
-
-**1. サービスとタイマーをインストール:**
-```bash
-sudo cp systemd/youtube-automation.service /etc/systemd/system/
-sudo cp systemd/youtube-automation.timer /etc/systemd/system/
-```
-
-**2. Systemdをリロード:**
-```bash
-sudo systemctl daemon-reload
-```
-
-**3. タイマーを有効化して起動:**
-```bash
-sudo systemctl enable --now youtube-automation.timer
-```
-
-**4. 状態確認:**
-```bash
-# タイマーの状態確認
-sudo systemctl status youtube-automation.timer
-
-# 次回実行時刻の確認
-sudo systemctl list-timers --all | grep youtube
-```
-
-**5. ログ確認:**
-```bash
-# Systemdログ
-journalctl -u youtube-automation.service -f
-
-# アプリケーションログ
-tail -f logs/systemd.log
-tail -f logs/daily_run_*.log
-```
-
-**6. 手動実行（テスト）:**
-```bash
-sudo systemctl start youtube-automation.service
-```
-
-#### 方法2: Cron（代替方法）
-
-**1. Crontabを編集:**
-```bash
-crontab -e
-```
-
-**2. 毎日9時に実行する設定を追加:**
-```cron
-# 毎日9:00 AMに実行
-0 9 * * * /home/kafka/projects/youtuber/run_daily.sh >> /home/kafka/projects/youtuber/logs/cron.log 2>&1
-```
-
-**3. Crontabを確認:**
-```bash
-crontab -l
-```
-
-**Cron時刻の書式:**
-```
-分 時 日 月 曜日 コマンド
-0  9  *  *  *    実行するコマンド
-
-例:
-0 9 * * *     # 毎日9:00
-0 */6 * * *   # 6時間ごと
-0 9 * * 1     # 毎週月曜9:00
-0 9 1 * *     # 毎月1日9:00
-```
-
-#### 方法3: 手動実行
-
-**シェルスクリプトから:**
-```bash
-./run_daily.sh
-```
-
-**Pythonから直接:**
-```bash
-source .venv/bin/activate
-python3 -m app.main daily
-```
-
-### 実行時刻の変更
-
-#### Systemdの場合
-
-`/etc/systemd/system/youtube-automation.timer` を編集:
-```ini
-[Timer]
-# 毎日9:00に実行
-OnCalendar=*-*-* 09:00:00
-
-# 他の例:
-# OnCalendar=*-*-* 06:00:00  # 毎日6:00
-# OnCalendar=Mon *-*-* 09:00:00  # 毎週月曜9:00
-# OnCalendar=*-*-01 09:00:00  # 毎月1日9:00
-```
-
-変更後は再読み込み:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart youtube-automation.timer
-```
-
-#### Cronの場合
-
-`crontab -e` で時刻を編集してください。
-
-### ログとモニタリング
-
-**ログファイルの場所:**
-- 日次実行ログ: `logs/daily_run_YYYYMMDD_HHMMSS.log`
-- Systemdログ: `logs/systemd.log`
-- Systemdエラーログ: `logs/systemd-error.log`
-- アプリケーションログ: `logs/app.log`
-- Cronログ: `logs/cron.log`（Cron使用時）
-
-**最終実行結果の確認:**
-```bash
-# Systemdの場合
-sudo systemctl status youtube-automation.service
-
-# ログから確認
-tail -n 100 logs/daily_run_*.log | grep -E "(Starting|completed|failed)"
-```
-
-**Discord通知:**
-
-`.env`で`DISCORD_WEBHOOK_URL`を設定すると、実行結果が自動通知されます：
-- ✅ 成功: 動画URL、実行時間、生成ファイル数
-- ❌ 失敗: エラー内容、失敗したステップ
-
-### トラブルシューティング
-
-#### サービスが起動しない
-
-```bash
-# サービスログを確認
-journalctl -u youtube-automation.service -n 50
-
-# 手動でテスト実行
-./run_daily.sh
-```
-
-**よくある原因:**
-- 仮想環境のパスが間違っている
-- `.env`ファイルが見つからない
-- 実行権限がない: `chmod +x run_daily.sh`
-
-#### タイマーがトリガーされない
-
-```bash
-# タイマーがアクティブか確認
-sudo systemctl list-timers --all | grep youtube
-
-# タイマーの状態確認
-sudo systemctl status youtube-automation.timer
-```
-
-**確認事項:**
-- タイマーが有効化されているか: `sudo systemctl enable youtube-automation.timer`
-- 時刻設定が正しいか: `/etc/systemd/system/youtube-automation.timer`
-
-#### 仮想環境のエラー
-
-```bash
-# 仮想環境を再作成
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-#### 権限エラー
-
-```bash
-# ログディレクトリの権限確認
-ls -ld logs/
-chmod 755 logs/
-
-# スクリプトの実行権限確認
-chmod +x run_daily.sh
-```
-
-### 自動化の無効化
-
-#### Systemdの場合
-
-```bash
-# タイマーを停止して無効化
-sudo systemctl stop youtube-automation.timer
-sudo systemctl disable youtube-automation.timer
-
-# サービスファイルを削除（完全に削除する場合）
-sudo rm /etc/systemd/system/youtube-automation.{service,timer}
-sudo systemctl daemon-reload
-```
-
-#### Cronの場合
-
-```bash
-# Crontabを編集して該当行を削除またはコメントアウト
-crontab -e
-# 行頭に # を追加: # 0 9 * * * /home/kafka/projects/youtuber/run_daily.sh
-```
-
-### セキュリティ注意事項
-
-**重要:**
-- `.env`ファイルのパーミッションを制限: `chmod 600 .env`
-- `.env`ファイルは絶対にGitにコミットしない
-- APIキーが露出した場合は即座にローテーション
-- ログファイルを定期的にレビュー
-- `token.pickle`（YouTube認証）もGitにコミットしない
-
-**推奨設定:**
-```bash
-# 機密ファイルの権限設定
-chmod 600 .env
-chmod 600 token.pickle
-chmod 600 secret/*.json
-chmod 700 secret/
-```
-
-### 次のステップ
-
-環境構築が完了したら、[実装ガイド](./implementation.md)に進んでください。
-
-
-
-# 環境構築とセットアップガイド（完全版）
-
-添付の最新ファイル内容を反映し、**最新の実装状況とAPI分析を統合**したセットアップガイドの完全版を作成しました。
-
-## 🎉 最新アップデート
-
-### **Phase 1完了**: CrewAI統合済み
-このシステムは**WOW Script Creation Crew**を搭載しています。7つのAIエージェントが協力して、視聴維持率50%+を目指す高品質な台本を自動生成します 。[1][2]
-
-### **🆕 Phase 2完了**: API安定性強化（2025年10月3日）
-**動作安定性を大幅に向上させる4つの新機能を実装しました** :[3][1]
-
-#### **1. API Key Rotation（自動ローテーション）**
-- **Gemini/Perplexity**: 複数キーをプールして自動切替
-- **Rate limit対策**: 429エラー検知→5分待機→別キーで継続
-- **成功率ベース選択**: 最適なキーを自動選択
-- **詳細**: `app/api_rotation.py`
-
-#### **2. NewsAPI.org フォールバック**
-- **3段階フォールバック**: Perplexity → NewsAPI → ダミーニュース
-- **無料**: 100リクエスト/日（開発用十分）
-- **自動切替**: Perplexity全失敗時に自動でNewsAPIへ
-
-#### **3. TTS並列度の動的調整**
-- **短い動画（5分未満）**: 4並列（高速）
-- **中程度（5-15分）**: 3並列（バランス）
-- **長い動画（15分以上）**: 2並列（安定性重視）
-- **自動最適化**: 動画長から推定して自動調整
-
-#### **4. Google Sheets プロンプトのローカルキャッシュ**
-- **TTL 24時間**: Sheets取得成功時に自動保存
-- **自動フォールバック**: Sheets失敗時にキャッシュから読込
-- **高可用性**: Sheets接続なしでも実行可能
-
-### **🎬 Stock Footage統合完了**
-**プロフェッショナルなB-roll映像機能を実装しました** :[4]
-
-- **完全無料**: Pexels + Pixabay API統合
-- **自動キーワード抽出**: 日本語スクリプト → 英語検索語に変換
-- **HD/4K品質**: Ken Burns効果、クロスフェード、カラーグレーディング
-- **信頼性**: 3段階フォールバック（Stock → Static → Simple）
-
-***
-
-## 事前準備チェックリスト
-
-### **必要なアカウント**
-
-**注意**: SerpAPIは認証が複雑なため使用しません。ニュース収集にはPerplexity/NewsAPIを使用します。
-
-- [ ] **Perplexity**: ニュース収集用（推奨）
-  - 🆕 **推奨**: 複数アカウント（Rate limit対策・自動ローテーション）
-  - 取得先: https://www.perplexity.ai/
-- [ ] **NewsAPI.org**: Perplexityフォールバック用（無料100リクエスト/日）🆕[5]
-  - 取得先: https://newsapi.org/register
-- [ ] **Google Cloud**: Gemini API・Sheets・Drive・YouTube Data API用
-  - ⚠️ **重要**: Vertex AI APIまたは直接のGemini API（CrewAI用）
-  - 🆕 **推奨**: 複数Geminiキー（Rate limit対策・自動ローテーション）
-- [ ] **ElevenLabs**: TTS（音声合成）用[6]
-- [ ] **Pexels**: 無料ストック映像API用 🆕[4]
-- [ ] **Pixabay**: 無料ストック映像API用（オプション）🆕
-- [ ] **Discord**: 運用通知用（Webhook URL）
-- [ ] **Render**: 実行基盤（Cronジョブ）用（オプション）
-- [ ] **GitHub**: コード管理・自動デプロイ用（オプション）
-
-***
-
-## API詳細仕様と対策
-
-**注意**: SerpAPIは認証が複雑なため使用しません。ニュース収集にはPerplexity/NewsAPIを使用します。
-
-### **ElevenLabs TTS API**
-
-| プラン | 月額料金 | 文字数制限 | オーバーエージ料金 | 推奨用途 |
-|--------|----------|------------|-------------------|----------|
-| **Free** | $0 | 10,000文字 | 利用不可 | 開発・テスト |
-| **Starter** | $5 | 30,000文字 | $0.30/1,000文字 | 小規模運用 |
-| **Creator** | $22 | 100,000文字 | $0.24/1,000文字 | 中規模運用 |
-| **Pro** | $99 | 500,000文字 | $0.18/1,000文字 | 大規模運用 |
-
-**検出されたエラー**: `quota_exceeded - You have 0 credits remaining`[7]
-**推奨対応**: Starter プラン（$5/月）への移行[6]
-
-### **Google Gemini API**
-
-| ティア | 条件 | RPM制限 | 日次制限 | 料金体系 |
-|--------|------|---------|----------|----------|
-| **Free** | なし | 15 RPM | 50-1,500 RPD | 無料 |
-| **Tier 1** | 課金設定 | 150 RPM | 1,000 RPD | $0.000625/1Kトークン |
-| **Tier 2** | $250以上 | 1,000 RPM | 50,000 RPD | 従量課金 |
-| **Tier 3** | $1,000以上 | 2,000 RPM | 無制限 | 従量課金 |
-
-**検出されたエラー**: `429 Too Many Requests - limit: 50`[7]
-**実装済み対策**: 複数キー自動ローテーション[1]
-
-### **Google Sheets API**
-
-- **料金**: **完全無料**（超過時も課金なし）
-- **制限**: 読み取り300/分、書き込み100/分/プロジェクト
-- **実装済み対策**: ローカルキャッシュ（TTL 24時間）[1]
-
-### **VOICEVOX Nemo（無料代替案）**
-
-- **料金**: **完全無料**のオープンソース
-- **導入**: HTTPサーバー（ポート50121）
-- **用途**: ElevenLabs制限時のバックアップTTS[8]
-
-***
-
-## APIキー取得と設定
-
-**重要**: SerpAPIは認証が複雑なため使用しません。ニュース収集はPerplexity/NewsAPIで行います。
-
-### **1. Perplexity API（推奨・複数キー推奨）**
-
-1. [Perplexity AI](https://www.perplexity.ai/)にアクセス
-2. アカウント作成・ログイン
-3. Settings → API Keysで新しいキーを生成
-4. **推奨**: 3つのキーを用意（Rate limit対策）
-
-**.env設定例**:
-```bash
 PERPLEXITY_API_KEY=pplx-key1
-PERPLEXITY_API_KEY_2=pplx-key2
-PERPLEXITY_API_KEY_3=pplx-key3
-```
-
-### **2. NewsAPI.org（フォールバック）**
-
-1. [NewsAPI.org](https://newsapi.org/register)で無料アカウント作成
-2. APIキーをコピー
-3. **制限**: 100リクエスト/日（開発用十分）
-
-```bash
-NEWSAPI_API_KEY=your_newsapi_key
-```
-
-### **3. Google Gemini API（複数キー推奨）**
-
-#### **オプションA: Google AI Studio（推奨）**
-1. [Google AI Studio](https://makersuite.google.com/)でAPIキー作成
-2. **推奨**: 3-5個のキーを発行（台本生成安定化）
-
-```bash
-GEMINI_API_KEY=AIza-key1
-GEMINI_API_KEY_2=AIza-key2
-GEMINI_API_KEY_3=AIza-key3
-GEMINI_API_KEY_4=AIza-key4
-GEMINI_API_KEY_5=AIza-key5
-```
-
-#### **オプションB: Vertex AI API（本番環境）**
-1. [Google Cloud Console](https://console.cloud.google.com/)でプロジェクト作成
-2. Vertex AI APIを有効化
-3. サービスアカウント認証設定
-
-### **4. Stock Footage APIs（完全無料）**
-
-#### **Pexels API（推奨）**
-1. [Pexels API](https://www.pexels.com/api/)で無料登録
-2. **特徴**: 無制限・HD/4K・商用利用可・著作権表示不要
-
-```bash
-PEXELS_API_KEY=YOUR_PEXELS_KEY
-```
-
-#### **Pixabay API（フォールバック）**
-1. [Pixabay API](https://pixabay.com/api/docs/)で登録
-2. **用途**: Pexels補完用
-
-```bash
-PIXABAY_API_KEY=YOUR_PIXABAY_KEY
-```
-
-### **5. ElevenLabs TTS（音声合成）**
-
-1. [ElevenLabs](https://elevenlabs.io/)でアカウント作成
-2. SettingsのAPI Keysからキーを取得
-3. **推奨プラン**: Starter（$5/月、30,000文字）
-
-```bash
-ELEVENLABS_API_KEY=sk_your_key
-```
-
-**音声ID（Voice ID）の取得**:
-1. ElevenLabsの「Voices」タブから音声を選択
-2. Voice IDをコピー
-3. `.env`に設定:
-```bash
-TTS_VOICE_TANAKA=voice_id_here
-TTS_VOICE_SUZUKI=voice_id_here
-TTS_VOICE_NARRATOR=voice_id_here
-```
-
-### **6. Discord Webhook（通知）**
-
-1. Discordサーバー設定 → 連携サービス → ウェブフック
-2. 新しいウェブフックを作成
-3. URLをコピー
-
-```bash
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your_webhook
-```
-
-### **7. VOICEVOX Nemo（無料TTSバックアップ）**
-
-**推奨**: ElevenLabs制限時の無料バックアップとして設定
-
-#### 詳細なセットアップガイド
-
-**完全なセットアップ手順とトラブルシューティングは [`VOICEVOX_SETUP.md`](./VOICEVOX_SETUP.md) を参照してください。**
-
-#### クイックスタート
-
-VOICEVOX Nemo専用の管理スクリプトを用意しています：
-
-```bash
-# 起動
-./scripts/voicevox_manager.sh start
-
-# 停止
-./scripts/voicevox_manager.sh stop
-
-# ステータス確認
-./scripts/voicevox_manager.sh status
-
-# 再起動
-./scripts/voicevox_manager.sh restart
-
-# ログ表示
-./scripts/voicevox_manager.sh logs
-
-# 音声合成テスト
-./scripts/voicevox_manager.sh test
-```
-
-#### 設定
-
-`config.yaml`で有効化（デフォルトで有効）:
-```yaml
-tts:
-  voicevox:
-    enabled: true
-    port: 50121
-    speaker: 1  # 話者ID（1: 四国めたん）
-```
-
-#### 特徴
-
-- ✅ **完全無料・オープンソース**
-- ✅ **日本語音声合成に最適**
-- ✅ **ElevenLabs失敗時に自動フォールバック**
-- ✅ **専用管理スクリプトで安定稼働**
-- ✅ **ログ管理・ヘルスチェック機能付き**
-
-#### トラブルシューティング
-
-**Dockerコマンドが見つからない（WSL2環境）**:
-
-詳細は [`VOICEVOX_SETUP.md#問題1`](./VOICEVOX_SETUP.md#問題1-dockerコマンドが見つからない) を参照。
-
-簡易手順:
-1. Docker Desktop for Windowsを起動
-2. Settings → Resources → WSL Integration
-3. 使用中のWSL2ディストリビューションにチェック
-4. Apply & Restart
-
-**ポートが既に使用されている場合**:
-```bash
-# 使用中のプロセスを確認
-sudo lsof -i :50121
-
-# 既存コンテナを停止
-./scripts/voicevox_manager.sh stop
-```
-
-**その他の問題**: [`VOICEVOX_SETUP.md - トラブルシューティング`](./VOICEVOX_SETUP.md#トラブルシューティング)
-
-***
-
-## 完全な.envファイルテンプレート
-
-```bash
-# ===== AI APIs =====
-# 注意: SerpAPIは認証が複雑なため使用しません
-
-# Perplexity（ニュース収集 - 推奨）- 複数キー設定推奨
-PERPLEXITY_API_KEY=pplx-key1
-PERPLEXITY_API_KEY_2=pplx-key2
-PERPLEXITY_API_KEY_3=pplx-key3
-
 # Gemini API（台本生成・CrewAI）- 複数キー設定推奨
 GEMINI_API_KEY=AIza-key1
 GEMINI_API_KEY_2=AIza-key2
 GEMINI_API_KEY_3=AIza-key3
 GEMINI_API_KEY_4=AIza-key4
 GEMINI_API_KEY_5=AIza-key5
-
 # NewsAPI.org（Perplexityフォールバック - 無料100リクエスト/日）
 NEWSAPI_API_KEY=your_newsapi_key
-
 # ElevenLabs（音声合成）
 ELEVENLABS_API_KEY=sk_your_key
-
+# ElevenLabsで使用するボイスID
+TTS_VOICE_TANAKA=voice_id_here
+TTS_VOICE_SUZUKI=voice_id_here
+TTS_VOICE_NARRATOR=voice_id_here
 # ===== Stock Footage APIs（無料・無制限） =====
 # Pexels API（プロフェッショナルなB-roll映像）
 PEXELS_API_KEY=YOUR_PEXELS_API_KEY
-
 # Pixabay API（フォールバック用）
 PIXABAY_API_KEY=YOUR_PIXABAY_API_KEY
-
 # ===== Google Cloud Services =====
-# サービスアカウント認証
+# サービスアカウント認証（Sheets, Drive, Vertex AI）
 GOOGLE_APPLICATION_CREDENTIALS=secret/service-account-key.json
-
 # Google Sheets（実行履歴・プロンプト管理）
 GOOGLE_SHEET_ID=1ABC_your_sheet_id
-
 # Google Drive（動画バックアップ）
 GOOGLE_DRIVE_FOLDER_ID=1DEF_your_folder_id
-
 # YouTube（動画アップロード - OAuth必須）
 YOUTUBE_CLIENT_SECRET=secret/youtube_oauth_client.json
-
 # ===== CrewAI設定 =====
 # CrewAI WOW Script Creation Crew の有効化
 USE_CREWAI_SCRIPT_GENERATION=true
-
+# 従来の3段階品質チェック（CrewAI無効時のみ）
+USE_THREE_STAGE_QUALITY_CHECK=true
 # ===== Video Generation Settings =====
-# ストック映像B-rollを使用するか
+# ストック映像B-rollを使用するか（無料、プロフェッショナル品質）
 ENABLE_STOCK_FOOTAGE=true
-
-# 動画あたりのストック映像クリップ数
+# 動画あたりのストック映像クリップ数（1-10推奨）
 STOCK_CLIPS_PER_VIDEO=5
-
 # ===== 通知 =====
 # Discord Webhook（実行結果通知）
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your_webhook
-
+# Slack（オプション）
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/your_webhook
 # ===== 開発設定 =====
 DEBUG=true
 LOG_LEVEL=INFO
+# ローカルストレージ
 LOCAL_OUTPUT_DIR=output
 SAVE_LOCAL_BACKUP=true
 ```
 
+**セキュリティ設定（重要）:**
+```bash
+# ファイル権限を制限
+chmod 600 .env
+chmod 600 token.pickle  # YouTube認証トークン
+chmod 600 secret/*.json  # Google Cloudキー
+chmod 700 secret/
+```
+
+### **5.4. Python環境セットアップ**
+#### **仮想環境の作成**
+uv sync
+
+#### **FFmpegのインストール**
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install ffmpeg
+# macOS
+brew install ffmpeg
+# Windows
+# https://ffmpeg.org/download.html からダウンロード
+```
+
 ***
-
-## 実装完了状況とテスト結果
-
-### **✅ Phase 1完了項目**
-
-1. **API Key Rotation**: 5個のGeminiキー自動ローテーション[3]
-2. **NewsAPI.org フォールバック**: 4件のニュース取得成功確認
-3. **プロンプトキャッシュ**: TTL 24時間で正常動作
-4. **Stock Footage統合**: HD/4K品質のB-roll自動生成[4]
-
-### **📊 期待される改善効果**
-
-| 指標 | 改善前 | 改善後 | 効果 |
-|------|--------|--------|------|
-| ニュース収集可用性 | 99% | 99.99% | +0.99% |
-| 台本生成可用性 | 95% | 99.5% | +4.5% |
-| プロンプト可用性 | 90% | 99.9% | +9.9% |
-| 動画品質 | 静的背景 | HD/4K B-roll | プロ品質 |
-
-***
-
-## セットアップ検証手順
-
-### **1. 統合検証スクリプト（推奨）**
-
+## **6. システム検証**
+### **6.1. 統合検証スクリプト（推奨）**
 全ての環境設定を自動で検証します:
-
 ```bash
 # システム全体の検証（VOICEVOX Nemo自動起動含む）
 python -m app.verify
 ```
-
-**検証内容**:
+**検証内容:**
 - ✅ .envファイルの存在確認
 - ✅ 必須APIキーの設定確認（Gemini, Pixabay）
 - ✅ オプションAPIキーの確認（Perplexity, NewsAPI, ElevenLabs等）
@@ -1590,24 +483,23 @@ python -m app.verify
 - ✅ 仮想環境の確認
 - ✅ 音声合成のテスト
 
-**注意**: SerpAPIは使用しません。ニュース収集はPerplexity/NewsAPIを使用します。
-
-### **2. 個別環境確認**
+### **6.2. 個別環境確認**
 ```bash
 # 設定確認
 python test_setup.py
-
-# API安定性テスト
-python test_api_stability.py
+# 依存関係テスト
+python -c "import google.oauth2.service_account; print('Google Auth OK')"
+python -c "import elevenlabs; print('ElevenLabs OK')"
+python -c "import pydub; print('Pydub OK')"
+python -c "import crewai; print('CrewAI OK')"
 ```
 
-### **3. CrewAI統合テスト**
+### **6.3. CrewAI統合テスト**
 ```bash
 # サンプルニュースでCrewAI実行
 uv run python3 test_crewai_flow.py
 ```
-
-**期待される出力**:
+**期待される出力:**
 ```
 🧪 CrewAI WOW Script Creation Flow テスト開始
 ✅ Created agent: deep_news_analyzer
@@ -1615,13 +507,12 @@ uv run python3 test_crewai_flow.py
 🚀 Starting WOW Script Creation Crew execution...
 ```
 
-### **4. Stock Footage テスト**
+### **6.4. Stock Footage テスト**
 ```bash
 # Stock Footage統合テスト
 python test_stock_footage.py
 ```
-
-**期待される出力**:
+**期待される出力:**
 ```
 🧪 Stock Footage Integration Test Suite
 ✓ Pexels API Key: ✓ Configured
@@ -1631,57 +522,427 @@ python test_stock_footage.py
 ```
 
 ***
-
-## 緊急対応プラン
-
-### **即座の修正（1-2日以内）**
-
-1. **ElevenLabs**: Starterプラン（$5/月）契約
-2. **Gemini API**: 課金設定有効化（Tier 1移行）
-3. **VOICEVOX Nemo**: ローカル環境構築（バックアップ）
-
-### **設定ファイル修正**
-```yaml
-# スピーカー設定ファイル修正
-speakers:
-  - voice_id: "valid_elevenlabs_voice_id_1"
-  - voice_id: "valid_elevenlabs_voice_id_2"
-  - voice_id: "valid_elevenlabs_voice_id_3"
+## **7. 自動実行設定**
+### **7.1. Systemd Timer（推奨 - Linux）**
+**サービスとタイマーをインストール:**
+```bash
+sudo cp systemd/youtube-automation.service /etc/systemd/system/
+sudo cp systemd/youtube-automation.timer /etc/systemd/system/
+```
+**Systemdをリロード:**
+```bash
+sudo systemctl daemon-reload
+```
+**タイマーを有効化して起動:**
+```bash
+sudo systemctl enable --now youtube-automation.timer
+```
+**状態確認:**
+```bash
+# タイマーの状態確認
+sudo systemctl status youtube-automation.timer
+# 次回実行時刻の確認
+sudo systemctl list-timers --all | grep youtube
+```
+**ログ確認:**
+```bash
+# Systemdログ
+journalctl -u youtube-automation.service -f
+# アプリケーションログ
+tail -f logs/systemd.log
+tail -f logs/daily_run_*.log
+```
+**手動実行（テスト）:**
+```bash
+sudo systemctl start youtube-automation.service
 ```
 
+#### **実行時刻の変更**
+`/etc/systemd/system/youtube-automation.timer` を編集:
+```ini
+[Timer]
+# 毎日9:00に実行
+OnCalendar=*-*-* 09:00:00
+# 他の例:
+# OnCalendar=*-*-* 06:00:00  # 毎日6:00
+# OnCalendar=Mon *-*-* 09:00:00  # 毎週月曜9:00
+# OnCalendar=*-*-01 09:00:00  # 毎月1日9:00
+```
+変更後は再読み込み:
 ```bash
-# Google認証設定
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+sudo systemctl daemon-reload
+sudo systemctl restart youtube-automation.timer
+```
+
+### **7.2. Cron（代替方法）**
+**Crontabを編集:**
+```bash
+crontab -e
+```
+**毎日9時に実行する設定を追加:**
+```cron
+# 毎日9:00 AMに実行
+0 9 * * * /home/kafka/projects/youtuber/run_daily.sh >> /home/kafka/projects/youtuber/logs/cron.log 2>&1
+```
+**Crontabを確認:**
+```bash
+crontab -l
+```
+**Cron時刻の書式:**
+```
+分 時 日 月 曜日 コマンド
+0  9  *  *  *    実行するコマンド
+例:
+0 9 * * *     # 毎日9:00
+0 */6 * * *   # 6時間ごと
+0 9 * * 1     # 毎週月曜9:00
+0 9 1 * *     # 毎月1日9:00
+```
+
+### **7.3. 手動実行**
+**シェルスクリプトから:**
+```bash
+./run_daily.sh
+```
+**Pythonから直接:**
+```bash
+source .venv/bin/activate
+python3 -m app.main daily
+```
+
+### **7.4. ログとモニタリング**
+**ログファイルの場所:**
+- 日次実行ログ: `logs/daily_run_YYYYMMDD_HHMMSS.log`
+- Systemdログ: `logs/systemd.log`
+- Systemdエラーログ: `logs/systemd-error.log`
+- アプリケーションログ: `logs/app.log`
+- Cronログ: `logs/cron.log`（Cron使用時）
+**最終実行結果の確認:**
+```bash
+# Systemdの場合
+sudo systemctl status youtube-automation.service
+# ログから確認
+tail -n 100 logs/daily_run_*.log | grep -E "(Starting|completed|failed)"
+```
+**Discord通知:**
+`.env`で`DISCORD_WEBHOOK_URL`を設定すると、実行結果が自動通知されます:
+- ✅ 成功: 動画URL、実行時間、生成ファイル数
+- ❌ 失敗: エラー内容、失敗したステップ
+
+***
+### **8.2. CrewAI統合のトラブルシューティング**
+#### **エラー: "Vertex AI API has not been used"**
+**完全なエラーメッセージ:**
+```
+Vertex AI API has not been used in project probable-setup-435816-r8
+before or it is disabled.
+```
+**解決策:**
+
+`app/config_prompts/prompts/agents.yaml` を編集:
+```yaml
+agents:
+  deep_news_analyzer:
+    model: gemini-pro  # または gemini-1.5-pro
+    temperature: 0.7
+```
+
+#### **エラー: "ModuleNotFoundError: No module named 'crewai'"**
+**解決策:**
+```bash
+# CrewAIをインストール
+pip install crewai crewai-tools
+# または requirements.txt から
+pip install -r requirements.txt
+```
+
+### **8.3. よくある問題**
+#### **問題: Google認証エラー**
+**確認事項:**
+- サービスアカウントキーファイルのパスを確認
+- 権限設定（SheetsとDriveへのアクセス）を確認
+- **YouTube APIの場合**: OAuth 2.0 クライアントIDのJSONファイルが正しい形式（トップレベルが `web` または `installed`）であることを確認してください。サービスアカウントキーのJSONファイルはYouTube APIの認証には使用できません。
+
+#### **問題: API制限エラー（429 Error）**
+**対処法:**
+- 各APIの使用量制限を確認
+- 複数キーの設定を検討（Perplexity, Gemini）
+- 実行頻度を見直す（CronやSystemd Timerの設定を変更する）
+
+#### **問題: FFmpegエラー**
+**確認事項:**
+- システムにFFmpegがインストールされているか確認: `ffmpeg -version`
+- PATHが正しく設定されているか確認
+- `logs/app.log` でffmpegの具体的なエラーメッセージを確認
+
+#### **問題: サービスが起動しない（Systemd）**
+**対処法:**
+```bash
+# サービスログを確認
+journalctl -u youtube-automation.service -n 50
+# 手動でテスト実行
+./run_daily.sh
+```
+**よくある原因:**
+- 仮想環境のパスが間違っている
+- `.env`ファイルが見つからない
+- 実行権限がない: `chmod +x run_daily.sh`
+
+#### **問題: 権限エラー**
+**対処法:**
+```bash
+# ログディレクトリの権限確認
+ls -ld logs/
+chmod 755 logs/
+# スクリプトの実行権限確認
+chmod +x run_daily.sh
+# 機密ファイルの権限設定
+chmod 600 .env
+chmod 600 token.pickle
+chmod 600 secret/*.json
+chmod 700 secret/
 ```
 
 ***
+## **9. 運用と監視**
+### **9.1. モニタリング項目**
+**APIキー成功率:**
+- 各プロバイダー（Gemini, Perplexity）の成功率を追跡
+- `logs/api_rotation.log` で確認
+**キャッシュヒット率:**
+- Google Sheetsキャッシュの効果測定
+- TTL 24時間の有効性確認
+**Stock Footage品質:**
+- B-roll取得成功率
+- Pexels/Pixabay からのクリップダウンロード成功率
+- HD/4K品質の維持状況
+**コスト追跡:**
+- 月次API使用料金監視
+- ElevenLabs: 文字数カウント
+- Gemini API: トークン使用量
+- YouTube Data API: クォータ消費状況
 
-## 長期運用と監視
-
-### **モニタリング項目**
-
-- **APIキー成功率**: 各プロバイダーの成功率追跡
-- **キャッシュヒット率**: Google Sheetsキャッシュ効果測定
-- **Stock Footage品質**: B-roll取得成功率
-- **コスト追跡**: 月次API使用料金監視
-
-### **ログ確認**
+### **9.2. ログ確認コマンド**
 ```bash
 # API統計確認
 tail -f logs/daily_run_*.log | grep -E "(API|キー|成功率)"
-
 # Stock Footage動作確認
 tail -f logs/app.log | grep -E "(stock|footage|clips)"
+# エラーのみ抽出
+grep -i error logs/app.log | tail -n 50
+# 実行時間の分析
+grep "duration_sec" logs/daily_run_*.log | awk '{print $NF}' | sort -n
 ```
 
-この統合対応により、**月額$10-15程度で安定した大規模YouTubeコンテンツ生成**が実現できます。システムは**99.5%以上の可用性**と**プロフェッショナル品質の動画**を提供します 。[9][5][6][1][4]
+### **9.3. 自動化の無効化**
+#### **Systemdの場合**
+```bash
+# タイマーを停止して無効化
+sudo systemctl stop youtube-automation.timer
+sudo systemctl disable youtube-automation.timer
+# サービスファイルを削除（完全に削除する場合）
+sudo rm /etc/systemd/system/youtube-automation.{service,timer}
+sudo systemctl daemon-reload
+```
+#### **Cronの場合**
+```bash
+# Crontabを編集して該当行を削除またはコメントアウト
+crontab -e
+# 行頭に # を追加: # 0 9 * * * /home/kafka/projects/youtuber/run_daily.sh
+```
 
-[1](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/52522745/0f16650f-fbdb-4506-933b-8a63bd3efb5e/IMPLEMENTATION_SUMMARY.md)
-[2](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/52522745/85a51a73-3900-4668-967d-4c0feac6ac68/README_CREWAI.md)
-[3](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/52522745/61853307-6ad8-4ef9-bfae-404eda062d61/TEST_RESULTS.md)
-[4](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/52522745/1c7fb4f0-e0f8-40b2-8cf1-0a097112768a/STOCK_FOOTAGE_IMPLEMENTATION.md)
-[5](https://developers.google.com/workspace/sheets/api/limits)
-[6](https://elevenlabs.io/pricing/api)
-[7](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/52522745/3db6a7db-3f52-470b-bb9f-cc6d6e9a1eb1/paste.txt)
-[8](https://voicevox.hiroshiba.jp/nemo/)
-[9](https://ai.google.dev/gemini-api/docs/rate-limits)
+***
+## **10. API仕様と料金体系**
+### **10.1. ElevenLabs TTS API**
+| プラン | 月額料金 | 文字数制限 | オーバーエージ料金 | 推奨用途 |
+|--------|----------|------------|-------------------|----------|
+| **Free** | $0 | 10,000文字 | 利用不可 | 開発・テスト |
+| **Starter** | $5 | 30,000文字 | $0.30/1,000文字 | 小規模運用 |
+| **Creator** | $22 | 100,000文字 | $0.24/1,000文字 | 中規模運用 |
+| **Pro** | $99 | 500,000文字 | $0.18/1,000文字 | 大規模運用 |
+**推奨対応:** 
+- 開発時: Freeプランで動作確認
+- 本番運用: Starter プラン（$5/月）が最もコスパが良い
+- 大規模運用: Creator以上を検討
+**検出されたエラー例:** `quota_exceeded - You have 0 credits remaining`
+
+### **10.2. Google Gemini API**
+| ティア | 条件 | RPM制限 | 日次制限 | 料金体系 |
+|--------|------|---------|----------|----------|
+| **Free** | なし | 15 RPM | 50-1,500 RPD | 無料 |
+| **Tier 1** | 課金設定 | 150 RPM | 1,000 RPD | $0.000625/1Kトークン |
+| **Tier 2** | $250以上 | 1,000 RPM | 50,000 RPD | 従量課金 |
+| **Tier 3** | $1,000以上 | 2,000 RPM | 無制限 | 従量課金 |
+**注意:**
+- RPM = Requests Per Minute（1分あたりのリクエスト数）
+- RPD = Requests Per Day（1日あたりのリクエスト数）
+- CrewAIの7エージェントは複数回のAPI呼び出しを行うため、複数キー推奨
+**検出されたエラー例:** `429 Too Many Requests - limit: 50`
+**実装済み対策:** 複数キー自動ローテーション（3-5キー推奨）
+
+### **10.3. Google Sheets API**
+- **料金:** **完全無料**（超過時も課金なし）
+- **制限:** 
+  - 読み取り: 300リクエスト/分
+  - 書き込み: 100リクエスト/分/プロジェクト
+- **実装済み対策:** ローカルキャッシュ（TTL 24時間）
+
+### **10.4. YouTube Data API v3**
+- **料金:** 無料（クォータ制限あり）
+- **クォータ:** 10,000ユニット/日
+- **動画アップロード:** 1,600ユニット/回
+- **推定:** 1日約6本の動画アップロード可能
+- **注意:** OAuth 2.0認証必須（サービスアカウント不可）
+
+### **10.5. Perplexity API**
+- **料金:** 有料プランのみ
+- **制限:** プランによって異なる
+- **推奨:** 複数アカウントで3キー用意
+- **フォールバック:** NewsAPI.org（無料100リクエスト/日）
+
+### **10.6. NewsAPI.org**
+- **料金:** 無料
+- **制限:** 100リクエスト/日
+- **用途:** Perplexity失敗時のフォールバック
+- **制約:** 開発用途のみ（本番は有料プラン）
+
+### **10.7. Stock Footage APIs**
+#### **Pexels API**
+- **料金:** 完全無料・無制限
+- **品質:** HD/4K
+- **制約:** なし（商用利用可、著作権表示不要）
+#### **Pixabay API**
+- **料金:** 完全無料
+- **制限:** あり（具体的な数値は要確認）
+- **用途:** Pexelsのフォールバック
+
+### **10.8. VOICEVOX Nemo**
+- **料金:** **完全無料**のオープンソース
+- **制限:** なし（ローカル実行）
+- **要件:** Docker環境
+- **リソース:** CPU版 500MB-1GB、メモリ50-100MB
+- **用途:** ElevenLabs制限時のバックアップTTS
+
+### **10.9. 月額コスト試算**
+**最小構成（開発・小規模運用）:**
+- ElevenLabs Starter: $5/月
+- Google Gemini: 無料（Free Tier内）
+- 他のサービス: 無料
+- **合計:** $5/月
+**推奨構成（安定運用）:**
+- ElevenLabs Starter: $5/月
+- Google Gemini Tier 1: ~$5-10/月（使用量による）
+- Perplexity: ~$20/月（プランによる）
+- 他のサービス: 無料
+- **合計:** $30-35/月
+**大規模構成（高可用性・高頻度）:**
+- ElevenLabs Creator: $22/月
+- Google Gemini Tier 2: ~$50/月
+- Perplexity Pro: ~$40/月
+- 他のサービス: 無料
+- **合計:** $112/月
+***
+## **12. プロジェクトファイル構造**
+```
+youtuber-automation/
+├── .env                          # 環境変数（Gitに含めない）
+├── .gitignore
+├── requirements.txt
+├── README.md
+├── IMPLEMENTATION_SUMMARY.md     # Phase 2実装サマリー
+├── VOICEVOX_SETUP.md            # VOICEVOX詳細ガイド
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py                  # メインエントリーポイント
+│   ├── verify.py                # システム検証スクリプト
+│   ├── video.py                 # 動画生成（ffmpeg）
+│   ├── api_rotation.py          # APIキーローテーション
+│   ├── japanese_quality.py      # 日本語純度チェック
+│   │
+│   ├── config/
+│   │   └── prompts/
+│   │       ├── agents.yaml      # CrewAI エージェント定義
+│   │       ├── analysis.yaml    # 分析タスク定義
+│   │       ├── script_generation.yaml  # 台本生成タスク
+│   │       └── quality_check.yaml      # 品質チェックタスク
+│   │
+│   └── crew/
+│       └── flows.py             # CrewAI実行フロー
+│
+├── secret/
+│   ├── service-account-key.json       # Google Cloud認証
+│   └── youtube_oauth_client.json      # YouTube OAuth
+│
+├── scripts/
+│   └── voicevox_manager.sh      # VOICEVOX管理スクリプト
+│
+├── systemd/
+│   ├── youtube-automation.service
+│   └── youtube-automation.timer
+│
+├── logs/                         # ログディレクトリ
+│   ├── daily_run_*.log
+│   ├── app.log
+│   ├── systemd.log
+│   └── cron.log
+│
+├── output/                       # 生成ファイル
+│   ├── videos/
+│   ├── audio/
+│   └── thumbnails/
+│
+├── test_setup.py                # 環境確認スクリプト
+├── test_crewai_flow.py          # CrewAIテスト
+├── test_stock_footage.py        # Stock Footageテスト
+├── setup_youtube_oauth.py       # YouTube認証セットアップ
+├── test_upload.py               # YouTubeアップロードテスト
+├── run_daily.sh                 # 日次実行スクリプト
+└── token.pickle                 # YouTube認証トークン（Gitに含めない）
+```
+
+***
+## **13. よくある質問（FAQ）**
+### **Q1: SerpAPIは使わないのですか？**
+A: 認証が複雑で安定性に欠けるため、本システムではPerplexity AI + NewsAPI.orgを使用します。これにより高可用性（99.99%）を実現しています。
+### **Q2: サービスアカウントでYouTubeにアップロードできますか？**
+A: できません。YouTube Data API v3は個人アカウントの委任が必要なため、OAuth 2.0クライアントIDを使用する必要があります。サービスアカウントはSheets/Driveのみで使用します。
+### **Q3: 無料で運用できますか？**
+A: 一部可能ですが、以下の制約があります：
+- ElevenLabs Free: 10,000文字/月（約2-3本の動画）
+- Gemini Free Tier: 15 RPM（CrewAIでは不十分）
+- **推奨:** 最低$5/月（ElevenLabs Starter）での運用
+
+### **Q4: 1日何本の動画を生成できますか？**
+A: 以下の要因によります：
+- YouTube Data APIクォータ: 1日約6本まで
+- ElevenLabs制限: Starterプランで1日約10本（1本=3,000文字として）
+- Gemini API制限: Tier 1で1日約50本（複数キー使用時）
+**実用的な推奨:** 1日1-3本の安定運用
+
+### **Q6: VOICEVOX Nemoは必須ですか？**
+A: オプションです。ElevenLabsのバックアップとして推奨しますが、以下のフォールバックチェーンが自動的に機能します：
+1. ElevenLabs TTS（プライマリ）
+2. VOICEVOX Nemo（無料バックアップ）
+3. gTTS（Google TTS Free）
+4. pyttsx3（オフライン・最終フォールバック）
+
+### **Q7: WindowsでもDocker無しで動きますか？**
+A: はい。VOICEVOX Nemoを使用しない場合、Windows上で直接実行可能です。gTTS/pyttsx3が自動的に使用されます。
+
+### **Q8: エラー時の通知は自動ですか？**
+A: はい。Discord WebhookまたはSlack Webhookを設定すると、以下の通知が自動送信されます：
+- ✅ 成功: 動画URL、実行時間、生成ファイル数
+- ❌ 失敗: エラー内容、失敗したステップ
+
+### **Q10: 本番環境へのデプロイ方法は？**
+A: 以下のオプションがあります：
+1. **ローカル環境 + Systemd Timer**: 最もシンプル
+2. **Render Cron Jobs**: クラウド環境
+3. **Heroku Scheduler**: PaaS環境
+4. **AWS Lambda + EventBridge**: サーバーレス
+本ガイドではSystemd Timer（ローカル）を推奨しています。
+
+***
+## **14. まとめ**
+本システムにより、**月額$0程度で安定した大規模YouTubeコンテンツ生成**が実現できます。
