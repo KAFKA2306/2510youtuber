@@ -90,15 +90,33 @@ class MetadataGenerator:
 {script_content[:500] if script_content else "台本データなし"}...
 
 【要件】
-1. タイトル: 50文字以内、クリック率向上を意識
+1. タイトル: 50文字以内、**キャッチーでWOW感のあるタイトル**
 2. 説明文: 1000-3000文字、SEO最適化
 3. タグ: 15-20個、検索性向上
 4. カテゴリ: YouTube標準カテゴリ
 5. サムネイル文言: 大きく表示するテキスト
 
-【重要な方針】
-- 正確性と信頼性を最優先
-- 煽りすぎない、品格を保つ
+【タイトル作成の重要方針】
+✅ **クリック率を最大化する要素を含める:**
+  - 数字・パーセンテージ（例: "10%急騰"、"3日連続"）
+  - 緊急性・時事性（例: "速報"、"緊急"、"今日の"）
+  - 感情を刺激する言葉（例: "衝撃"、"注目"、"警告"、"チャンス"）
+  - 疑問形・問いかけ（例: "なぜ？"、"どうなる？"）
+  - 具体的な固有名詞（例: "日経平均"、"日銀"、"NVIDIA"）
+
+✅ **成功例:**
+  - "【速報】日経平均10%急騰！その理由と今後の展開"
+  - "日銀緊急利上げ！株価暴落のシナリオとは？"
+  - "NVIDIA決算で市場激変！今注目すべき3銘柄"
+  - "円安150円突破！あなたの資産への影響は？"
+
+❌ **避けるべき例:**
+  - "今日の経済ニュース解説"（平凡すぎ）
+  - "市場動向について"（抽象的）
+  - "経済情報まとめ"（興味を引かない）
+
+【その他の方針】
+- 正確性と信頼性を最優先（誇張しすぎない）
 - 検索されやすいキーワードを含める
 - 視聴者価値を明確に示す
 - 時事性を強調
@@ -159,8 +177,7 @@ class MetadataGenerator:
 
                 response = client.generate_content(
                     prompt,
-                    generation_config=generation_config,
-                    timeout=90
+                    generation_config=generation_config
                 )
                 content = response.text
                 logger.debug(f"Generated metadata response length: {len(content)}")
@@ -246,14 +263,53 @@ class MetadataGenerator:
             return self._get_fallback_metadata(news_items, "daily")
 
     def _generate_fallback_title(self, news_items: List[Dict[str, Any]]) -> str:
-        """フォールバック用タイトル生成"""
+        """フォールバック用タイトル生成（WOW要素追加）"""
         current_date = datetime.now().strftime("%m/%d")
         if news_items and len(news_items) > 0:
             main_topic = news_items[0].get("title", "経済ニュース")
+
+            # WOW要素を含むキーワードを抽出
+            wow_keywords = self._extract_wow_elements(main_topic)
             keywords = self._extract_keywords(main_topic)
-            if keywords:
-                return f"【{current_date}】{keywords[0]}など重要経済ニュース解説"
-        return f"【{current_date}】今日の重要経済ニュース解説"
+
+            if wow_keywords:
+                # WOW要素がある場合
+                return f"【速報】{wow_keywords[0]}！注目の{keywords[0] if keywords else '経済ニュース'}"
+            elif keywords:
+                # 通常キーワードのみの場合も強調
+                return f"【{current_date}】{keywords[0]}が動く！今日の重要ニュース"
+
+        return f"【{current_date}速報】今日の経済市場で何が起きた？"
+
+    def _extract_wow_elements(self, text: str) -> List[str]:
+        """WOW要素（数字、パーセンテージ、変動表現）を抽出"""
+        wow_elements = []
+
+        # パーセンテージ抽出
+        percent_match = re.search(r'([+\-]?\d+\.?\d*[%％])', text)
+        if percent_match:
+            wow_elements.append(f"{percent_match.group(1)}変動")
+
+        # 倍率抽出
+        bai_match = re.search(r'(\d+\.?\d*倍)', text)
+        if bai_match:
+            wow_elements.append(bai_match.group(1))
+
+        # 変動表現
+        trend_patterns = ['急騰', '暴落', '急落', '高騰', '急上昇', '急降下', '史上最高', '最安値', '年初来高値', '年初来安値']
+        for pattern in trend_patterns:
+            if pattern in text:
+                wow_elements.append(pattern)
+                break
+
+        # 緊急性表現
+        urgent_patterns = ['速報', '緊急', '衝撃', '警告', '注目', '重大']
+        for pattern in urgent_patterns:
+            if pattern in text:
+                wow_elements.append(pattern)
+                break
+
+        return wow_elements[:2]  # 最大2つ
 
     def _enhance_description(self, description: str, news_items: List[Dict[str, Any]]) -> str:
         """説明文を拡充"""
@@ -342,10 +398,14 @@ class MetadataGenerator:
         return keywords[:5]
 
     def _get_fallback_metadata(self, news_items: List[Dict[str, Any]], mode: str) -> Dict[str, Any]:
-        """フォールバック用メタデータ"""
+        """フォールバック用メタデータ（WOW要素追加）"""
         current_date = datetime.now().strftime("%Y年%m月%d日")
+
+        # WOW要素を含むタイトル生成
+        fallback_title = self._generate_fallback_title(news_items)
+
         return {
-            "title": f"【{current_date}】重要経済ニュース解説",
+            "title": fallback_title,
             "description": f"""
 【{current_date} 経済ニュース解説】
 

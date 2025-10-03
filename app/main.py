@@ -18,6 +18,7 @@ from .config import cfg
 from .discord import discord_notifier
 from .drive import upload_video_package
 from .metadata import generate_youtube_metadata
+from .metadata_storage import metadata_storage
 from .script_gen import generate_dialogue
 from .search_news import collect_news
 from .sheets import load_prompts as load_prompts_from_sheets
@@ -96,6 +97,17 @@ class YouTubeWorkflow:
             step10_result = await self._step10_upload_to_youtube(
                 step6_result["video_path"], step7_result["metadata"], step8_result.get("thumbnail_path")
             )
+
+            # 動画URLを記録に追加
+            if step10_result.get("video_url"):
+                try:
+                    metadata_storage.update_video_stats(
+                        run_id=self.run_id,
+                        video_url=step10_result.get("video_url")
+                    )
+                    logger.info("Updated metadata storage with video URL")
+                except Exception as e:
+                    logger.warning(f"Failed to update video URL in storage: {e}")
 
             execution_time = (datetime.now() - start_time).total_seconds()
             result = self._compile_final_result(
@@ -346,6 +358,19 @@ class YouTubeWorkflow:
             if not metadata:
                 raise Exception("Metadata generation failed")
             logger.info(f"Generated metadata: {metadata.get('title', 'No title')}")
+
+            # メタデータを記録（CSV + Google Sheets）
+            try:
+                metadata_storage.save_metadata(
+                    metadata=metadata,
+                    run_id=self.run_id,
+                    mode=mode,
+                    news_items=news_items
+                )
+                logger.info("Metadata saved to storage")
+            except Exception as e:
+                logger.warning(f"Failed to save metadata to storage: {e}")
+
             return {
                 "success": True,
                 "metadata": metadata,

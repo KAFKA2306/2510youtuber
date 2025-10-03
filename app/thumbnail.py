@@ -6,11 +6,13 @@ YouTube動画用の魅力的なサムネイル画像を自動生成します。
 統合内容:
 - 標準サムネイル生成（ThumbnailGenerator）
 - プロ品質サムネイル生成（ProThumbnailGenerator）
+- V2革新的デザイン（左右分割レイアウト）
 - 自動切り替え機能
 """
 
 import logging
 import os
+import re
 import textwrap
 from datetime import datetime
 from pathlib import Path
@@ -20,12 +22,13 @@ logger = logging.getLogger(__name__)
 
 
 class ThumbnailGenerator:
-    """サムネイル生成クラス"""
+    """サムネイル生成クラス（V2革新的デザイン統合）"""
 
     def __init__(self):
         self.output_size = (1280, 720)  # YouTube推奨サイズ
         self.font_paths = self._get_available_fonts()
         self.color_schemes = self._load_color_schemes()
+        self.default_icon = "/home/kafka/projects/youtuber/assets/icon/ChatGPT Image 2025年10月2日 19_53_38.png"
 
         try:
             from PIL import Image, ImageDraw, ImageFont
@@ -120,6 +123,8 @@ class ThumbnailGenerator:
         mode: str = "daily",
         style: str = "economic_blue",
         output_path: str = None,
+        layout: str = "v2",
+        icon_path: str = None,
     ) -> str:
         """サムネイル画像を生成
 
@@ -129,11 +134,16 @@ class ThumbnailGenerator:
             mode: 動画モード (daily/special/breaking)
             style: カラースキーム
             output_path: 出力パス
+            layout: レイアウトタイプ ("v2"=左右分割, "classic"=従来型)
+            icon_path: V2レイアウト用アイコン画像パス
 
         Returns:
             生成されたサムネイル画像のパス
 
         """
+        # V2レイアウトを使用
+        if layout == "v2":
+            return self._generate_v2_layout(title, icon_path, news_items, mode, output_path)
         try:
             if not self.has_pil:
                 return self._generate_fallback_thumbnail(title, output_path)
@@ -615,25 +625,297 @@ class ThumbnailGenerator:
 
         return generated_thumbnails
 
+    def _generate_v2_layout(
+        self,
+        title: str,
+        icon_path: str = None,
+        news_items: List[Dict[str, Any]] = None,
+        mode: str = "daily",
+        output_path: str = None,
+    ) -> str:
+        """V2革新的レイアウト（左右分割：画像右、テキスト左）"""
+        if not self.has_pil:
+            return self._generate_fallback_thumbnail(title, output_path)
+
+        try:
+            from PIL import Image, ImageDraw, ImageEnhance
+
+            if not output_path:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = f"thumbnail_v2_{timestamp}.png"
+
+            # モダン背景
+            image = self._create_modern_background(mode)
+
+            # 右側にアイコン配置
+            image = self._add_right_icon(image, icon_path or self.default_icon)
+
+            # 左側にキャッチコピー
+            image = self._add_left_catchcopy(image, title, mode)
+
+            # モバイル最適化
+            image = self._enhance_v2_for_mobile(image)
+
+            image.save(output_path, "PNG", quality=95, optimize=True)
+            logger.info(f"Generated V2 thumbnail: {output_path}")
+            return output_path
+
+        except Exception as e:
+            logger.error(f"V2 thumbnail generation failed: {e}")
+            return self._generate_fallback_thumbnail(title, output_path)
+
+    def _create_modern_background(self, mode: str):
+        """モダンなグラデーション背景（V2専用）"""
+        from PIL import Image, ImageDraw
+
+        width, height = self.output_size
+
+        bg_schemes = {
+            "daily": ((15, 25, 45), (35, 55, 95)),
+            "special": ((45, 15, 65), (85, 35, 115)),
+            "breaking": ((50, 10, 10), (100, 25, 25)),
+        }
+
+        start_color, end_color = bg_schemes.get(mode, bg_schemes["daily"])
+
+        image = Image.new("RGB", (width, height))
+
+        # 斜めグラデーション
+        for y in range(height):
+            ratio = y / height
+            r = int(start_color[0] + (end_color[0] - start_color[0]) * ratio)
+            g = int(start_color[1] + (end_color[1] - start_color[1]) * ratio)
+            b = int(start_color[2] + (end_color[2] - start_color[2]) * ratio)
+
+            r = max(0, min(255, r))
+            g = max(0, min(255, g))
+            b = max(0, min(255, b))
+
+            from PIL import ImageDraw
+            draw = ImageDraw.Draw(image)
+            draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+        # 中央分割線
+        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+
+        center_x = width // 2
+        for offset in range(-3, 4):
+            alpha = 40 - abs(offset) * 10
+            overlay_draw.line([(center_x + offset, 0), (center_x + offset, height)],
+                            fill=(255, 255, 255, alpha), width=1)
+
+        image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+
+        return image
+
+    def _add_right_icon(self, image, icon_path: str):
+        """右側に大きなアイコンを配置"""
+        from PIL import Image, ImageDraw
+
+        width, height = self.output_size
+
+        try:
+            if not os.path.exists(icon_path):
+                logger.warning(f"Icon not found: {icon_path}")
+                return image
+
+            icon = Image.open(icon_path)
+
+            # 右側80%使用
+            icon_height = int(height * 0.8)
+            aspect_ratio = icon.width / icon.height
+            icon_width = int(icon_height * aspect_ratio)
+
+            icon = icon.resize((icon_width, icon_height), Image.Resampling.LANCZOS)
+
+            icon_x = width - icon_width - 30
+            icon_y = (height - icon_height) // 2
+
+            # 影を追加
+            if icon.mode == 'RGBA':
+                shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+                shadow_draw = ImageDraw.Draw(shadow)
+                shadow_draw.ellipse(
+                    [icon_x - 10, icon_y + icon_height - 50,
+                     icon_x + icon_width + 10, icon_y + icon_height + 20],
+                    fill=(0, 0, 0, 60)
+                )
+                image = Image.alpha_composite(image.convert("RGBA"), shadow).convert("RGB")
+
+                image = image.convert("RGBA")
+                image.paste(icon, (icon_x, icon_y), icon)
+                image = image.convert("RGB")
+            else:
+                image.paste(icon, (icon_x, icon_y))
+
+            logger.info(f"Icon placed at ({icon_x}, {icon_y})")
+
+        except Exception as e:
+            logger.error(f"Failed to add icon: {e}")
+
+        return image
+
+    def _add_left_catchcopy(self, image, title: str, mode: str):
+        """左側にWOWキャッチコピーを配置"""
+        from PIL import ImageDraw
+
+        draw = ImageDraw.Draw(image)
+        width, height = self.output_size
+
+        catchcopy = self._create_wow_catchcopy(title)
+
+        left_width = width // 2 - 80
+        left_center_x = left_width // 2 + 60
+
+        copy_font = self._get_font(size=120)
+        if not copy_font:
+            return image
+
+        lines = catchcopy.split('\n')
+        total_height = len(lines) * 145
+        start_y = (height - total_height) // 2 + 20
+
+        for i, line in enumerate(lines):
+            if not line.strip():
+                continue
+
+            bbox = draw.textbbox((0, 0), line, font=copy_font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+
+            x = left_center_x - text_width // 2
+            y = start_y + i * 145
+
+            # 背景ボックス
+            padding = 15
+            draw.rectangle(
+                [x - padding, y - padding, x + text_width + padding, y + text_height + padding],
+                fill=(0, 0, 0, 150)
+            )
+
+            # 多層影
+            for offset in range(10, 0, -2):
+                shadow_alpha = 200 - (offset * 15)
+                draw.text((x + offset, y + offset), line, font=copy_font, fill=(0, 0, 0, shadow_alpha))
+
+            # 極太アウトライン
+            for dx in [-3, -2, -1, 0, 1, 2, 3]:
+                for dy in [-3, -2, -1, 0, 1, 2, 3]:
+                    if dx != 0 or dy != 0:
+                        draw.text((x + dx, y + dy), line, font=copy_font, fill=(0, 0, 0))
+
+            # メインテキスト
+            text_color = self._get_v2_text_color(mode)
+            draw.text((x, y), line, font=copy_font, fill=text_color)
+
+        # 日付バッジ
+        self._add_v2_date_badge(draw)
+
+        return image
+
+    def _create_wow_catchcopy(self, title: str) -> str:
+        """WOWなキャッチコピーを生成"""
+        wow_keywords = {
+            '暴落': '大暴落\n警報!',
+            '急落': '急落\n速報!',
+            '急騰': '急騰\n来た!',
+            '高騰': '高騰\n注目!',
+            '速報': '緊急\n速報!',
+            '利上げ': '利上げ\nショック',
+            '円安': '円安\n加速!',
+            '円高': '円高\n急騰!',
+            '株価': '株価\n激変!',
+            '金利': '金利\n衝撃!',
+            'AI': 'AI\n革命!',
+            'ビットコイン': 'BTC\n爆上げ',
+            '仮想通貨': '暗号資産\n祭り!',
+        }
+
+        for keyword, copy in wow_keywords.items():
+            if keyword in title:
+                return copy
+
+        # 数字抽出
+        number_patterns = [
+            (r'([+\-]?\d+\.?\d*[%％])', '{}%\n激震!'),
+            (r'(\d+\.?\d*倍)', '{}\n急上昇'),
+            (r'([+\-]\d+円)', '{}\n動く!'),
+        ]
+
+        for pattern, template in number_patterns:
+            match = re.search(pattern, title)
+            if match:
+                num = match.group(1)
+                return template.format(num)
+
+        # デフォルト
+        important_words = ['注目', '速報', '衝撃', '警告', '予測', '分析']
+        for word in important_words:
+            if word in title:
+                return f'{word}\n情報!'
+
+        words = title.replace(' ', '').replace('　', '')
+        if len(words) >= 4:
+            first_part = words[:5]
+            return f'{first_part}\n速報!'
+
+        return '超注目\n情報!'
+
+    def _get_v2_text_color(self, mode: str) -> tuple:
+        """V2用テキストカラー"""
+        colors = {
+            "daily": (255, 223, 0),
+            "special": (255, 105, 180),
+            "breaking": (255, 69, 0),
+        }
+        return colors.get(mode, (255, 223, 0))
+
+    def _add_v2_date_badge(self, draw):
+        """V2用日付バッジ"""
+        font = self._get_font(size=36)
+        if not font:
+            return
+
+        date_text = datetime.now().strftime("%m/%d")
+        x, y = 40, self.output_size[1] - 90
+
+        draw.ellipse([x - 5, y - 5, x + 110, y + 50], fill=(255, 69, 0))
+        draw.text((x + 15, y), date_text, font=font, fill=(255, 255, 255))
+
+    def _enhance_v2_for_mobile(self, image):
+        """V2用モバイル最適化"""
+        from PIL import ImageEnhance
+
+        enhancer = ImageEnhance.Contrast(image)
+        image = enhancer.enhance(1.35)
+
+        enhancer = ImageEnhance.Color(image)
+        image = enhancer.enhance(1.25)
+
+        enhancer = ImageEnhance.Sharpness(image)
+        image = enhancer.enhance(1.3)
+
+        return image
+
 
 # グローバルインスタンス
 thumbnail_generator = ThumbnailGenerator()
 
 
 def generate_thumbnail(
-    title: str, news_items: List[Dict[str, Any]] = None, mode: str = "daily", style: str = "economic_blue"
+    title: str,
+    news_items: List[Dict[str, Any]] = None,
+    mode: str = "daily",
+    style: str = "economic_blue",
+    layout: str = "v2",
+    icon_path: str = None,
+    output_path: str = None,
 ) -> str:
-    """サムネイル生成の簡易関数（プロモジュール優先）"""
-    # プロ品質モジュールが利用可能な場合はそちらを使用
-    if HAS_PRO_MODULE:
-        try:
-            logger.info("Using pro thumbnail generator for higher CTR")
-            return _generate_pro_thumbnail(title, news_items, mode)
-        except Exception as e:
-            logger.warning(f"Pro thumbnail generation failed, falling back to standard: {e}")
-
-    # 標準モジュールを使用
-    return thumbnail_generator.generate_thumbnail(title, news_items, mode, style)
+    """サムネイル生成の簡易関数（V2レイアウトがデフォルト）"""
+    return thumbnail_generator.generate_thumbnail(
+        title, news_items, mode, style, output_path, layout=layout, icon_path=icon_path
+    )
 
 
 def create_batch_thumbnails(titles: List[str], styles: List[str] = None, modes: List[str] = None) -> List[str]:
