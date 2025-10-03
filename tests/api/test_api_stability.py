@@ -51,6 +51,7 @@ try:
 except Exception as e:
     print(f"❌ Test 1 FAILED: {e}")
     import traceback
+
     traceback.print_exc()
 
 # ===== Test 2: NewsAPI.org フォールバック =====
@@ -82,6 +83,7 @@ try:
 except Exception as e:
     print(f"❌ Test 2 FAILED: {e}")
     import traceback
+
     traceback.print_exc()
 
 # ===== Test 3: プロンプトキャッシュ =====
@@ -120,13 +122,15 @@ try:
 except Exception as e:
     print(f"❌ Test 3 FAILED: {e}")
     import traceback
+
     traceback.print_exc()
 
 # ===== 総括 =====
 print("\n" + "=" * 60)
 print("📊 テスト結果サマリー")
 print("=" * 60)
-print("""
+print(
+    """
 ✅ 実装完了機能:
   1. API Key Rotation (Gemini/Perplexity)
   2. NewsAPI.org フォールバック
@@ -137,7 +141,8 @@ print("""
   - 実際のワークフローでの統合テスト
   - ログ監視でキーローテーション動作確認
   - Rate limit発生時の自動切替確認
-""")
+"""
+)
 
 print("=" * 60)
 print("🎉 導通テスト完了")

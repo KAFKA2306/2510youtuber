@@ -1,10 +1,6 @@
 """Unit tests for feedback loop system."""
 
 import json
-import os
-import tempfile
-from datetime import datetime
-from pathlib import Path
 
 import pytest
 
@@ -55,33 +51,23 @@ class TestWorkflowResultModel:
     def test_script_grade_calculation(self):
         """Test script grade calculation from WOW score."""
         # Grade S (>= 8.5)
-        result_s = WorkflowResult(
-            success=True, run_id="test", mode="test", execution_time_seconds=1.0, wow_score=8.7
-        )
+        result_s = WorkflowResult(success=True, run_id="test", mode="test", execution_time_seconds=1.0, wow_score=8.7)
         assert result_s.script_grade == "S"
 
         # Grade A (>= 8.0)
-        result_a = WorkflowResult(
-            success=True, run_id="test", mode="test", execution_time_seconds=1.0, wow_score=8.2
-        )
+        result_a = WorkflowResult(success=True, run_id="test", mode="test", execution_time_seconds=1.0, wow_score=8.2)
         assert result_a.script_grade == "A"
 
         # Grade B (>= 7.5)
-        result_b = WorkflowResult(
-            success=True, run_id="test", mode="test", execution_time_seconds=1.0, wow_score=7.8
-        )
+        result_b = WorkflowResult(success=True, run_id="test", mode="test", execution_time_seconds=1.0, wow_score=7.8)
         assert result_b.script_grade == "B"
 
         # Grade C (< 7.5)
-        result_c = WorkflowResult(
-            success=True, run_id="test", mode="test", execution_time_seconds=1.0, wow_score=7.0
-        )
+        result_c = WorkflowResult(success=True, run_id="test", mode="test", execution_time_seconds=1.0, wow_score=7.0)
         assert result_c.script_grade == "C"
 
         # N/A (no score)
-        result_na = WorkflowResult(
-            success=True, run_id="test", mode="test", execution_time_seconds=1.0
-        )
+        result_na = WorkflowResult(success=True, run_id="test", mode="test", execution_time_seconds=1.0)
         assert result_na.script_grade == "N/A"
 
     def test_status_icon(self):
@@ -97,21 +83,15 @@ class TestWorkflowResultModel:
         assert result_good.status_icon == "✅"
 
         # Success with good WOW score
-        result_wow = WorkflowResult(
-            success=True, run_id="test", mode="test", execution_time_seconds=1.0, wow_score=8.5
-        )
+        result_wow = WorkflowResult(success=True, run_id="test", mode="test", execution_time_seconds=1.0, wow_score=8.5)
         assert result_wow.status_icon == "✅"
 
         # Success but no metrics
-        result_warning = WorkflowResult(
-            success=True, run_id="test", mode="test", execution_time_seconds=1.0
-        )
+        result_warning = WorkflowResult(success=True, run_id="test", mode="test", execution_time_seconds=1.0)
         assert result_warning.status_icon == "⚠️"
 
         # Failed
-        result_failed = WorkflowResult(
-            success=False, run_id="test", mode="test", execution_time_seconds=1.0
-        )
+        result_failed = WorkflowResult(success=False, run_id="test", mode="test", execution_time_seconds=1.0)
         assert result_failed.status_icon == "❌"
 
     def test_workflow_result_serialization(self):
@@ -159,9 +139,7 @@ class TestYouTubeFeedbackModel:
 
     def test_engagement_rate_calculation(self):
         """Test engagement rate calculation."""
-        feedback = YouTubeFeedback(
-            video_id="test", views=1000, likes=50, comments_count=30
-        )
+        feedback = YouTubeFeedback(video_id="test", views=1000, likes=50, comments_count=30)
 
         # Engagement = (likes + comments) / views * 100
         expected = (50 + 30) / 1000 * 100
@@ -477,18 +455,10 @@ class TestFeedbackAnalyzer:
         jsonl_path = tmp_path / "test.jsonl"
 
         results = [
-            WorkflowResult(
-                success=True, run_id="test_1", mode="daily", execution_time_seconds=100.0
-            ),
-            WorkflowResult(
-                success=True, run_id="test_2", mode="daily", execution_time_seconds=100.0
-            ),
-            WorkflowResult(
-                success=False, run_id="test_3", mode="daily", execution_time_seconds=100.0
-            ),
-            WorkflowResult(
-                success=True, run_id="test_4", mode="daily", execution_time_seconds=100.0
-            ),
+            WorkflowResult(success=True, run_id="test_1", mode="daily", execution_time_seconds=100.0),
+            WorkflowResult(success=True, run_id="test_2", mode="daily", execution_time_seconds=100.0),
+            WorkflowResult(success=False, run_id="test_3", mode="daily", execution_time_seconds=100.0),
+            WorkflowResult(success=True, run_id="test_4", mode="daily", execution_time_seconds=100.0),
         ]
 
         with open(jsonl_path, "w") as f:

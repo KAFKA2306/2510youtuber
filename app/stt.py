@@ -33,10 +33,7 @@ class STTManager:
         processed_audio_path = self._preprocess_audio(audio_path)
         try:
             with open(processed_audio_path, "rb") as audio_file:
-                response = self.client.speech_to_text.convert(
-                    file=audio_file,
-                    model_id="scribe_v1"
-                )
+                response = self.client.speech_to_text.convert(file=audio_file, model_id="scribe_v1")
             words = self._process_transcription_result(response.dict())
             logger.info(f"ElevenLabs transcribed {len(words)} words from {audio_path}")
             return words
@@ -47,9 +44,7 @@ class STTManager:
                 except (OSError, FileNotFoundError) as e:
                     logger.debug(f"Could not remove temporary file {processed_audio_path}: {e}")
 
-    def transcribe_audio(
-        self, audio_path: str, language: str = "ja"
-    ) -> List[Dict[str, Any]]:
+    def transcribe_audio(self, audio_path: str, language: str = "ja") -> List[Dict[str, Any]]:
         """音声ファイルを文字起こし（フォールバック付き）"""
         return stt_fallback_manager.transcribe_with_fallback(audio_path)
 

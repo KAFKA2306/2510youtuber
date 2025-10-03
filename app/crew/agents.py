@@ -42,7 +42,7 @@ class AgentFactory:
 
             llm = get_crewai_gemini_llm(
                 model=agent_config.get("model", "gemini-2.0-flash-exp"),
-                temperature=agent_config.get("temperature", 0.7)
+                temperature=agent_config.get("temperature", 0.7),
             )
 
             # エージェント作成
@@ -52,7 +52,7 @@ class AgentFactory:
                 backstory=agent_config.get("backstory", ""),
                 verbose=getattr(settings, "crew_verbose", False),
                 llm=llm,
-                **override_params
+                **override_params,
             )
 
             logger.info(f"Created agent: {agent_name}")

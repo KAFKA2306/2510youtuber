@@ -8,6 +8,7 @@
 - モバイル視認性最適化
 """
 
+import importlib.util
 import logging
 import os
 import textwrap
@@ -27,10 +28,9 @@ class ProThumbnailGenerator:
         self.font_paths = self._get_available_fonts() if self.has_pil else {}
 
     def _check_pil(self) -> bool:
-        try:
-            from PIL import Image, ImageDraw, ImageFont
+        if importlib.util.find_spec("PIL.Image") and importlib.util.find_spec("PIL.ImageDraw") and importlib.util.find_spec("PIL.ImageFont"):
             return True
-        except ImportError:
+        else:
             logger.warning("PIL not available, thumbnail generation will be limited")
             return False
 
@@ -68,7 +68,6 @@ class ProThumbnailGenerator:
             return self._generate_fallback_thumbnail(title, output_path)
 
         try:
-
             # 出力パス設定
             if not output_path:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -136,10 +135,7 @@ class ProThumbnailGenerator:
 
         for i in range(max_radius, 0, -20):
             alpha = int(30 * (1 - i / max_radius))
-            overlay_draw.ellipse(
-                [center_x - i, center_y - i, center_x + i, center_y + i],
-                fill=(255, 255, 255, alpha)
-            )
+            overlay_draw.ellipse([center_x - i, center_y - i, center_x + i, center_y + i], fill=(255, 255, 255, alpha))
 
         image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
 
@@ -218,7 +214,8 @@ class ProThumbnailGenerator:
             padding = 20
             draw.rectangle(
                 [x - padding, y - padding, x + text_width + padding, y + text_height + padding],
-                outline=(255, 255, 255), width=8
+                outline=(255, 255, 255),
+                width=8,
             )
 
         # タイトルテキスト（上部）
@@ -237,8 +234,8 @@ class ProThumbnailGenerator:
             # 背景ボックス（視認性）
             padding = 25
             draw.rectangle(
-                [x - padding, y - padding//2, x + text_width + padding, y + (bbox[3] - bbox[1]) + padding],
-                fill=(0, 0, 0, 200)
+                [x - padding, y - padding // 2, x + text_width + padding, y + (bbox[3] - bbox[1]) + padding],
+                fill=(0, 0, 0, 200),
             )
 
             # テキスト影
@@ -273,8 +270,7 @@ class ProThumbnailGenerator:
             # 背景ボックス（黒、半透明）
             padding = 40
             draw.rectangle(
-                [x - padding, y - padding, x + text_width + padding, y + text_height + padding],
-                fill=(0, 0, 0, 180)
+                [x - padding, y - padding, x + text_width + padding, y + text_height + padding], fill=(0, 0, 0, 180)
             )
 
             # 極太影（6層）
@@ -359,12 +355,14 @@ class ProThumbnailGenerator:
         for font_path in self.font_paths.values():
             try:
                 return ImageFont.truetype(font_path, size)
-            except:
+            except Exception as e:
+                logger.debug(f"Could not load font {font_path}: {e}")
                 continue
 
         try:
             return ImageFont.load_default()
-        except:
+        except Exception as e:
+            logger.warning(f"Could not load default font: {e}")
             return None
 
     def _generate_fallback_thumbnail(self, title: str, output_path: str = None) -> str:

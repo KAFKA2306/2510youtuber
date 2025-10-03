@@ -11,6 +11,7 @@ class NewsItem(BaseModel):
 
     個別のニュース記事を表すモデル
     """
+
     title: str = Field(..., min_length=1, max_length=200, description="ニュースタイトル")
     url: str = Field(..., description="ニュースURL")
     summary: str = Field(..., min_length=50, max_length=1000, description="要約")
@@ -46,9 +47,7 @@ class NewsItem(BaseModel):
         return self.impact_level == "high"
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class NewsCollection(BaseModel):
@@ -56,6 +55,7 @@ class NewsCollection(BaseModel):
 
     複数のニュース項目をまとめて管理
     """
+
     items: List[NewsItem] = Field(..., min_items=1, max_items=10, description="ニュース項目リスト")
     mode: str = Field(..., description="実行モード (daily/special/test)")
     collected_at: datetime = Field(default_factory=datetime.now, description="収集日時")
@@ -104,10 +104,8 @@ class NewsCollection(BaseModel):
                     "category": item.category,
                 }
                 for item in self.items
-            ]
+            ],
         }
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}

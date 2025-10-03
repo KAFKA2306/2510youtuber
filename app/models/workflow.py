@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 class StepStatus(str, Enum):
     """ステップの状態"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -18,6 +19,7 @@ class StepStatus(str, Enum):
 
 class StepResult(BaseModel):
     """ワークフローステップの実行結果"""
+
     step_name: str = Field(..., description="ステップ名")
     status: StepStatus = Field(..., description="ステータス")
     success: bool = Field(..., description="成功フラグ")
@@ -53,13 +55,12 @@ class StepResult(BaseModel):
         self.warnings.append(warning)
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class WorkflowState(BaseModel):
     """ワークフロー全体の状態管理"""
+
     run_id: str = Field(..., description="実行ID")
     mode: str = Field(..., description="実行モード (daily/special/test)")
 
@@ -84,14 +85,12 @@ class WorkflowState(BaseModel):
         """ステップを開始"""
         self.current_step = step_name
         self.step_results[step_name] = StepResult(
-            step_name=step_name,
-            status=StepStatus.IN_PROGRESS,
-            success=False,
-            started_at=datetime.now()
+            step_name=step_name, status=StepStatus.IN_PROGRESS, success=False, started_at=datetime.now()
         )
 
-    def complete_step(self, step_name: str, success: bool, data: Dict[str, Any] = None,
-                     error: str = None, files: List[str] = None):
+    def complete_step(
+        self, step_name: str, success: bool, data: Dict[str, Any] = None, error: str = None, files: List[str] = None
+    ):
         """ステップを完了"""
         if step_name not in self.step_results:
             raise ValueError(f"Step {step_name} was not started")
@@ -143,17 +142,15 @@ class WorkflowState(BaseModel):
     @property
     def failed_steps_count(self) -> int:
         """失敗したステップ数"""
-        return sum(1 for result in self.step_results.values()
-                  if result.status == StepStatus.FAILED)
+        return sum(1 for result in self.step_results.values() if result.status == StepStatus.FAILED)
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class WorkflowResult(BaseModel):
     """ワークフロー全体の最終結果 + フィードバックループ用データ"""
+
     success: bool = Field(..., description="全体成功フラグ")
     run_id: str = Field(..., description="実行ID")
     mode: str = Field(..., description="実行モード")
@@ -251,6 +248,7 @@ class WorkflowResult(BaseModel):
 
 class YouTubeFeedback(BaseModel):
     """YouTube統計フィードバックデータ"""
+
     video_id: str = Field(..., description="YouTube動画ID")
 
     # 基本統計
@@ -278,6 +276,4 @@ class YouTubeFeedback(BaseModel):
         return None
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}

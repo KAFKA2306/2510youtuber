@@ -126,11 +126,13 @@ class VideoFeedbackCollector:
             if "manual_feedback" not in data[video_id]:
                 data[video_id]["manual_feedback"] = []
 
-            data[video_id]["manual_feedback"].append({
-                "positive": positive,
-                "comment": comment,
-                "timestamp": datetime.now().isoformat(),
-            })
+            data[video_id]["manual_feedback"].append(
+                {
+                    "positive": positive,
+                    "comment": comment,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
 
             with open(self.feedback_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
@@ -177,8 +179,12 @@ class VideoFeedbackCollector:
 
             total_views = sum(v.get("analytics", {}).get("views", 0) for v in theme_videos)
             total_likes = sum(v.get("analytics", {}).get("likes", 0) for v in theme_videos)
-            retention_rates = [v.get("analytics", {}).get("retention_rate", 0) for v in theme_videos if v.get("analytics")]
-            view_durations = [v.get("analytics", {}).get("avg_view_duration", 0) for v in theme_videos if v.get("analytics")]
+            retention_rates = [
+                v.get("analytics", {}).get("retention_rate", 0) for v in theme_videos if v.get("analytics")
+            ]
+            view_durations = [
+                v.get("analytics", {}).get("avg_view_duration", 0) for v in theme_videos if v.get("analytics")
+            ]
 
             positive_count = 0
             negative_count = 0
@@ -206,9 +212,9 @@ class VideoFeedbackCollector:
 
     def print_performance_report(self):
         """全テーマのパフォーマンスレポートを出力"""
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("背景テーマ パフォーマンスレポート（実動画データ）")
-        print("="*70)
+        print("=" * 70)
 
         themes = self.theme_manager.themes.keys()
         for theme_name in themes:
@@ -225,7 +231,7 @@ class VideoFeedbackCollector:
             print(f"  ポジティブフィードバック: {summary['positive_feedback_count']}")
             print(f"  ネガティブフィードバック: {summary['negative_feedback_count']}")
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
 
 
 # グローバルインスタンス
@@ -243,11 +249,7 @@ if __name__ == "__main__":
 
     # テストデータ
     test_video_id = "test_video_123"
-    collector.record_video_metadata(
-        test_video_id,
-        "professional_blue",
-        {"title": "Test Video", "duration": 300}
-    )
+    collector.record_video_metadata(test_video_id, "professional_blue", {"title": "Test Video", "duration": 300})
 
     # アナリティクス更新（シミュレーション）
     collector.update_analytics(
@@ -261,7 +263,7 @@ if __name__ == "__main__":
             "avg_view_percentage": 80.2,
             "retention_rate": 75.5,
             "click_through_rate": 12.3,
-        }
+        },
     )
 
     # 手動フィードバック
@@ -272,5 +274,4 @@ if __name__ == "__main__":
     collector.print_performance_report()
 
     # テーママネージャーのレポートも出力
-    from .background_theme import get_theme_manager
     get_theme_manager().print_analytics_report()

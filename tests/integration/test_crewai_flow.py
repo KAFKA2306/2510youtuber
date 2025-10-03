@@ -16,10 +16,7 @@ sys.path.insert(0, str(project_root))
 from app.crew.flows import create_wow_script_crew
 
 # ロギング設定
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -33,35 +30,27 @@ SAMPLE_NEWS = [
         "key_points": [
             "植田総裁が政策見直しの可能性に言及",
             "インフレ率が目標の2%に近づく",
-            "市場では利上げ観測が強まる"
+            "市場では利上げ観測が強まる",
         ],
         "impact_level": "high",
-        "category": "経済"
+        "category": "経済",
     },
     {
         "title": "新NISAが投資ブームを加速",
         "url": "https://example.com/news2",
         "summary": "2024年に始まった新NISA制度により、個人投資家の参入が急増している。",
-        "key_points": [
-            "口座開設数が前年比200%増",
-            "若年層の投資参加が顕著",
-            "長期積立投資が人気"
-        ],
+        "key_points": ["口座開設数が前年比200%増", "若年層の投資参加が顕著", "長期積立投資が人気"],
         "impact_level": "medium",
-        "category": "経済"
+        "category": "経済",
     },
     {
         "title": "AI関連株が市場を牽引",
         "url": "https://example.com/news3",
         "summary": "生成AIブームにより、AI関連企業の株価が急騰している。",
-        "key_points": [
-            "NVIDIA株価が年初来で300%上昇",
-            "日本のAI関連銘柄も連動上昇",
-            "投資家の関心が集中"
-        ],
+        "key_points": ["NVIDIA株価が年初来で300%上昇", "日本のAI関連銘柄も連動上昇", "投資家の関心が集中"],
         "impact_level": "high",
-        "category": "経済"
-    }
+        "category": "経済",
+    },
 ]
 
 
@@ -78,10 +67,7 @@ async def test_crewai_flow():
             logger.info(f"  {i}. {news['title']}")
 
         logger.info("\n🚀 CrewAI実行中...")
-        result = create_wow_script_crew(
-            news_items=SAMPLE_NEWS,
-            target_duration_minutes=8
-        )
+        result = create_wow_script_crew(news_items=SAMPLE_NEWS, target_duration_minutes=8)
 
         # 結果表示
         logger.info("\n" + "=" * 60)

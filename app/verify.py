@@ -21,10 +21,7 @@ import logging
 from dotenv import load_dotenv
 
 # ロギング設定
-logging.basicConfig(
-    level=logging.INFO,
-    format="[%(levelname)s] %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 # .envファイルを読み込み
@@ -101,12 +98,7 @@ class SystemVerifier:
         logger.info("3. Checking VOICEVOX Nemo server...")
 
         try:
-            result = subprocess.run(
-                [str(self.voicevox_manager), "status"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            result = subprocess.run([str(self.voicevox_manager), "status"], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 logger.info(f"✅ VOICEVOX Nemo is running on port {self.voicevox_port}")
                 return True
@@ -130,12 +122,7 @@ class SystemVerifier:
             return False
 
         try:
-            result = subprocess.run(
-                [str(self.voicevox_manager), "start"],
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
+            result = subprocess.run([str(self.voicevox_manager), "start"], capture_output=True, text=True, timeout=120)
 
             if result.returncode == 0:
                 logger.info("✅ VOICEVOX Nemo started successfully")
@@ -200,12 +187,7 @@ class SystemVerifier:
             return False
 
         try:
-            result = subprocess.run(
-                [str(self.voicevox_manager), "test"],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
+            result = subprocess.run([str(self.voicevox_manager), "test"], capture_output=True, text=True, timeout=60)
 
             if result.returncode == 0:
                 logger.info("✅ VOICEVOX synthesis test successful")
@@ -223,9 +205,9 @@ class SystemVerifier:
 
     def print_summary(self):
         """検証結果のサマリーを表示"""
-        logger.info("\n" + "="*60)
+        logger.info("\n" + "=" * 60)
         logger.info("VERIFICATION SUMMARY")
-        logger.info("="*60)
+        logger.info("=" * 60)
 
         if self.errors:
             logger.error(f"\n❌ ERRORS ({len(self.errors)}):")
@@ -244,7 +226,7 @@ class SystemVerifier:
         else:
             logger.error("\n❌ SYSTEM NOT READY - Please fix errors above")
 
-        logger.info("="*60)
+        logger.info("=" * 60)
 
     def run(self) -> bool:
         """全検証を実行"""

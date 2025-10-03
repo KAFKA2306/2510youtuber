@@ -11,13 +11,11 @@ __all__ = [
     # News models
     "NewsItem",
     "NewsCollection",
-
     # Script models
     "Script",
     "ScriptSegment",
     "QualityScore",
     "WOWMetrics",
-
     # Workflow models
     "WorkflowState",
     "StepResult",

@@ -21,9 +21,9 @@ from app.video import video_generator
 
 def test_stock_footage_capability():
     """Test if stock footage generation is available."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🎬 Stock Footage Video Generation Integration Test")
-    print("="*70)
+    print("=" * 70)
 
     # Check if stock footage is available
     can_use_stock = video_generator._can_use_stock_footage()
@@ -68,15 +68,17 @@ def test_stock_footage_capability():
     if results:
         print(f"✓ Found {len(results)} stock clips:")
         for i, clip in enumerate(results[:3], 1):
-            print(f"  {i}. {clip['keyword']} - {clip['quality']} ({clip['width']}x{clip['height']}) - {clip['duration']}s")
+            print(
+                f"  {i}. {clip['keyword']} - {clip['quality']} ({clip['width']}x{clip['height']}) - {clip['duration']}s"
+            )
     else:
         print("✗ No clips found")
         return False
 
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✅ Integration Test Passed!")
-    print("="*70)
+    print("=" * 70)
     print("\nStock footage video generation is fully operational.")
     print("Next video generation will automatically use stock footage B-roll.")
     print("\nTo generate a test video with stock footage, run:")
@@ -105,9 +107,9 @@ def test_generation_methods():
 
 def main():
     """Run integration tests."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🧪 Stock Footage Video Generation - Full Integration Test")
-    print("="*70)
+    print("=" * 70)
 
     success = test_stock_footage_capability()
 

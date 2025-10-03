@@ -11,6 +11,7 @@ class ScriptSegment(BaseModel):
 
     個別の発話単位を表すモデル
     """
+
     speaker: str = Field(..., description="話者名（田中/鈴木/ナレーター）")
     text: str = Field(..., min_length=1, description="発話テキスト")
     timestamp_start: Optional[float] = Field(default=None, description="開始時刻（秒）")
@@ -51,6 +52,7 @@ class WOWMetrics(BaseModel):
 
     台本の驚き・感動・エンゲージメント要素を数値化
     """
+
     surprise_points_count: int = Field(default=0, ge=0, description="驚きポイント数")
     emotion_peaks_count: int = Field(default=0, ge=0, description="感情ピーク数")
     curiosity_gaps_count: int = Field(default=0, ge=0, description="好奇心ギャップ数")
@@ -62,12 +64,12 @@ class WOWMetrics(BaseModel):
     def total_wow_elements(self) -> int:
         """WOW要素の合計数"""
         return (
-            self.surprise_points_count +
-            self.emotion_peaks_count +
-            self.curiosity_gaps_count +
-            self.visual_instructions_count +
-            self.concrete_numbers_count +
-            self.viewer_questions_count
+            self.surprise_points_count
+            + self.emotion_peaks_count
+            + self.curiosity_gaps_count
+            + self.visual_instructions_count
+            + self.concrete_numbers_count
+            + self.viewer_questions_count
         )
 
     @property
@@ -81,6 +83,7 @@ class QualityScore(BaseModel):
 
     台本の品質を多次元で評価
     """
+
     wow_score: float = Field(..., ge=0.0, le=10.0, description="総合WOWスコア")
     surprise_score: float = Field(..., ge=0.0, le=10.0, description="驚き度")
     emotion_score: float = Field(..., ge=0.0, le=10.0, description="感動度")
@@ -110,10 +113,7 @@ class QualityScore(BaseModel):
 
     def is_passing(self, wow_threshold: float = 8.0, purity_threshold: float = 95.0) -> bool:
         """合格基準を満たしているか"""
-        return (
-            self.wow_score >= wow_threshold and
-            self.japanese_purity >= purity_threshold
-        )
+        return self.wow_score >= wow_threshold and self.japanese_purity >= purity_threshold
 
     @property
     def is_excellent(self) -> bool:
@@ -144,6 +144,7 @@ class Script(BaseModel):
 
     完全な動画台本を表すモデル
     """
+
     segments: List[ScriptSegment] = Field(..., min_items=1, description="台本セグメント")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="メタデータ")
     quality_score: Optional[QualityScore] = Field(default=None, description="品質スコア")
@@ -188,13 +189,7 @@ class Script(BaseModel):
 
     def add_processing_step(self, step_name: str, details: Dict[str, Any]):
         """処理ステップを履歴に追加"""
-        self.processing_history.append({
-            "step": step_name,
-            "timestamp": datetime.now().isoformat(),
-            "details": details
-        })
+        self.processing_history.append({"step": step_name, "timestamp": datetime.now().isoformat(), "details": details})
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}

@@ -60,7 +60,7 @@ class GeminiClient(AIClient):
         model: str = "gemini-2.0-flash-exp",
         temperature: float = 0.7,
         max_tokens: int = 4096,
-        timeout_seconds: int = 120
+        timeout_seconds: int = 120,
     ):
         """
         Args:
@@ -87,7 +87,7 @@ class GeminiClient(AIClient):
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
         timeout_seconds: Optional[int] = None,
-        max_retries: int = 3
+        max_retries: int = 3,
     ) -> str:
         """テキスト生成（リトライ機能付き）
 
@@ -123,11 +123,7 @@ class GeminiClient(AIClient):
                 genai.configure(api_key=api_key_value)
                 client = genai.GenerativeModel(f"models/{self.model_name}")
 
-                response = client.generate_content(
-                    prompt,
-                    generation_config=generation_config,
-                    timeout=timeout
-                )
+                response = client.generate_content(prompt, generation_config=generation_config, timeout=timeout)
                 content = response.text
                 logger.debug(f"Generated {len(content)} characters")
                 return content
@@ -135,18 +131,16 @@ class GeminiClient(AIClient):
                 error_str = str(e).lower()
                 if any(kw in error_str for kw in ["429", "rate limit", "quota"]):
                     logger.warning(f"Gemini rate limit detected: {e}")
-                    raise # rotation_managerがハンドリング
+                    raise  # rotation_managerがハンドリング
                 if any(kw in error_str for kw in ["504", "deadline exceeded", "timeout"]):
                     logger.warning(f"Gemini timeout detected: {e}")
-                    raise # rotation_managerがハンドリング
+                    raise  # rotation_managerがハンドリング
                 logger.warning(f"Gemini API error: {e}")
-                raise # rotation_managerがハンドリング
+                raise  # rotation_managerがハンドリング
 
         try:
             return rotation_manager.execute_with_rotation(
-                provider="gemini",
-                api_call=api_call_with_key,
-                max_attempts=max_retries
+                provider="gemini", api_call=api_call_with_key, max_attempts=max_retries
             )
         except Exception as e:
             logger.error(f"All Gemini API attempts failed: {e}")
@@ -209,12 +203,7 @@ class PerplexityClient(AIClient):
     リトライ機能、タイムアウト処理を含む
     """
 
-    def __init__(
-        self,
-        api_key: Optional[str] = None,
-        model: str = "sonar",
-        timeout_seconds: int = 120
-    ):
+    def __init__(self, api_key: Optional[str] = None, model: str = "sonar", timeout_seconds: int = 120):
         self.api_key = api_key or settings.api_keys.get("perplexity") or os.getenv("PERPLEXITY_API_KEY")
         if not self.api_key:
             raise ValueError("Perplexity API key not found. Please set PERPLEXITY_API_KEY or configure in AppSettings.")
@@ -248,12 +237,7 @@ class PerplexityClient(AIClient):
                 logger.debug(f"Perplexity API call (attempt {attempt+1}/{max_retries})")
 
                 with httpx.Client() as client:
-                    response = client.post(
-                        self.api_url,
-                        json=payload,
-                        headers=headers,
-                        timeout=self.timeout_seconds
-                    )
+                    response = client.post(self.api_url, json=payload, headers=headers, timeout=self.timeout_seconds)
                     response.raise_for_status()
                     data = response.json()
                     content = data["choices"][0]["message"]["content"]
@@ -264,7 +248,7 @@ class PerplexityClient(AIClient):
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429 and attempt < max_retries - 1:
                     # Rate limit
-                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    wait_time = (2**attempt) + random.uniform(0, 1)
                     logger.warning(f"Perplexity rate limit, waiting {wait_time:.2f}s...")
                     time.sleep(wait_time)
                     continue
@@ -332,7 +316,7 @@ class FallbackAIClient(AIClient):
         perplexity_model: str = "sonar",
         temperature: float = 0.7,
         max_tokens: int = 4096,
-        timeout_seconds: int = 120
+        timeout_seconds: int = 120,
     ):
         """
         Args:
@@ -349,10 +333,7 @@ class FallbackAIClient(AIClient):
         # Primary: Gemini
         try:
             self.primary_client = GeminiClient(
-                model=gemini_model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout_seconds=timeout_seconds
+                model=gemini_model, temperature=temperature, max_tokens=max_tokens, timeout_seconds=timeout_seconds
             )
             self.current_client = "gemini"
             logger.info("FallbackAIClient using Gemini as primary")
@@ -363,10 +344,7 @@ class FallbackAIClient(AIClient):
 
         # Fallback: Perplexity
         try:
-            self.fallback_client = PerplexityClient(
-                model=perplexity_model,
-                timeout_seconds=timeout_seconds
-            )
+            self.fallback_client = PerplexityClient(model=perplexity_model, timeout_seconds=timeout_seconds)
         except Exception as e:
             logger.error(f"Perplexity initialization also failed: {e}")
             self.fallback_client = None
@@ -423,10 +401,7 @@ class AIClientFactory:
 
     @staticmethod
     def create(
-        client_type: str,
-        model: Optional[str] = None,
-        temperature: Optional[float] = None,
-        **kwargs
+        client_type: str, model: Optional[str] = None, temperature: Optional[float] = None, **kwargs
     ) -> AIClient:
         """AI Clientを生成
 
@@ -463,6 +438,7 @@ class AIClientFactory:
             AI Clientインスタンス
         """
         from app.config_prompts.prompts import get_prompt_manager
+
         pm = get_prompt_manager()
         agent_config = pm.get_agent_config(agent_name)
 
@@ -473,7 +449,7 @@ class AIClientFactory:
                 perplexity_model="sonar",
                 temperature=agent_config.get("temperature", 0.7),
                 max_tokens=agent_config.get("max_tokens", 4096),
-                timeout_seconds=agent_config.get("timeout_seconds", 300)
+                timeout_seconds=agent_config.get("timeout_seconds", 300),
             )
         else:
             # Geminiのみ（フォールバックなし）
@@ -481,7 +457,7 @@ class AIClientFactory:
                 model=agent_config.get("model", "gemini-2.0-flash-exp"),
                 temperature=agent_config.get("temperature", 0.7),
                 max_tokens=agent_config.get("max_tokens", 4096),
-                timeout_seconds=agent_config.get("timeout_seconds", 300)
+                timeout_seconds=agent_config.get("timeout_seconds", 300),
             )
 
 
@@ -489,11 +465,8 @@ class AIClientFactory:
 # 便利関数
 # ===================================
 
-def get_gemini_client(
-    model: str = "gemini-2.5-flash",
-    temperature: float = 0.7,
-    **kwargs
-) -> GeminiClient:
+
+def get_gemini_client(model: str = "gemini-2.5-flash", temperature: float = 0.7, **kwargs) -> GeminiClient:
     """Gemini Clientを取得（簡易関数）"""
     return GeminiClient(model=model, temperature=temperature, **kwargs)
 
@@ -508,8 +481,6 @@ def get_perplexity_client(model: str = "sonar", **kwargs) -> PerplexityClient:
 # ===================================
 
 try:
-    from typing import Any, List, Optional
-
     import google.generativeai as genai_sdk
     from langchain_core.language_models.llms import LLM as BaseLLM
 
@@ -546,11 +517,7 @@ try:
                 logger.error(f"Gemini Direct call failed: {e}")
                 raise
 
-    def get_crewai_gemini_llm(
-        model: str = "gemini-pro",
-        temperature: float = 0.7,
-        **kwargs
-    ):
+    def get_crewai_gemini_llm(model: str = "gemini-pro", temperature: float = 0.7, **kwargs):
         """CrewAI用のGemini LLM（Direct SDK - NO LiteLLM/Vertex AI）"""
         # モデル名の正規化 - Google AI Studio API compatible names
         model_mapping = {
@@ -566,7 +533,7 @@ try:
         logger.info(f"CrewAI LLM: {model} -> {final_model} (Direct Gemini SDK)")
 
         return GeminiDirectLLM(
-            model=final_model, # model_nameをmodelに変更
+            model=final_model,  # model_nameをmodelに変更
             temperature=temperature,
             # api_keyはGeminiClient内でrotation_managerから取得するため不要
         )

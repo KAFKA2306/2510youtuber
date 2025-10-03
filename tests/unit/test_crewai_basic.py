@@ -47,6 +47,7 @@ def test_agent_creation():
     except Exception as e:
         print(f"✗ Agent creation failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -72,7 +73,7 @@ def test_task_creation():
                 "source": "日本経済新聞",
                 "impact_level": "high",
                 "category": "金融",
-                "key_points": ["年初来高値更新", "2.1%上昇", "好調な企業決算"]
+                "key_points": ["年初来高値更新", "2.1%上昇", "好調な企業決算"],
             },
             {
                 "title": "円相場が急騰、1ドル140円台に",
@@ -80,8 +81,8 @@ def test_task_creation():
                 "source": "ロイター",
                 "impact_level": "medium",
                 "category": "為替",
-                "key_points": ["円急騰", "140円台", "3ヶ月ぶり"]
-            }
+                "key_points": ["円急騰", "140円台", "3ヶ月ぶり"],
+            },
         ]
 
         # タスク生成
@@ -103,6 +104,7 @@ def test_task_creation():
     except Exception as e:
         print(f"✗ Task creation failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -125,7 +127,7 @@ def test_crew_initialization():
                 "summary": "日本銀行は金融政策決定会合で、政策金利の据え置きを決定した。",
                 "source": "日本経済新聞",
                 "impact_level": "high",
-                "category": "金融政策"
+                "category": "金融政策",
             }
         ]
 
@@ -146,6 +148,7 @@ def test_crew_initialization():
     except Exception as e:
         print(f"✗ Crew initialization failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

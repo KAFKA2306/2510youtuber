@@ -67,9 +67,7 @@ class StockFootageManager:
 
         # Fallback to Pixabay if needed
         if len(all_results) < max_clips and self.pixabay_api_key:
-            pixabay_results = self._search_pixabay(
-                keywords, max_clips - len(all_results), orientation
-            )
+            pixabay_results = self._search_pixabay(keywords, max_clips - len(all_results), orientation)
             all_results.extend(pixabay_results)
             logger.info(f"Found {len(pixabay_results)} clips from Pixabay")
 
@@ -83,9 +81,7 @@ class StockFootageManager:
         # Limit to max_clips
         return all_results[:max_clips]
 
-    def _search_pexels(
-        self, keywords: List[str], max_clips: int, orientation: str
-    ) -> List[Dict]:
+    def _search_pexels(self, keywords: List[str], max_clips: int, orientation: str) -> List[Dict]:
         """Search Pexels API for stock footage."""
         results = []
 
@@ -116,17 +112,19 @@ class StockFootageManager:
                         hd_file = self._get_best_video_file(video_files)
 
                         if hd_file:
-                            results.append({
-                                "id": f"pexels_{video['id']}",
-                                "url": hd_file["link"],
-                                "duration": video.get("duration", 10),
-                                "keyword": keyword,
-                                "width": video.get("width", 1920),
-                                "height": video.get("height", 1080),
-                                "quality": hd_file.get("quality", "hd"),
-                                "source": "pexels",
-                                "thumbnail": video.get("image", ""),
-                            })
+                            results.append(
+                                {
+                                    "id": f"pexels_{video['id']}",
+                                    "url": hd_file["link"],
+                                    "duration": video.get("duration", 10),
+                                    "keyword": keyword,
+                                    "width": video.get("width", 1920),
+                                    "height": video.get("height", 1080),
+                                    "quality": hd_file.get("quality", "hd"),
+                                    "source": "pexels",
+                                    "thumbnail": video.get("image", ""),
+                                }
+                            )
 
                 elif response.status_code == 429:
                     logger.warning("Pexels API rate limit reached")
@@ -139,9 +137,7 @@ class StockFootageManager:
 
         return results
 
-    def _search_pixabay(
-        self, keywords: List[str], max_clips: int, orientation: str
-    ) -> List[Dict]:
+    def _search_pixabay(self, keywords: List[str], max_clips: int, orientation: str) -> List[Dict]:
         """Search Pixabay API for stock footage.
 
         API Docs: https://pixabay.com/api/docs/
@@ -168,7 +164,9 @@ class StockFootageManager:
                 if response.status_code == 200:
                     data = response.json()
                     videos = data.get("hits", [])
-                    logger.info(f"Pixabay: Found {len(videos)} videos for '{keyword}' (total available: {data.get('totalHits', 0)})")
+                    logger.info(
+                        f"Pixabay: Found {len(videos)} videos for '{keyword}' (total available: {data.get('totalHits', 0)})"
+                    )
 
                     for video in videos:
                         video_files = video.get("videos", {})
@@ -184,20 +182,22 @@ class StockFootageManager:
                             # Skip if no suitable quality available
                             continue
 
-                        results.append({
-                            "id": f"pixabay_{video['id']}",
-                            "url": video_data["url"],
-                            "duration": video.get("duration", 10),
-                            "keyword": keyword,
-                            "width": video_data.get("width", 1280),
-                            "height": video_data.get("height", 720),
-                            "quality": quality,
-                            "source": "pixabay",
-                            "thumbnail": video_data.get("thumbnail", ""),
-                            "tags": video.get("tags", ""),
-                            "downloads": video.get("downloads", 0),
-                            "likes": video.get("likes", 0),
-                        })
+                        results.append(
+                            {
+                                "id": f"pixabay_{video['id']}",
+                                "url": video_data["url"],
+                                "duration": video.get("duration", 10),
+                                "keyword": keyword,
+                                "width": video_data.get("width", 1280),
+                                "height": video_data.get("height", 720),
+                                "quality": quality,
+                                "source": "pixabay",
+                                "thumbnail": video_data.get("thumbnail", ""),
+                                "tags": video.get("tags", ""),
+                                "downloads": video.get("downloads", 0),
+                                "likes": video.get("likes", 0),
+                            }
+                        )
 
                 elif response.status_code == 429:
                     logger.warning("Pixabay API rate limit reached")
@@ -300,6 +300,7 @@ class StockFootageManager:
             return
 
         import time
+
         now = time.time()
         cutoff = older_than_days * 24 * 3600
         deleted = 0

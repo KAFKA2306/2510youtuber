@@ -74,9 +74,7 @@ class BRollGenerator:
 
         # Output path
         if not output_path:
-            output_path = os.path.join(
-                tempfile.gettempdir(), f"broll_{os.getpid()}.mp4"
-            )
+            output_path = os.path.join(tempfile.gettempdir(), f"broll_{os.getpid()}.mp4")
 
         logger.info(f"Generating B-roll from {len(valid_clips)} clips (target: {target_duration}s)")
 
@@ -86,9 +84,7 @@ class BRollGenerator:
         try:
             if len(valid_clips) == 1:
                 # Single clip: just apply effects
-                return self._process_single_clip(
-                    valid_clips[0], target_duration, output_path, enable_effects
-                )
+                return self._process_single_clip(valid_clips[0], target_duration, output_path, enable_effects)
             else:
                 # Multiple clips: concatenate with transitions
                 return self._concatenate_clips(
@@ -131,9 +127,7 @@ class BRollGenerator:
 
             # Ken Burns effect (slow zoom)
             if enable_effects:
-                filters.append(
-                    f"zoompan=z='min(zoom+0.001,1.2)':d={int(duration * 25)}:s=1920x1080:fps=25"
-                )
+                filters.append(f"zoompan=z='min(zoom+0.001,1.2)':d={int(duration * 25)}:s=1920x1080:fps=25")
 
             # Color grading (warm, professional)
             filters.append("eq=contrast=1.1:brightness=0.02:saturation=1.15")
@@ -143,13 +137,20 @@ class BRollGenerator:
             # Run ffmpeg
             cmd = [
                 self.ffmpeg_path,
-                "-i", clip_path,
-                "-vf", filter_str,
-                "-t", str(duration),
-                "-c:v", "libx264",
-                "-preset", "medium",
-                "-crf", "23",
-                "-pix_fmt", "yuv420p",
+                "-i",
+                clip_path,
+                "-vf",
+                filter_str,
+                "-t",
+                str(duration),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "medium",
+                "-crf",
+                "23",
+                "-pix_fmt",
+                "yuv420p",
                 "-an",  # No audio
                 "-y",
                 output_path,
@@ -255,13 +256,20 @@ class BRollGenerator:
             cmd = [
                 self.ffmpeg_path,
                 *input_args,
-                "-filter_complex", filter_complex,
-                "-map", f"[{current_label}]",
-                "-c:v", "libx264",
-                "-preset", "medium",
-                "-crf", "23",
-                "-pix_fmt", "yuv420p",
-                "-movflags", "+faststart",
+                "-filter_complex",
+                filter_complex,
+                "-map",
+                f"[{current_label}]",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "medium",
+                "-crf",
+                "23",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
                 "-y",
                 output_path,
             ]
@@ -306,9 +314,7 @@ class BRollGenerator:
             Output path or None if failed
         """
         if not output_path:
-            output_path = os.path.join(
-                tempfile.gettempdir(), f"broll_simple_{os.getpid()}.mp4"
-            )
+            output_path = os.path.join(tempfile.gettempdir(), f"broll_simple_{os.getpid()}.mp4")
 
         # Create concat file
         concat_file = os.path.join(tempfile.gettempdir(), f"concat_{os.getpid()}.txt")
@@ -325,14 +331,22 @@ class BRollGenerator:
             # Simple concatenation
             cmd = [
                 self.ffmpeg_path,
-                "-f", "concat",
-                "-safe", "0",
-                "-i", concat_file,
-                "-vf", "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080",
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "23",
-                "-pix_fmt", "yuv420p",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                concat_file,
+                "-vf",
+                "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "fast",
+                "-crf",
+                "23",
+                "-pix_fmt",
+                "yuv420p",
                 "-an",
                 "-y",
                 output_path,

@@ -7,7 +7,6 @@ SEO最適化と視聴者エンゲージメント向上を目的とした高品�
 
 import json
 import logging
-import os  # 追加
 import re
 from datetime import datetime
 from typing import Any, Dict, List
@@ -154,7 +153,7 @@ class MetadataGenerator:
             """単一APIキーでの呼び出し"""
             try:
                 genai.configure(api_key=api_key)
-                client = genai.GenerativeModel("models/gemini-2.0-flash-exp") # 統一モデル名
+                client = genai.GenerativeModel("models/gemini-2.0-flash-exp")  # 統一モデル名
 
                 generation_config = genai.GenerationConfig(
                     temperature=0.7,
@@ -163,10 +162,7 @@ class MetadataGenerator:
                     max_output_tokens=4096,
                 )
 
-                response = client.generate_content(
-                    prompt,
-                    generation_config=generation_config
-                )
+                response = client.generate_content(prompt, generation_config=generation_config)
                 content = response.text
                 logger.debug(f"Generated metadata response length: {len(content)}")
                 return content
@@ -184,9 +180,7 @@ class MetadataGenerator:
 
         try:
             return rotation_manager.execute_with_rotation(
-                provider="gemini",
-                api_call=api_call_with_key,
-                max_attempts=max_retries
+                provider="gemini", api_call=api_call_with_key, max_attempts=max_retries
             )
         except Exception as e:
             logger.error(f"All Gemini API attempts failed for metadata generation: {e}")
@@ -284,7 +278,18 @@ class MetadataGenerator:
             wow_elements.append(bai_match.group(1))
 
         # 変動表現
-        trend_patterns = ["急騰", "暴落", "急落", "高騰", "急上昇", "急降下", "史上最高", "最安値", "年初来高値", "年初来安値"]
+        trend_patterns = [
+            "急騰",
+            "暴落",
+            "急落",
+            "高騰",
+            "急上昇",
+            "急降下",
+            "史上最高",
+            "最安値",
+            "年初来高値",
+            "年初来安値",
+        ]
         for pattern in trend_patterns:
             if pattern in text:
                 wow_elements.append(pattern)

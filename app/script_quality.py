@@ -41,10 +41,7 @@ class ThreeStageScriptGenerator:
             raise
 
     def generate_high_quality_script(
-        self,
-        news_items: List[Dict[str, Any]],
-        base_prompt: str,
-        target_duration_minutes: int = 30
+        self, news_items: List[Dict[str, Any]], base_prompt: str, target_duration_minutes: int = 30
     ) -> Dict[str, Any]:
         """3段階品質チェックで高品質な台本を生成
 
@@ -76,7 +73,7 @@ class ThreeStageScriptGenerator:
                     "stage2_review": {"error": "Review failed"},
                     "quality_score": 5.0,
                     "iterations": 1,
-                    "success": True
+                    "success": True,
                 }
 
             # Stage 3: 最終稿生成（必要に応じて改善）
@@ -88,15 +85,11 @@ class ThreeStageScriptGenerator:
                     "stage2_review": stage2_result,
                     "quality_score": stage2_result["quality_score"],
                     "iterations": 1,
-                    "success": True
+                    "success": True,
                 }
             else:
                 stage3_result = self._stage3_generate_final(
-                    stage1_result["draft"],
-                    stage2_result,
-                    news_items,
-                    base_prompt,
-                    target_duration_minutes
+                    stage1_result["draft"], stage2_result, news_items, base_prompt, target_duration_minutes
                 )
 
                 return {
@@ -106,7 +99,7 @@ class ThreeStageScriptGenerator:
                     "stage3_improvements": stage3_result.get("improvements", []),
                     "quality_score": stage3_result.get("quality_score", 8.0),
                     "iterations": 2,
-                    "success": True
+                    "success": True,
                 }
 
         except Exception as e:
@@ -114,10 +107,7 @@ class ThreeStageScriptGenerator:
             return self._create_failure_result(str(e))
 
     def _stage1_generate_draft(
-        self,
-        news_items: List[Dict[str, Any]],
-        base_prompt: str,
-        target_duration: int
+        self, news_items: List[Dict[str, Any]], base_prompt: str, target_duration: int
     ) -> Dict[str, Any]:
         """Stage 1: 初稿を生成"""
         logger.info("Stage 1: Generating draft script...")
@@ -163,21 +153,13 @@ class ThreeStageScriptGenerator:
             draft_script = response.text.strip()
 
             logger.info(f"Stage 1 completed: {len(draft_script)} characters")
-            return {
-                "success": True,
-                "draft": draft_script,
-                "length": len(draft_script)
-            }
+            return {"success": True, "draft": draft_script, "length": len(draft_script)}
 
         except Exception as e:
             logger.error(f"Stage 1 failed: {e}")
             return {"success": False, "error": str(e)}
 
-    def _stage2_quality_review(
-        self,
-        draft_script: str,
-        news_items: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def _stage2_quality_review(self, draft_script: str, news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Stage 2: 品質レビューを実施"""
         logger.info("Stage 2: Reviewing script quality...")
 
@@ -236,7 +218,7 @@ class ThreeStageScriptGenerator:
                 "quality_score": quality_score,
                 "review_text": review_text,
                 "improvements": improvements,
-                "strengths": strengths
+                "strengths": strengths,
             }
 
         except Exception as e:
@@ -249,7 +231,7 @@ class ThreeStageScriptGenerator:
         review_result: Dict[str, Any],
         news_items: List[Dict[str, Any]],
         base_prompt: str,
-        target_duration: int
+        target_duration: int,
     ) -> Dict[str, Any]:
         """Stage 3: レビューを反映した最終稿を生成"""
         logger.info("Stage 3: Generating final script with improvements...")
@@ -299,7 +281,7 @@ class ThreeStageScriptGenerator:
                 "success": True,
                 "final_script": final_script,
                 "improvements": improvements,
-                "quality_score": 8.5  # 改善後のスコア（推定）
+                "quality_score": 8.5,  # 改善後のスコア（推定）
             }
 
         except Exception as e:
@@ -309,7 +291,7 @@ class ThreeStageScriptGenerator:
                 "success": True,
                 "final_script": draft_script,
                 "error": str(e),
-                "quality_score": review_result.get("quality_score", 6.0)
+                "quality_score": review_result.get("quality_score", 6.0),
             }
 
     def _format_news_for_script(self, news_items: List[Dict[str, Any]]) -> str:
@@ -405,13 +387,7 @@ class ThreeStageScriptGenerator:
 
     def _create_failure_result(self, error: str) -> Dict[str, Any]:
         """失敗結果を作成"""
-        return {
-            "success": False,
-            "error": error,
-            "final_script": None,
-            "quality_score": 0.0,
-            "iterations": 0
-        }
+        return {"success": False, "error": error, "final_script": None, "quality_score": 0.0, "iterations": 0}
 
 
 # グローバルインスタンス
@@ -419,22 +395,14 @@ three_stage_generator = ThreeStageScriptGenerator() if cfg.gemini_api_key else N
 
 
 def generate_high_quality_script(
-    news_items: List[Dict[str, Any]],
-    base_prompt: str,
-    target_duration_minutes: int = 30
+    news_items: List[Dict[str, Any]], base_prompt: str, target_duration_minutes: int = 30
 ) -> Dict[str, Any]:
     """3段階品質チェック付き台本生成の簡易関数"""
     if three_stage_generator:
-        return three_stage_generator.generate_high_quality_script(
-            news_items, base_prompt, target_duration_minutes
-        )
+        return three_stage_generator.generate_high_quality_script(news_items, base_prompt, target_duration_minutes)
     else:
         logger.error("Three-stage generator not available")
-        return {
-            "success": False,
-            "error": "Three-stage generator not initialized",
-            "final_script": None
-        }
+        return {"success": False, "error": "Three-stage generator not initialized", "final_script": None}
 
 
 if __name__ == "__main__":
@@ -449,7 +417,7 @@ if __name__ == "__main__":
                 "url": "https://example.com/news1",
                 "key_points": ["年初来高値更新", "2.1%上昇", "好調な企業決算"],
                 "impact_level": "high",
-                "category": "金融"
+                "category": "金融",
             }
         ]
 

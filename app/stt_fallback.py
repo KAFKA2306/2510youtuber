@@ -65,18 +65,21 @@ class STTFallbackManager:
         """Whisper による音声認識"""
         try:
             import whisper
+
             model = whisper.load_model("base")
             result = model.transcribe(audio_path, word_timestamps=True)
 
             words = []
             for segment in result.get("segments", []):
                 for word_data in segment.get("words", []):
-                    words.append({
-                        "word": word_data["word"].strip(),
-                        "start": word_data["start"],
-                        "end": word_data["end"],
-                        "confidence": 0.9  # Whisper doesn't provide confidence
-                    })
+                    words.append(
+                        {
+                            "word": word_data["word"].strip(),
+                            "start": word_data["start"],
+                            "end": word_data["end"],
+                            "confidence": 0.9,  # Whisper doesn't provide confidence
+                        }
+                    )
             return words
         except ImportError:
             self.logger.warning("whisper library not installed, trying CLI.")
@@ -94,29 +97,45 @@ class STTFallbackManager:
 
             # Use a temporary file for JSON output
             temp_json_path = f"{audio_path}.json"
-            result = subprocess.run([
-                "whisper", audio_path, "--model", "base",
-                "--output_format", "json", "--word_timestamps", "True",
-                "--output_dir", os.path.dirname(temp_json_path) # Specify output directory
-            ], capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                [
+                    "whisper",
+                    audio_path,
+                    "--model",
+                    "base",
+                    "--output_format",
+                    "json",
+                    "--word_timestamps",
+                    "True",
+                    "--output_dir",
+                    os.path.dirname(temp_json_path),  # Specify output directory
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
 
             if os.path.exists(temp_json_path):
                 with open(temp_json_path, "r") as f:
                     data = json.load(f)
-                os.remove(temp_json_path) # Clean up temp file
+                os.remove(temp_json_path)  # Clean up temp file
 
                 words = []
                 for segment in data.get("segments", []):
                     for word_data in segment.get("words", []):
-                        words.append({
-                            "word": word_data["word"].strip(),
-                            "start": word_data["start"],
-                            "end": word_data["end"],
-                            "confidence": 0.9
-                        })
+                        words.append(
+                            {
+                                "word": word_data["word"].strip(),
+                                "start": word_data["start"],
+                                "end": word_data["end"],
+                                "confidence": 0.9,
+                            }
+                        )
                 return words
             else:
-                self.logger.error(f"Whisper CLI did not produce expected JSON output at {temp_json_path}. Stderr: {result.stderr}")
+                self.logger.error(
+                    f"Whisper CLI did not produce expected JSON output at {temp_json_path}. Stderr: {result.stderr}"
+                )
                 return []
         except FileNotFoundError:
             self.logger.warning("Whisper CLI or ffmpeg not found. Please install them.")
@@ -193,12 +212,7 @@ class STTFallbackManager:
             for word in words:
                 start_time = current_time
                 end_time = current_time + word_duration
-                word_list.append({
-                    "word": word,
-                    "start": start_time,
-                    "end": end_time,
-                    "confidence": 0.7
-                })
+                word_list.append({"word": word, "start": start_time, "end": end_time, "confidence": 0.7})
                 current_time = end_time
 
             return word_list
@@ -224,6 +238,7 @@ class STTFallbackManager:
         except Exception as e:
             self.logger.error(f"Fallback transcription generation failed: {e}")
             return []
+
 
 # グローバルインスタンス
 stt_fallback_manager = STTFallbackManager()

@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # 日本語品質チェックのインポート
 try:
     from .japanese_quality import clean_subtitle_text, validate_subtitle_text
+
     HAS_JAPANESE_QUALITY_CHECK = True
     logger.info("Japanese quality check available for subtitles")
 except ImportError:

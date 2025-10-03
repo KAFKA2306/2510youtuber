@@ -441,9 +441,7 @@ class GenerateThumbnailStep(WorkflowStep):
 
         if not metadata or not news_items:
             logger.warning("Missing metadata or news_items, skipping thumbnail")
-            return self._success(
-                data={"thumbnail_path": None, "warning": "Missing metadata or news_items"}
-            )
+            return self._success(data={"thumbnail_path": None, "warning": "Missing metadata or news_items"})
 
         try:
             thumbnail_path = generate_thumbnail(

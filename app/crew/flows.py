@@ -30,6 +30,7 @@ litellm.vertex_location = None  # Force no Vertex location
 # Patch LiteLLM completion to use shared rotation manager
 original_completion = litellm.completion
 
+
 def patched_completion(model=None, messages=None, **kwargs):
     """Intercept LiteLLM completion calls to use shared rotation manager"""
     if model and "gemini" in model.lower():
@@ -53,11 +54,8 @@ def patched_completion(model=None, messages=None, **kwargs):
         return original_completion(model=model, messages=messages, **kwargs)
 
     # Execute with rotation
-    return rotation_manager.execute_with_rotation(
-        provider="gemini",
-        api_call=litellm_call,
-        max_attempts=3
-    )
+    return rotation_manager.execute_with_rotation(provider="gemini", api_call=litellm_call, max_attempts=3)
+
 
 litellm.completion = patched_completion
 
@@ -109,7 +107,7 @@ class WOWScriptFlow:
             agents=list(self.agents.values()),
             tasks=list(self.tasks.values()),
             process=Process.sequential,  # 順次実行
-            verbose=getattr(settings, "crew_verbose", False)
+            verbose=getattr(settings, "crew_verbose", False),
         )
 
         logger.info("🚀 Starting WOW Script Creation Crew execution...")
@@ -181,7 +179,7 @@ class WOWScriptFlow:
             for i, line in enumerate(script_lines):
                 if line.strip() and not speaker_pattern.match(line.strip()):
                     speaker_format_valid = False
-                    break # 最初の無効な行が見つかったらループを抜ける
+                    break  # 最初の無効な行が見つかったらループを抜ける
 
             if not speaker_format_valid:
                 logger.warning("Script does not have proper speaker format")
@@ -194,7 +192,7 @@ class WOWScriptFlow:
                 "quality_data": parsed_data.get("quality_guarantee", {}),
                 "japanese_purity_score": parsed_data.get("japanese_purity_score", 0),
                 "character_count": parsed_data.get("character_count", len(final_script)),
-                "speaker_format_valid": speaker_format_valid, # 新しいフィールドを追加
+                "speaker_format_valid": speaker_format_valid,  # 新しいフィールドを追加
             }
 
             return result
@@ -208,10 +206,7 @@ class WOWScriptFlow:
             }
 
 
-def create_wow_script_crew(
-    news_items: List[Dict[str, Any]],
-    target_duration_minutes: int = 8
-) -> Dict[str, Any]:
+def create_wow_script_crew(news_items: List[Dict[str, Any]], target_duration_minutes: int = 8) -> Dict[str, Any]:
     """WOW Script Creation Crewを実行（簡易関数）
 
     Args:
@@ -235,10 +230,7 @@ class WOWScriptFlowWithQualityLoop:
         self.max_iterations = getattr(settings, "max_quality_iterations", 2)
         self.wow_threshold = getattr(settings, "wow_score_min", 8.0)
 
-    def execute_with_quality_loop(
-        self,
-        news_items: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def execute_with_quality_loop(self, news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """品質ループ付き実行
 
         Args:

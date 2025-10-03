@@ -64,7 +64,11 @@ class DriveManager:
     def _verify_folder_access(self):
         """指定フォルダへのアクセス権限を確認"""
         try:
-            folder_info = self.service.files().get(fileId=self.folder_id, fields="id,name,mimeType", supportsAllDrives=True).execute()
+            folder_info = (
+                self.service.files()
+                .get(fileId=self.folder_id, fields="id,name,mimeType", supportsAllDrives=True)
+                .execute()
+            )
 
             if folder_info.get("mimeType") != "application/vnd.google-apps.folder":
                 raise ValueError(f"Specified ID is not a folder: {self.folder_id}")
@@ -102,7 +106,12 @@ class DriveManager:
 
             file_result = (
                 self.service.files()
-                .create(body=file_metadata, media_body=media, fields="id,name,size,webViewLink,webContentLink", supportsAllDrives=True)
+                .create(
+                    body=file_metadata,
+                    media_body=media,
+                    fields="id,name,size,webViewLink,webContentLink",
+                    supportsAllDrives=True,
+                )
                 .execute()
             )
 
@@ -263,7 +272,9 @@ class DriveManager:
             folder_metadata = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
             if self.folder_id:
                 folder_metadata["parents"] = [self.folder_id]
-            folder_result = self.service.files().create(body=folder_metadata, fields="id,name", supportsAllDrives=True).execute()
+            folder_result = (
+                self.service.files().create(body=folder_metadata, fields="id,name", supportsAllDrives=True).execute()
+            )
             folder_id = folder_result.get("id")
             logger.info(f"Created package folder: {folder_name} ({folder_id})")
             return folder_id
@@ -284,7 +295,9 @@ class DriveManager:
 
     def _get_folder_link(self, folder_id: str) -> str:
         try:
-            folder_info = self.service.files().get(fileId=folder_id, fields="webViewLink", supportsAllDrives=True).execute()
+            folder_info = (
+                self.service.files().get(fileId=folder_id, fields="webViewLink", supportsAllDrives=True).execute()
+            )
             return folder_info.get("webViewLink", "")
         except Exception as e:
             logger.warning(f"Failed to get folder link: {e}")
@@ -321,6 +334,7 @@ class DriveManager:
         """ファイルをローカルにコピー"""
         try:
             import shutil
+
             dest_path = os.path.join(dest_dir, dest_filename)
             shutil.copy2(source_path, dest_path)
             logger.info(f"Saved local copy: {dest_path}")
@@ -333,7 +347,13 @@ class DriveManager:
             query = f"'{target_folder_id}' in parents and trashed=false" if target_folder_id else "trashed=false"
             results = (
                 self.service.files()
-                .list(q=query, pageSize=limit, fields="files(id,name,size,mimeType,createdTime,webViewLink)", supportsAllDrives=True, includeItemsFromAllDrives=True)
+                .list(
+                    q=query,
+                    pageSize=limit,
+                    fields="files(id,name,size,mimeType,createdTime,webViewLink)",
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
                 .execute()
             )
             files = results.get("files", [])
@@ -373,7 +393,13 @@ class DriveManager:
             query = f"createdTime < '{cutoff_str}' and trashed=false"
             if self.folder_id:
                 query += f" and '{self.folder_id}' in parents"
-            results = self.service.files().list(q=query, fields="files(id,name,createdTime)", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
+            results = (
+                self.service.files()
+                .list(
+                    q=query, fields="files(id,name,createdTime)", supportsAllDrives=True, includeItemsFromAllDrives=True
+                )
+                .execute()
+            )
             old_files = results.get("files", [])
             deleted_count = 0
             for file_info in old_files:

@@ -31,7 +31,7 @@ def test_gemini_key_registration(has_gemini_key):
 
     # Geminiキーとキー名を収集 (GEMINI_API_KEY_2から5を対象)
     gemini_keys_with_names = []
-    for i in range(2, 6): # GEMINI_API_KEY_1はスキップ
+    for i in range(2, 6):  # GEMINI_API_KEY_1はスキップ
         key_name = f"GEMINI_API_KEY_{i}"
         key_value = os.getenv(key_name)
         if key_value and "your-" not in key_value:
@@ -46,7 +46,7 @@ def test_gemini_key_registration(has_gemini_key):
 
         # 登録されたキーのkey_nameが正しく設定されていることを確認
         for i, key_obj in enumerate(manager.key_pools["gemini"]):
-            expected_key_name = f"GEMINI_API_KEY_{i+2}" # インデックス調整
+            expected_key_name = f"GEMINI_API_KEY_{i+2}"  # インデックス調整
             assert key_obj.key_name == expected_key_name, f"キー {key_obj.key} のkey_nameが正しくありません"
     else:
         pytest.skip("GEMINI_API_KEY_2から5が設定されていません")
@@ -105,10 +105,10 @@ def test_gemini_daily_quota_limit_exceeded():
     from app.api_rotation import APIKeyRotationManager
 
     manager = APIKeyRotationManager()
-    manager.register_keys("gemini", [("GEMINI_API_KEY_2", "key2")]) # GEMINI_API_KEY_2を使用
+    manager.register_keys("gemini", [("GEMINI_API_KEY_2", "key2")])  # GEMINI_API_KEY_2を使用
     manager.set_gemini_daily_quota_limit(1)  # 制限を1に設定
     manager.gemini_daily_calls = 0
-    manager.last_quota_reset_date = datetime.datetime.now() - datetime.timedelta(days=1) # リセットを強制
+    manager.last_quota_reset_date = datetime.datetime.now() - datetime.timedelta(days=1)  # リセットを強制
 
     mock_api_call = MagicMock(return_value="Success")
 
@@ -119,7 +119,7 @@ def test_gemini_daily_quota_limit_exceeded():
     # 2回目の呼び出しは制限超過で失敗
     with pytest.raises(Exception, match="Gemini daily quota .* exceeded"):
         manager.execute_with_rotation("gemini", mock_api_call)
-    assert manager.gemini_daily_calls == 1 # 失敗してもカウントは増えない
+    assert manager.gemini_daily_calls == 1  # 失敗してもカウントは増えない
 
 
 @pytest.mark.api
@@ -131,16 +131,16 @@ def test_gemini_daily_quota_reset():
     from app.api_rotation import APIKeyRotationManager
 
     manager = APIKeyRotationManager()
-    manager.register_keys("gemini", [("GEMINI_API_KEY_2", "key2")]) # GEMINI_API_KEY_2を使用
+    manager.register_keys("gemini", [("GEMINI_API_KEY_2", "key2")])  # GEMINI_API_KEY_2を使用
     manager.set_gemini_daily_quota_limit(1)  # 制限を1に設定
     manager.gemini_daily_calls = 1
-    manager.last_quota_reset_date = datetime.datetime.now() - datetime.timedelta(days=1) # リセットを強制
+    manager.last_quota_reset_date = datetime.datetime.now() - datetime.timedelta(days=1)  # リセットを強制
 
     mock_api_call = MagicMock(return_value="Success")
 
     # 日付が変わったので、クォータがリセットされ、呼び出しが成功する
     manager.execute_with_rotation("gemini", mock_api_call)
-    assert manager.gemini_daily_calls == 1 # リセット後、1回目の呼び出し
+    assert manager.gemini_daily_calls == 1  # リセット後、1回目の呼び出し
     assert manager.last_quota_reset_date.date() == datetime.datetime.now().date()
 
 
@@ -154,7 +154,9 @@ def test_log_output_contains_key_name(caplog):
 
     manager = APIKeyRotationManager()
     manager.key_pools["test_service"] = [
-        APIKey(key="test_key_value_1", provider="test_service", key_name="TEST_API_KEY_1") # APIKeyRotationManager.APIKey を APIKey に変更
+        APIKey(
+            key="test_key_value_1", provider="test_service", key_name="TEST_API_KEY_1"
+        )  # APIKeyRotationManager.APIKey を APIKey に変更
     ]
     manager.current_indices["test_service"] = 0
 

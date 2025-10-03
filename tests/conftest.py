@@ -26,6 +26,7 @@ load_dotenv(env_path)
 
 # ===== Session-level Fixtures =====
 
+
 @pytest.fixture(scope="session")
 def project_root() -> Path:
     """プロジェクトルートディレクトリのパス"""
@@ -75,6 +76,7 @@ def has_newsapi_key() -> bool:
 
 # ===== Function-level Fixtures =====
 
+
 @pytest.fixture
 def sample_news_item() -> Dict[str, Any]:
     """サンプルニュースアイテム（単一）"""
@@ -85,7 +87,7 @@ def sample_news_item() -> Dict[str, Any]:
         "key_points": ["年初来高値更新", "2.1%上昇", "好調な企業決算", "海外投資家の買い"],
         "source": "日本経済新聞",
         "impact_level": "high",
-        "category": "金融"
+        "category": "金融",
     }
 
 
@@ -100,7 +102,7 @@ def sample_news_items() -> List[Dict[str, Any]]:
             "key_points": ["政策金利据え置き", "0.25%維持", "市場予想通り"],
             "source": "日本経済新聞",
             "impact_level": "high",
-            "category": "金融政策"
+            "category": "金融政策",
         },
         {
             "title": "新NISAが投資ブームを加速",
@@ -109,7 +111,7 @@ def sample_news_items() -> List[Dict[str, Any]]:
             "key_points": ["口座開設数200%増", "若年層の参加増", "長期積立人気"],
             "source": "ロイター",
             "impact_level": "medium",
-            "category": "投資"
+            "category": "投資",
         },
         {
             "title": "AI関連株が市場を牽引",
@@ -118,8 +120,8 @@ def sample_news_items() -> List[Dict[str, Any]]:
             "key_points": ["NVIDIA株価300%上昇", "日本AI銘柄も連動", "投資家関心集中"],
             "source": "Bloomberg",
             "impact_level": "high",
-            "category": "テクノロジー"
-        }
+            "category": "テクノロジー",
+        },
     ]
 
 
@@ -166,7 +168,7 @@ def sample_script_segments() -> List[Dict[str, str]]:
         {"speaker": "鈴木", "text": "よろしくお願いします。"},
         {"speaker": "田中", "text": "まず第一のポイントは経済成長率です。"},
         {"speaker": "鈴木", "text": "具体的にどれくらいですか？"},
-        {"speaker": "田中", "text": "前年比2.1パーセントの成長となっています。"}
+        {"speaker": "田中", "text": "前年比2.1パーセントの成長となっています。"},
     ]
 
 
@@ -188,6 +190,7 @@ def temp_cache_dir(tmp_path) -> Path:
 
 # ===== Mock Fixtures (基本的なモック) =====
 
+
 @pytest.fixture
 def mock_gemini_response():
     """Gemini APIのモックレスポンス"""
@@ -203,6 +206,7 @@ def mock_gemini_response():
 
 
 # ===== Pytest Hooks =====
+
 
 def pytest_configure(config):
     """pytest設定時のカスタマイズ"""
@@ -230,17 +234,9 @@ def pytest_collection_modifyitems(config, items):
 def pytest_addoption(parser):
     """カスタムコマンドラインオプション追加"""
     parser.addoption(
-        "--run-e2e",
-        action="store_true",
-        default=False,
-        help="E2Eテストを実行する（実API呼び出しあり・課金注意）"
+        "--run-e2e", action="store_true", default=False, help="E2Eテストを実行する（実API呼び出しあり・課金注意）"
     )
-    parser.addoption(
-        "--skip-slow",
-        action="store_true",
-        default=False,
-        help="遅いテストをスキップする"
-    )
+    parser.addoption("--skip-slow", action="store_true", default=False, help="遅いテストをスキップする")
 
 
 def pytest_report_header(config):

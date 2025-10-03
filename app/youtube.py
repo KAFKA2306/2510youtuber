@@ -305,7 +305,9 @@ class YouTubeManager:
             error_detail = str(e)
 
             # 権限エラーの場合は警告のみ（動画自体はアップロード済み）
-            if e.resp.status == 403 and ("forbidden" in error_detail.lower() or "not be properly authorized" in error_detail):
+            if e.resp.status == 403 and (
+                "forbidden" in error_detail.lower() or "not be properly authorized" in error_detail
+            ):
                 logger.warning(
                     f"Thumbnail upload not authorized for video {video_id}. "
                     f"This may be due to OAuth scope limitations. Video upload was successful. "

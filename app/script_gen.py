@@ -5,7 +5,6 @@
 """
 
 import logging
-import os  # 追加
 import re
 from datetime import datetime
 from typing import Any, Dict, List
@@ -20,6 +19,7 @@ logger = logging.getLogger(__name__)
 # 3段階品質チェックシステムのインポート
 try:
     from .script_quality import three_stage_generator
+
     HAS_QUALITY_CHECK = three_stage_generator is not None
     if HAS_QUALITY_CHECK:
         logger.info("3-stage quality check system is available")
@@ -30,6 +30,7 @@ except ImportError:
 # 日本語品質チェックシステムのインポート
 try:
     from .japanese_quality import check_script_japanese_purity, improve_japanese_quality
+
     HAS_JAPANESE_QUALITY_CHECK = True
     logger.info("Japanese quality check system is available")
 except ImportError:
@@ -60,8 +61,12 @@ class ScriptGenerator:
             raise
 
     def generate_dialogue(
-        self, news_items: List[Dict[str, Any]], prompt_b: str = None, target_duration_minutes: int = 8,
-        use_quality_check: bool = True, use_enhanced_template: bool = True
+        self,
+        news_items: List[Dict[str, Any]],
+        prompt_b: str = None,
+        target_duration_minutes: int = 8,
+        use_quality_check: bool = True,
+        use_enhanced_template: bool = True,
     ) -> str:
         """ニュース項目から対談台本を生成
 
@@ -206,7 +211,7 @@ class ScriptGenerator:
             try:
                 # キーごとにクライアントを再設定
                 genai.configure(api_key=api_key)
-                client = genai.GenerativeModel("models/gemini-2.0-flash-exp") # 統一モデル名
+                client = genai.GenerativeModel("models/gemini-2.0-flash-exp")  # 統一モデル名
 
                 # リクエストタイムアウトを設定（120秒）
                 generation_config = genai.GenerationConfig(
@@ -216,11 +221,7 @@ class ScriptGenerator:
                     max_output_tokens=8192,
                 )
 
-                response = client.generate_content(
-                    prompt,
-                    generation_config=generation_config,
-                    timeout=120
-                )
+                response = client.generate_content(prompt, generation_config=generation_config, timeout=120)
                 content = response.text
                 logger.debug(f"Generated script length: {len(content)}")
                 return content
@@ -245,9 +246,7 @@ class ScriptGenerator:
         # キーローテーション実行
         try:
             return rotation_manager.execute_with_rotation(
-                provider="gemini",
-                api_call=api_call_with_key,
-                max_attempts=max_retries
+                provider="gemini", api_call=api_call_with_key, max_attempts=max_retries
             )
         except Exception as e:
             logger.error(f"All Gemini API attempts failed: {e}")
@@ -339,7 +338,7 @@ class ScriptGenerator:
                 r"システムに問題が発生",
                 r"システムエラー",
                 r"技術的な問題",
-                r"手動での確認をお願いします"
+                r"手動での確認をお願いします",
             ]
             for pattern in error_patterns:
                 if re.search(pattern, script):
@@ -501,8 +500,7 @@ script_generator = ScriptGenerator() if cfg.gemini_api_key else None
 
 
 def generate_dialogue(
-    news_items: List[Dict[str, Any]], prompt_b: str, target_duration_minutes: int = 30,
-    use_quality_check: bool = True
+    news_items: List[Dict[str, Any]], prompt_b: str, target_duration_minutes: int = 30, use_quality_check: bool = True
 ) -> str:
     """台本生成の簡易関数
 
@@ -513,9 +511,7 @@ def generate_dialogue(
         use_quality_check: 3段階品質チェックを使用するか（デフォルト: True）
     """
     if script_generator:
-        return script_generator.generate_dialogue(
-            news_items, prompt_b, target_duration_minutes, use_quality_check
-        )
+        return script_generator.generate_dialogue(news_items, prompt_b, target_duration_minutes, use_quality_check)
     else:
         logger.warning("Script generator not available, using template fallback")
         return ScriptGenerator()._get_template_fallback_script(news_items)
@@ -528,8 +524,16 @@ def generate_short_script(topic: str, duration_minutes: int = 10) -> str:
     else:
         logger.warning("Script generator not available, using template fallback")
         return ScriptGenerator()._get_template_fallback_script(
-            [{"title": topic, "summary": f"{topic}についての解説です。", "source": "各種報道",
-              "key_points": [f"{topic}の概要", "重要ポイント"], "impact_level": "medium", "category": "経済"}]
+            [
+                {
+                    "title": topic,
+                    "summary": f"{topic}についての解説です。",
+                    "source": "各種報道",
+                    "key_points": [f"{topic}の概要", "重要ポイント"],
+                    "impact_level": "medium",
+                    "category": "経済",
+                }
+            ]
         )
 
 

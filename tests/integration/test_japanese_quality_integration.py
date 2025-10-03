@@ -26,18 +26,18 @@ def test_english_detection():
         {
             "name": "Pure Japanese",
             "script": "田中: 今日は重要な経済ニュースについて話します。\n鈴木: GDPが3.5%増加しました。",
-            "expected_pure": True
+            "expected_pure": True,
         },
         {
             "name": "Mixed with English",
             "script": "田中: Today we will discuss important news.\n鈴木: The market is very bullish.",
-            "expected_pure": False
+            "expected_pure": False,
         },
         {
             "name": "Allowed abbreviations",
             "script": "田中: AIとIoT技術が発展しています。\n鈴木: GDPは前年比2.3%の増加です。",
-            "expected_pure": True
-        }
+            "expected_pure": True,
+        },
     ]
 
     for test in test_cases:
@@ -164,7 +164,7 @@ def test_end_to_end():
     sample_subtitles = [
         "今日は重要な経済ニュースについて話します",
         "GDPが2.1%増加しました",
-        "製造業とIT業界の成長が顕著です"
+        "製造業とIT業界の成長が顕著です",
     ]
 
     valid_count = 0
@@ -210,6 +210,7 @@ def run_all_tests():
     except Exception as e:
         print(f"\n✗ Test failed with error: {e}")
         import traceback
+
         traceback.print_exc()
 
 

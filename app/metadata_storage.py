@@ -8,10 +8,11 @@ import csv
 import json
 import logging
 import os
-import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from .models.workflow import WorkflowResult
 
 logger = logging.getLogger(__name__)
 
@@ -220,9 +221,7 @@ class MetadataStorage:
 
         return " | ".join(topics)
 
-    def load_history(
-        self, limit: int = 100, mode: str = None, min_views: int = None
-    ) -> List[Dict[str, Any]]:
+    def load_history(self, limit: int = 100, mode: str = None, min_views: int = None) -> List[Dict[str, Any]]:
         """過去のメタデータ履歴を読み込み.
 
         Args:
@@ -285,9 +284,7 @@ class MetadataStorage:
         history = self.load_history(limit=limit * 2, min_views=min_views)
 
         # 視聴回数でソート
-        sorted_history = sorted(
-            history, key=lambda x: int(x.get("view_count", 0) or 0), reverse=True
-        )
+        sorted_history = sorted(history, key=lambda x: int(x.get("view_count", 0) or 0), reverse=True)
 
         titles = [record["title"] for record in sorted_history[:limit] if record.get("title")]
 
@@ -306,9 +303,7 @@ class MetadataStorage:
         history = self.load_history(limit=limit * 2)
 
         # 視聴回数でソート
-        sorted_history = sorted(
-            history, key=lambda x: int(x.get("view_count", 0) or 0), reverse=True
-        )
+        sorted_history = sorted(history, key=lambda x: int(x.get("view_count", 0) or 0), reverse=True)
 
         keyword_count = {}
 
@@ -326,9 +321,7 @@ class MetadataStorage:
                 keyword_count[tag] = keyword_count.get(tag, 0) + 1
 
         # 出現回数でソート
-        sorted_keywords = dict(
-            sorted(keyword_count.items(), key=lambda x: x[1], reverse=True)[:20]
-        )
+        sorted_keywords = dict(sorted(keyword_count.items(), key=lambda x: x[1], reverse=True)[:20])
 
         logger.info(f"Analyzed keywords from top {limit} videos")
         return sorted_keywords

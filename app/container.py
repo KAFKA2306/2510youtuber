@@ -51,6 +51,7 @@ class AppContainer:
         """Get TTS manager instance (lazy-loaded)."""
         if self._tts_manager is None:
             from app.tts import TTSManager
+
             self._tts_manager = TTSManager()
             logger.debug("TTSManager created")
         return self._tts_manager
@@ -65,6 +66,7 @@ class AppContainer:
         """Get video generator instance (lazy-loaded)."""
         if self._video_generator is None:
             from app.video import VideoGenerator
+
             self._video_generator = VideoGenerator()
             logger.debug("VideoGenerator created")
         return self._video_generator
@@ -79,6 +81,7 @@ class AppContainer:
         """Get metadata storage instance (lazy-loaded)."""
         if self._metadata_storage is None:
             from app.metadata_storage import MetadataStorage
+
             self._metadata_storage = MetadataStorage()
             logger.debug("MetadataStorage created")
         return self._metadata_storage
@@ -93,8 +96,10 @@ class AppContainer:
         """Get sheets manager instance (lazy-loaded)."""
         if self._sheets_manager is None:
             from app.config import settings
+
             if settings.google_sheet_id:
                 from app.sheets import SheetsManager
+
                 self._sheets_manager = SheetsManager()
                 logger.debug("SheetsManager created")
             else:
@@ -112,6 +117,7 @@ class AppContainer:
         """Get discord notifier instance (lazy-loaded)."""
         if self._discord_notifier is None:
             from app.discord import DiscordNotifier
+
             self._discord_notifier = DiscordNotifier()
             logger.debug("DiscordNotifier created")
         return self._discord_notifier
@@ -126,6 +132,7 @@ class AppContainer:
         """Get workflow instance (lazy-loaded)."""
         if self._workflow is None:
             from app.main import YouTubeWorkflow
+
             self._workflow = YouTubeWorkflow()
             logger.debug("YouTubeWorkflow created")
         return self._workflow

@@ -84,8 +84,7 @@ class VideoGenerator:
                 try:
                     logger.info("Attempting to generate video with stock footage B-roll...")
                     video_path = self._generate_with_stock_footage(
-                        audio_path, subtitle_path, audio_duration,
-                        script_content, news_items, output_path
+                        audio_path, subtitle_path, audio_duration, script_content, news_items, output_path
                     )
                     if video_path:
                         self.last_used_stock_footage = True
@@ -206,7 +205,11 @@ class VideoGenerator:
                     prev_stop = gradient_stops[color_idx - 1]
                     prev_color = gradient_colors[color_idx]
                     next_stop = gradient_stops[color_idx]
-                    next_color = gradient_colors[color_idx + 1] if color_idx + 1 < len(gradient_colors) else gradient_colors[color_idx]
+                    next_color = (
+                        gradient_colors[color_idx + 1]
+                        if color_idx + 1 < len(gradient_colors)
+                        else gradient_colors[color_idx]
+                    )
                 else:
                     prev_stop = gradient_stops[-1]
                     prev_color = gradient_colors[-1]
@@ -242,7 +245,9 @@ class VideoGenerator:
             # 対角線アクセント（テーマ設定に応じて）
             if theme.diagonal_lines:
                 for i in range(-500, width + 500, 300):
-                    overlay_draw.line([(i, 0), (i + 600, height * 0.6)], fill=(255, 255, 255, theme.grid_opacity + 1), width=2)
+                    overlay_draw.line(
+                        [(i, 0), (i + 600, height * 0.6)], fill=(255, 255, 255, theme.grid_opacity + 1), width=2
+                    )
 
             image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
             draw = ImageDraw.Draw(image)
@@ -267,7 +272,10 @@ class VideoGenerator:
                         elif theme.robot_icon_position == "bottom-left":
                             icon_x, icon_y = margin, height - theme.robot_icon_size[1] - margin
                         elif theme.robot_icon_position == "bottom-right":
-                            icon_x, icon_y = width - theme.robot_icon_size[0] - margin, height - theme.robot_icon_size[1] - margin
+                            icon_x, icon_y = (
+                                width - theme.robot_icon_size[0] - margin,
+                                height - theme.robot_icon_size[1] - margin,
+                            )
                         else:
                             icon_x, icon_y = margin, margin
 
@@ -374,7 +382,9 @@ class VideoGenerator:
     def _get_quality_settings(self) -> Dict[str, Any]:
         presets = settings.video_quality_presets
         quality_settings = presets.get(self.video_quality, presets["medium"])
-        quality_settings.update({"c:a": "aac", "b:a": "128k", "ar": "44100", "pix_fmt": "yuv420p", "movflags": "+faststart"})
+        quality_settings.update(
+            {"c:a": "aac", "b:a": "128k", "ar": "44100", "pix_fmt": "yuv420p", "movflags": "+faststart"}
+        )
         return quality_settings
 
     def _build_subtitle_filter(self, subtitle_path: str) -> str:
@@ -436,12 +446,7 @@ class VideoGenerator:
         for font_name in font_candidates:
             try:
                 # fc-listでフォントの存在を確認
-                result = subprocess.run(
-                    ["fc-list", f":family={font_name}"],
-                    capture_output=True,
-                    text=True,
-                    timeout=2
-                )
+                result = subprocess.run(["fc-list", f":family={font_name}"], capture_output=True, text=True, timeout=2)
                 if result.returncode == 0 and result.stdout.strip():
                     return font_name
             except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
@@ -613,9 +618,7 @@ class VideoGenerator:
             audio_stream = ffmpeg.input(audio_path)
 
             quality_settings = self._get_quality_settings()
-            stream = ffmpeg.output(
-                stream, audio_stream, output_path, **quality_settings
-            ).overwrite_output()
+            stream = ffmpeg.output(stream, audio_stream, output_path, **quality_settings).overwrite_output()
 
             ffmpeg.run(stream, quiet=True)
             logger.info(f"Fallback video generated: {output_path}")
@@ -630,6 +633,7 @@ class VideoGenerator:
 def _get_video_generator() -> VideoGenerator:
     """Get video generator from container (backward compatibility)."""
     from app.container import get_container
+
     return get_container().video_generator
 
 
@@ -650,7 +654,7 @@ def generate_video(
     background_image: str = None,
     title: str = "Economic News",
     script_content: str = "",
-    **kwargs
+    **kwargs,
 ) -> str:
     """Generate video from audio and subtitle files
 
@@ -666,12 +670,7 @@ def generate_video(
         Path to generated video file
     """
     return _get_video_generator().generate_video(
-        audio_path,
-        subtitle_path,
-        background_image,
-        title,
-        script_content=script_content,
-        **kwargs
+        audio_path, subtitle_path, background_image, title, script_content=script_content, **kwargs
     )
 
 

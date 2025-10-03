@@ -104,10 +104,7 @@ class YouTubeWorkflow:
             video_url = self.context.get("video_url")
             if video_url:
                 try:
-                    metadata_storage.update_video_stats(
-                        run_id=self.run_id,
-                        video_url=video_url
-                    )
+                    metadata_storage.update_video_stats(run_id=self.run_id, video_url=video_url)
                     logger.info("Updated metadata storage with video URL")
                 except Exception as e:
                     logger.warning(f"Failed to update video URL in storage: {e}")
@@ -159,8 +156,8 @@ class YouTubeWorkflow:
         return {
             "success": False,
             "failed_step": step_name,
-            "error": result.error if hasattr(result, 'error') else str(result),
-            "run_id": self.run_id
+            "error": result.error if hasattr(result, "error") else str(result),
+            "run_id": self.run_id,
         }
 
     def _compile_final_result(self, step_results: List[Any], execution_time: float) -> Dict[str, Any]:
@@ -221,10 +218,7 @@ class YouTubeWorkflow:
         step_names = [step.step_name for step in self.steps]
         for i, step_result in enumerate(step_results):
             if i < len(step_names):
-                result["steps"][step_names[i]] = {
-                    "success": step_result.success,
-                    **step_result.data
-                }
+                result["steps"][step_names[i]] = {"success": step_result.success, **step_result.data}
 
         result["news_count"] = news_count
         result["script_length"] = script_length
@@ -247,7 +241,7 @@ class YouTubeWorkflow:
 
     def _classify_hook_from_script(self, script_step: Any) -> str:
         """Classify hook strategy from script content."""
-        if not script_step or not hasattr(script_step, 'data'):
+        if not script_step or not hasattr(script_step, "data"):
             return "その他"
 
         script_content = script_step.data.get("script", "")
@@ -257,19 +251,19 @@ class YouTubeWorkflow:
         # Get first 200 chars
         first_segment = script_content[:200]
 
-        if re.search(r'(驚き|衝撃|まさか|信じられない)', first_segment):
+        if re.search(r"(驚き|衝撃|まさか|信じられない)", first_segment):
             return "衝撃的事実"
-        elif re.search(r'(なぜ|どうして|理由|原因)', first_segment):
+        elif re.search(r"(なぜ|どうして|理由|原因)", first_segment):
             return "疑問提起"
-        elif re.search(r'\d+[%％]|\d+億|\d+倍', first_segment):
+        elif re.search(r"\d+[%％]|\d+億|\d+倍", first_segment):
             return "意外な数字"
-        elif re.search(r'(知らない|隠された|裏側|真実)', first_segment):
+        elif re.search(r"(知らない|隠された|裏側|真実)", first_segment):
             return "隠された真実"
         return "その他"
 
     def _extract_topic(self, news_step: Any) -> str:
         """Extract main topic from news items."""
-        if not news_step or not hasattr(news_step, 'data'):
+        if not news_step or not hasattr(news_step, "data"):
             return "一般"
 
         news_items = news_step.data.get("news_items", [])
@@ -327,6 +321,7 @@ class YouTubeWorkflow:
         for file_path in self.context.generated_files:
             try:
                 import os
+
                 if os.path.exists(file_path):
                     os.remove(file_path)
                     cleaned_count += 1
@@ -341,6 +336,7 @@ class YouTubeWorkflow:
 def _get_workflow() -> YouTubeWorkflow:
     """Get workflow instance from container (backward compatibility)."""
     from .container import get_container
+
     return get_container().workflow
 
 

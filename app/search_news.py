@@ -30,7 +30,7 @@ class NewsCollector:
 
         # Perplexity keysを登録
         perplexity_keys_with_names = []
-        for i in range(1, 10): # PERPLEXITY_API_KEY_1からPERPLEXITY_API_KEY_9まで
+        for i in range(1, 10):  # PERPLEXITY_API_KEY_1からPERPLEXITY_API_KEY_9まで
             key_name = f"PERPLEXITY_API_KEY_{i}" if i > 1 else "PERPLEXITY_API_KEY"
             key_value = os.getenv(key_name)
             if key_value:
@@ -188,9 +188,7 @@ class NewsCollector:
         # キーローテーション実行
         try:
             return rotation_manager.execute_with_rotation(
-                provider="perplexity",
-                api_call=api_call_with_key,
-                max_attempts=max_attempts
+                provider="perplexity", api_call=api_call_with_key, max_attempts=max_attempts
             )
         except Exception as e:
             logger.error(f"All Perplexity API attempts failed: {e}")
@@ -322,7 +320,7 @@ class NewsCollector:
                         "summary": article.get("description", "") or article.get("content", "")[:300],
                         "key_points": [
                             article.get("title", ""),
-                            f"出典: {article.get('source', {}).get('name', '不明')}"
+                            f"出典: {article.get('source', {}).get('name', '不明')}",
                         ],
                         "source": article.get("source", {}).get("name", "NewsAPI"),
                         "impact_level": "medium",

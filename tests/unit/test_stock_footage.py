@@ -21,9 +21,9 @@ from app.services.media import BRollGenerator, StockFootageManager, VisualMatche
 
 def test_config():
     """Test configuration."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("📋 Configuration Test")
-    print("="*60)
+    print("=" * 60)
 
     pexels_key = os.getenv("PEXELS_API_KEY", "")
     pixabay_key = os.getenv("PIXABAY_API_KEY", "")
@@ -45,9 +45,9 @@ def test_config():
 
 def test_visual_matcher():
     """Test visual keyword extraction."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🎯 Visual Matcher Test")
-    print("="*60)
+    print("=" * 60)
 
     matcher = VisualMatcher()
 
@@ -81,9 +81,9 @@ def test_visual_matcher():
 
 def test_stock_footage_manager():
     """Test stock footage search and download."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("📹 Stock Footage Manager Test")
-    print("="*60)
+    print("=" * 60)
 
     manager = StockFootageManager()
 
@@ -122,9 +122,9 @@ def test_stock_footage_manager():
 
 def test_broll_generator():
     """Test B-roll generation (requires downloaded clips)."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🎬 B-roll Generator Test")
-    print("="*60)
+    print("=" * 60)
 
     _generator = BRollGenerator()
     print("✓ B-roll generator initialized")
@@ -137,9 +137,9 @@ def test_broll_generator():
 
 def main():
     """Run all tests."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🧪 Stock Footage Integration Test Suite")
-    print("="*70)
+    print("=" * 70)
 
     results = {
         "config": test_config(),
@@ -154,9 +154,9 @@ def main():
         results["stock_footage_manager"] = None
 
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("📊 Test Summary")
-    print("="*70)
+    print("=" * 70)
 
     for test_name, result in results.items():
         if result is None:

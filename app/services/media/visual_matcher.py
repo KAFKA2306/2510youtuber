@@ -23,34 +23,29 @@ class VisualMatcher:
         "株価": ["stock chart", "market data", "trading screen"],
         "投資": ["investment", "investor", "portfolio"],
         "証券": ["securities", "stock exchange", "trading"],
-
         # 通貨・為替
         "円": ["japanese yen", "currency", "forex"],
         "ドル": ["dollar", "currency exchange", "forex"],
         "円高": ["currency exchange", "forex trading", "yen"],
         "円安": ["currency exchange", "forex trading", "yen"],
         "為替": ["foreign exchange", "forex", "currency"],
-
         # 中央銀行・政策
         "日銀": ["bank of japan", "central bank", "monetary policy"],
         "FRB": ["federal reserve", "central bank", "monetary policy"],
         "金利": ["interest rates", "financial charts", "economy"],
         "政策": ["government", "policy", "meeting"],
-
         # 企業・ビジネス
         "企業": ["corporate", "office", "business meeting"],
         "会社": ["company", "corporate office", "business"],
         "業績": ["business performance", "charts", "analytics"],
         "決算": ["financial report", "business meeting", "charts"],
         "売上": ["sales", "business growth", "charts"],
-
         # 都市・場所
         "東京": ["tokyo", "cityscape", "japan"],
         "大阪": ["osaka", "cityscape", "japan"],
         "日本": ["japan", "tokyo", "japanese"],
         "アメリカ": ["united states", "new york", "washington"],
         "中国": ["china", "shanghai", "beijing"],
-
         # トレンド・動き
         "上昇": ["upward trend", "growth", "rising"],
         "下落": ["downward trend", "decline", "falling"],
@@ -58,7 +53,6 @@ class VisualMatcher:
         "回復": ["recovery", "improvement", "growth"],
         "急騰": ["surge", "spike", "rapid growth"],
         "暴落": ["crash", "collapse", "decline"],
-
         # 産業
         "製造": ["manufacturing", "factory", "production"],
         "自動車": ["automotive", "cars", "manufacturing"],
@@ -66,13 +60,11 @@ class VisualMatcher:
         "半導体": ["semiconductor", "technology", "microchip"],
         "AI": ["artificial intelligence", "technology", "computer"],
         "IT": ["information technology", "computer", "digital"],
-
         # 資源・エネルギー
         "石油": ["oil", "energy", "petroleum"],
         "原油": ["crude oil", "oil rig", "energy"],
         "電力": ["electricity", "power plant", "energy"],
         "再生": ["renewable energy", "solar", "wind power"],
-
         # その他
         "グラフ": ["chart", "graph", "data visualization"],
         "データ": ["data", "analytics", "statistics"],

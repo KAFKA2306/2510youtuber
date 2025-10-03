@@ -96,10 +96,7 @@ class BackgroundThemeManager:
             name="professional_blue",
             description="深い青のプロフェッショナルデザイン",
             gradient_stops=[0.25, 0.60, 0.80, 1.0],
-            gradient_colors=[
-                (10, 20, 35), (20, 35, 55),
-                (15, 50, 75), (8, 25, 45), (5, 15, 30)
-            ],
+            gradient_colors=[(10, 20, 35), (20, 35, 55), (15, 50, 75), (8, 25, 45), (5, 15, 30)],
             accent_circles=[
                 {"pos": (-150, -150, 500, 500), "color": (0, 140, 240, 35)},
                 {"pos": (-100, -100, 450, 450), "color": (0, 180, 255, 25)},
@@ -127,10 +124,7 @@ class BackgroundThemeManager:
             name="elegant_purple",
             description="高級感のある紫グラデーション",
             gradient_stops=[0.25, 0.60, 0.80, 1.0],
-            gradient_colors=[
-                (30, 15, 50), (45, 20, 70),
-                (60, 25, 90), (40, 15, 60), (25, 10, 40)
-            ],
+            gradient_colors=[(30, 15, 50), (45, 20, 70), (60, 25, 90), (40, 15, 60), (25, 10, 40)],
             accent_circles=[
                 {"pos": (-150, -150, 500, 500), "color": (150, 50, 255, 30)},
                 {"pos": (1420, -150, 2070, 500), "color": (255, 100, 200, 25)},
@@ -158,10 +152,7 @@ class BackgroundThemeManager:
             name="dynamic_green",
             description="活発な印象の緑系デザイン",
             gradient_stops=[0.30, 0.65, 0.82, 1.0],
-            gradient_colors=[
-                (5, 25, 15), (10, 45, 25),
-                (15, 65, 35), (10, 40, 20), (5, 25, 12)
-            ],
+            gradient_colors=[(5, 25, 15), (10, 45, 25), (15, 65, 35), (10, 40, 20), (5, 25, 12)],
             accent_circles=[
                 {"pos": (-100, -100, 450, 450), "color": (50, 255, 150, 32)},
                 {"pos": (1470, -100, 2020, 450), "color": (150, 255, 50, 28)},
@@ -189,10 +180,7 @@ class BackgroundThemeManager:
             name="minimal_gray",
             description="シンプルで洗練されたグレートーン",
             gradient_stops=[0.35, 0.70, 0.85, 1.0],
-            gradient_colors=[
-                (40, 40, 45), (55, 55, 60),
-                (70, 70, 75), (50, 50, 55), (35, 35, 40)
-            ],
+            gradient_colors=[(40, 40, 45), (55, 55, 60), (70, 70, 75), (50, 50, 55), (35, 35, 40)],
             accent_circles=[
                 {"pos": (-120, -120, 480, 480), "color": (200, 200, 210, 25)},
                 {"pos": (1440, 600, 2040, 1200), "color": (180, 180, 190, 22)},
@@ -255,7 +243,9 @@ class BackgroundThemeManager:
 
     def _save_analytics(self):
         """アナリティクスデータを保存"""
-        os.makedirs(os.path.dirname(self.analytics_file) if os.path.dirname(self.analytics_file) else ".", exist_ok=True)
+        os.makedirs(
+            os.path.dirname(self.analytics_file) if os.path.dirname(self.analytics_file) else ".", exist_ok=True
+        )
         try:
             analytics = {}
             for name, theme in self.themes.items():
@@ -348,7 +338,9 @@ class BackgroundThemeManager:
                 theme.avg_retention_rate = retention_rate
 
             self._save_analytics()
-            logger.info(f"Updated metrics for {theme_name}: duration={view_duration:.1f}s, retention={retention_rate:.1f}%")
+            logger.info(
+                f"Updated metrics for {theme_name}: duration={view_duration:.1f}s, retention={retention_rate:.1f}%"
+            )
 
     def get_theme_rankings(self) -> List[Dict]:
         """テーマのランキングを取得"""
@@ -361,16 +353,18 @@ class BackgroundThemeManager:
                 retention_weight = theme.avg_retention_rate / 100.0 if theme.avg_retention_rate > 0 else 0.5
                 score = feedback_score * retention_weight
 
-            rankings.append({
-                "name": theme.name,
-                "description": theme.description,
-                "usage_count": theme.usage_count,
-                "positive_feedback": theme.positive_feedback,
-                "negative_feedback": theme.negative_feedback,
-                "avg_retention_rate": theme.avg_retention_rate,
-                "score": score,
-                "last_used": theme.last_used,
-            })
+            rankings.append(
+                {
+                    "name": theme.name,
+                    "description": theme.description,
+                    "usage_count": theme.usage_count,
+                    "positive_feedback": theme.positive_feedback,
+                    "negative_feedback": theme.negative_feedback,
+                    "avg_retention_rate": theme.avg_retention_rate,
+                    "score": score,
+                    "last_used": theme.last_used,
+                }
+            )
 
         # スコア順にソート
         rankings.sort(key=lambda x: x["score"], reverse=True)
@@ -378,9 +372,9 @@ class BackgroundThemeManager:
 
     def print_analytics_report(self):
         """アナリティクスレポートを出力"""
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("背景テーマ パフォーマンスレポート")
-        print("="*70)
+        print("=" * 70)
 
         rankings = self.get_theme_rankings()
         for i, rank in enumerate(rankings, 1):
@@ -393,7 +387,7 @@ class BackgroundThemeManager:
             if rank["last_used"]:
                 print(f"   最終使用: {rank['last_used']}")
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
 
 
 # グローバルインスタンス

@@ -164,7 +164,9 @@ class TTSManager:
             config = voice_configs.get("田中")  # デフォルト話者
 
         if not config:
-            logger.warning(f"No voice configuration found for speaker '{speaker}' or default '田中'. Using default VoiceSettings.")
+            logger.warning(
+                f"No voice configuration found for speaker '{speaker}' or default '田中'. Using default VoiceSettings."
+            )
             return {"voice_id": "default_voice_id", "settings": VoiceSettings()}
 
         config_dict = config.dict()
@@ -172,7 +174,7 @@ class TTSManager:
             stability=config.stability,
             similarity_boost=config.similarity_boost,
             style=config.style,
-            use_speaker_boost=True
+            use_speaker_boost=True,
         )
         return config_dict
 
@@ -213,9 +215,7 @@ class TTSManager:
             estimated_duration_minutes = len(script_text) / 300
 
             # 最適な並列度を計算
-            optimal_concurrency = self._calculate_optimal_concurrency(
-                len(chunks), estimated_duration_minutes
-            )
+            optimal_concurrency = self._calculate_optimal_concurrency(len(chunks), estimated_duration_minutes)
 
             logger.info(
                 f"Starting TTS for {len(chunks)} chunks "
@@ -228,11 +228,7 @@ class TTSManager:
             for chunk in chunks:
                 output_path = f"temp/tts_chunk_{chunk['id']}.mp3"
 
-                success = await self._synthesize_with_fallback(
-                    chunk["text"],
-                    output_path,
-                    chunk["voice_config"]
-                )
+                success = await self._synthesize_with_fallback(chunk["text"], output_path, chunk["voice_config"])
                 if success:
                     audio_paths.append(output_path)
                 else:
@@ -288,6 +284,7 @@ class TTSManager:
             if audio_paths:
                 fallback_path = f"fallback_audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
                 import shutil
+
                 shutil.copy2(audio_paths[0], fallback_path)
                 return fallback_path
             raise
@@ -323,6 +320,7 @@ class TTSManager:
 def _get_tts_manager() -> TTSManager:
     """Get TTS manager from container (backward compatibility)."""
     from app.container import get_container
+
     return get_container().tts_manager
 
 

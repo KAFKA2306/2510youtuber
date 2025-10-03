@@ -124,11 +124,7 @@ class VoicevoxProvider(TTSProvider):
 
         # Generate audio query
         query_params = {"text": text, "speaker": self.speaker}
-        query_response = requests.post(
-            f"http://localhost:{self.port}/audio_query",
-            params=query_params,
-            timeout=10
-        )
+        query_response = requests.post(f"http://localhost:{self.port}/audio_query", params=query_params, timeout=10)
 
         if query_response.status_code != 200:
             raise Exception(f"Audio query failed: {query_response.status_code}")
@@ -136,10 +132,7 @@ class VoicevoxProvider(TTSProvider):
         # Synthesize audio
         synthesis_params = {"speaker": self.speaker}
         synthesis_response = requests.post(
-            f"http://localhost:{self.port}/synthesis",
-            params=synthesis_params,
-            json=query_response.json(),
-            timeout=30
+            f"http://localhost:{self.port}/synthesis", params=synthesis_params, json=query_response.json(), timeout=30
         )
 
         if synthesis_response.status_code != 200:
@@ -162,11 +155,7 @@ class OpenAIProvider(TTSProvider):
         if not self.client:
             return False
 
-        response = self.client.audio.speech.create(
-            model="tts-1",
-            voice="nova",
-            input=text
-        )
+        response = self.client.audio.speech.create(model="tts-1", voice="nova", input=text)
 
         with open(output_path, "wb") as f:
             f.write(response.content)
@@ -193,10 +182,12 @@ class CoquiProvider(TTSProvider):
     """Coqui TTS provider (free, local, requires CLI installation)."""
 
     async def _try_synthesize(self, text: str, output_path: str, **kwargs) -> bool:
-        result = subprocess.run([
-            "tts", "--text", text, "--out_path", output_path,
-            "--model_name", "tts_models/ja/kokoro/tacotron2-DDC"
-        ], capture_output=True, text=True, timeout=60)
+        result = subprocess.run(
+            ["tts", "--text", text, "--out_path", output_path, "--model_name", "tts_models/ja/kokoro/tacotron2-DDC"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
 
         if result.returncode == 0 and os.path.exists(output_path):
             return True

@@ -111,9 +111,7 @@ class FeedbackAnalyzer:
         if not recent:
             return "No execution data available."
 
-        avg_wow = sum(ex.wow_score for ex in recent if ex.wow_score) / len(
-            [ex for ex in recent if ex.wow_score]
-        )
+        avg_wow = sum(ex.wow_score for ex in recent if ex.wow_score) / len([ex for ex in recent if ex.wow_score])
         success_rate = self.calculate_success_rate()
         hook_performance = self.analyze_hook_performance()
 

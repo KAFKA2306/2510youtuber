@@ -103,7 +103,7 @@ class JapaneseQualityChecker:
                 "issues": [],
                 "purity_score": 50.0,
                 "english_ratio": 0.0,
-                "error": str(e)
+                "error": str(e),
             }
 
     def _detect_english_words(self, text: str, line_num: int) -> List[Dict[str, Any]]:
@@ -123,13 +123,15 @@ class JapaneseQualityChecker:
             word = match.group()
             # 短い接頭語・接尾語は許可（例: e-mail, Mr.）
             if len(word) >= 3:
-                issues.append({
-                    "type": "english_word",
-                    "text": word,
-                    "line": line_num,
-                    "position": match.start(),
-                    "severity": "high" if len(word) > 5 else "medium"
-                })
+                issues.append(
+                    {
+                        "type": "english_word",
+                        "text": word,
+                        "line": line_num,
+                        "position": match.start(),
+                        "severity": "high" if len(word) > 5 else "medium",
+                    }
+                )
 
         return issues
 
@@ -151,7 +153,7 @@ class JapaneseQualityChecker:
                     "success": True,
                     "improved_script": script,
                     "changes_made": False,
-                    "original_score": quality_result["purity_score"]
+                    "original_score": quality_result["purity_score"],
                 }
 
             # 改善が必要な場合
@@ -185,9 +187,7 @@ class JapaneseQualityChecker:
             # 改善後の品質を再チェック
             new_quality = self.check_script_japanese_purity(improved_script)
 
-            logger.info(
-                f"Script improved: {quality_result['purity_score']:.1f} -> {new_quality['purity_score']:.1f}"
-            )
+            logger.info(f"Script improved: {quality_result['purity_score']:.1f} -> {new_quality['purity_score']:.1f}")
 
             return {
                 "success": True,
@@ -195,7 +195,7 @@ class JapaneseQualityChecker:
                 "changes_made": True,
                 "original_score": quality_result["purity_score"],
                 "new_score": new_quality["purity_score"],
-                "issues_fixed": len(quality_result["issues"]) - len(new_quality["issues"])
+                "issues_fixed": len(quality_result["issues"]) - len(new_quality["issues"]),
             }
 
         except Exception as e:
@@ -203,7 +203,7 @@ class JapaneseQualityChecker:
             return {
                 "success": False,
                 "error": str(e),
-                "improved_script": script  # フォールバック
+                "improved_script": script,  # フォールバック
             }
 
     def _format_issues(self, issues: List[Dict[str, Any]]) -> str:
@@ -213,9 +213,7 @@ class JapaneseQualityChecker:
 
         formatted = []
         for issue in issues[:10]:  # 最大10個
-            formatted.append(
-                f"- 行{issue['line']}: 英語「{issue['text']}」を日本語に変更してください"
-            )
+            formatted.append(f"- 行{issue['line']}: 英語「{issue['text']}」を日本語に変更してください")
 
         if len(issues) > 10:
             formatted.append(f"...他{len(issues) - 10}件")
@@ -293,11 +291,7 @@ class JapaneseQualityChecker:
         面白い内容になっているかを評価します。
         """
         if not self.client:
-            return {
-                "clarity_score": 50.0,
-                "interest_score": 50.0,
-                "suggestions": []
-            }
+            return {"clarity_score": 50.0, "interest_score": 50.0, "suggestions": []}
 
         try:
             evaluation_prompt = f"""
@@ -347,17 +341,12 @@ class JapaneseQualityChecker:
             return {
                 "clarity_score": clarity_score,
                 "interest_score": interest_score,
-                "suggestions": suggestions[:5]  # 最大5個
+                "suggestions": suggestions[:5],  # 最大5個
             }
 
         except Exception as e:
             logger.error(f"Clarity and interest check failed: {e}")
-            return {
-                "clarity_score": 50.0,
-                "interest_score": 50.0,
-                "suggestions": [],
-                "error": str(e)
-            }
+            return {"clarity_score": 50.0, "interest_score": 50.0, "suggestions": [], "error": str(e)}
 
 
 # グローバルインスタンス
@@ -442,7 +431,7 @@ if __name__ == "__main__":
             "今日は重要なニュースがあります",
             "GDPが3.5%増加しました",
             "This is an English subtitle",
-            "AI技術が発展しています"
+            "AI技術が発展しています",
         ]
 
         for subtitle in test_subtitles:

@@ -18,9 +18,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class APIKey:
     """APIキー情報"""
+
     key: str
     provider: str  # "gemini", "perplexity", etc.
-    key_name: Optional[str] = None # 環境変数名などを記録
+    key_name: Optional[str] = None  # 環境変数名などを記録
     failure_count: int = 0
     last_failure: Optional[datetime] = None
     last_success: Optional[datetime] = None
@@ -77,16 +78,13 @@ class APIKeyRotationManager:
         self.gemini_daily_quota_limit: int = 0
         self.gemini_daily_calls: int = 0
         self.last_quota_reset_date: Optional[datetime] = None
-        self._gemini_current_key_index: int = 0 # Geminiキーの現在のインデックス
+        self._gemini_current_key_index: int = 0  # Geminiキーの現在のインデックス
 
     def _check_and_reset_daily_quota(self):
         """日次クォータをチェックし、必要であればリセットする"""
         now = datetime.now()
         # UTC午前0時にリセットされると仮定
-        if (
-            self.last_quota_reset_date is None
-            or self.last_quota_reset_date.date() < now.date()
-        ):
+        if self.last_quota_reset_date is None or self.last_quota_reset_date.date() < now.date():
             logger.info("Resetting Gemini daily quota.")
             self.gemini_daily_calls = 0
             self.last_quota_reset_date = now
@@ -152,9 +150,11 @@ class APIKeyRotationManager:
                     # 現在のキーが利用不可の場合、次の利用可能なキーを探す
                     start_index = self._gemini_current_key_index
                     while True:
-                        self._gemini_current_key_index = (self._gemini_current_key_index + 1) % len(self.key_pools["gemini"])
-                        if self._gemini_current_key_index == start_index: # 一周した
-                            selected_key = self.key_pools["gemini"][self._gemini_current_key_index] # どれか一つを返す
+                        self._gemini_current_key_index = (self._gemini_current_key_index + 1) % len(
+                            self.key_pools["gemini"]
+                        )
+                        if self._gemini_current_key_index == start_index:  # 一周した
+                            selected_key = self.key_pools["gemini"][self._gemini_current_key_index]  # どれか一つを返す
                             logger.warning("All Gemini keys are unavailable, returning the current one.")
                             break
                         if self.key_pools["gemini"][self._gemini_current_key_index].is_available:
@@ -171,15 +171,12 @@ class APIKeyRotationManager:
             )
             return selected_key
 
-        else: # Gemini以外のプロバイダーは既存のロジック
+        else:  # Gemini以外のプロバイダーは既存のロジック
             available_keys = [k for k in self.key_pools[provider] if k.is_available]
 
             if not available_keys:
                 logger.warning(f"All {provider} keys are unavailable, trying anyway...")
-                available_keys = sorted(
-                    self.key_pools[provider],
-                    key=lambda k: k.last_failure or datetime.min
-                )
+                available_keys = sorted(self.key_pools[provider], key=lambda k: k.last_failure or datetime.min)
 
             if len(available_keys) > 1:
                 sorted_keys = sorted(available_keys, key=lambda k: k.success_rate, reverse=True)
@@ -226,10 +223,7 @@ class APIKeyRotationManager:
         # Gemini APIの場合、日次クォータをチェック
         if provider == "gemini":
             self._check_and_reset_daily_quota()
-            if (
-                self.gemini_daily_quota_limit > 0
-                and self.gemini_daily_calls >= self.gemini_daily_quota_limit
-            ):
+            if self.gemini_daily_quota_limit > 0 and self.gemini_daily_calls >= self.gemini_daily_quota_limit:
                 error_msg = (
                     f"Gemini daily quota ({self.gemini_daily_quota_limit}) exceeded. "
                     f"Current calls: {self.gemini_daily_calls}. "
@@ -268,20 +262,17 @@ class APIKeyRotationManager:
             except Exception as e:
                 error_str = str(e).lower()
                 is_rate_limit = any(
-                    keyword in error_str
-                    for keyword in ["429", "rate limit", "quota", "too many requests"]
+                    keyword in error_str for keyword in ["429", "rate limit", "quota", "too many requests"]
                 )
 
                 key_obj.mark_failure(is_rate_limit=is_rate_limit)
                 last_exception = e
 
-                logger.warning(
-                    f"{key_identifier} API call failed (attempt {attempt + 1}/{max_attempts}): {e}"
-                )
+                logger.warning(f"{key_identifier} API call failed (attempt {attempt + 1}/{max_attempts}): {e}")
 
                 # Rate limitでない場合、短い待機
                 if not is_rate_limit and attempt < max_attempts - 1:
-                    wait_time = min(2 ** attempt, 10)  # 最大10秒
+                    wait_time = min(2**attempt, 10)  # 最大10秒
                     logger.info(f"Waiting {wait_time}s before next attempt...")
                     time.sleep(wait_time)
 
@@ -321,10 +312,7 @@ class APIKeyRotationManager:
                 ],
             }
         else:
-            return {
-                provider_name: self.get_stats(provider_name)
-                for provider_name in self.key_pools.keys()
-            }
+            return {provider_name: self.get_stats(provider_name) for provider_name in self.key_pools.keys()}
 
 
 # グローバルインスタンス

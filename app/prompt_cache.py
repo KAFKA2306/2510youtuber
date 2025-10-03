@@ -17,7 +17,7 @@ class PromptManager:
                     self.cache[filename] = yaml.safe_load(f)
             except FileNotFoundError:
                 print(f"Warning: Prompt file not found: {filepath}")
-                self.cache[filename] = {} # ファイルが見つからない場合は空の辞書をキャッシュ
+                self.cache[filename] = {}  # ファイルが見つからない場合は空の辞書をキャッシュ
         return self.cache[filename]
 
     def get_agent_config(self, agent_name: str) -> dict:
@@ -38,6 +38,7 @@ class PromptManager:
         cache_file = os.path.join(self.prompts_dir, f"cache_{mode}.yaml")
         with open(cache_file, "w", encoding="utf-8") as f:
             yaml.safe_dump(prompts, f, allow_unicode=True)
+
 
 def get_prompt_manager():
     return PromptManager()

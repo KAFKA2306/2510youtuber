@@ -178,13 +178,13 @@ DASHBOARD_HTML = """
 """
 
 
-@route("/")
+@app.route("/")
 def dashboard():
     """ダッシュボード表示"""
     return render_template_string(DASHBOARD_HTML)
 
 
-@route("/api/status")
+@app.route("/api/status")
 def api_status():
     """システム状態API"""
     status = {"timestamp": datetime.now().isoformat(), "services": {}}
@@ -227,7 +227,7 @@ def api_status():
     return jsonify(status)
 
 
-@route("/api/run", methods=["POST"])
+@app.route("/api/run", methods=["POST"])
 def api_run():
     """ワークフロー実行API"""
     try:
@@ -258,7 +258,7 @@ def api_run():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@route("/api/runs")
+@app.route("/api/runs")
 def api_runs():
     """実行履歴API"""
     try:
@@ -272,7 +272,7 @@ def api_runs():
         return jsonify({"error": str(e)}), 500
 
 
-@route("/api/logs")
+@app.route("/api/logs")
 def api_logs():
     """ログAPI"""
     try:
@@ -289,13 +289,13 @@ def api_logs():
         return f"Error reading logs: {e}"
 
 
-@route("/api/health")
+@app.route("/api/health")
 def health_check():
     """ヘルスチェック"""
     return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat(), "version": "1.0.0"})
 
 
-@route("/api/webhook/discord", methods=["POST"])
+@app.route("/api/webhook/discord", methods=["POST"])
 def discord_webhook():
     """Discord Webhook エンドポイント"""
     try:
@@ -311,12 +311,12 @@ def discord_webhook():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@errorhandler(404)
+@app.errorhandler(404)
 def not_found(error):
     return jsonify({"error": "Not found"}), 404
 
 
-@errorhandler(500)
+@app.errorhandler(500)
 def internal_error(error):
     return jsonify({"error": "Internal server error"}), 500
 
@@ -326,4 +326,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     debug = cfg.debug
 
-    run(host="0.0.0.0", port=port, debug=debug)
+    app.run(host="0.0.0.0", port=port, debug=debug)

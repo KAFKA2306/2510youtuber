@@ -28,7 +28,7 @@ def test_simple_script_generation():
             "source": "日本経済新聞",
             "impact_level": "high",
             "category": "金融",
-            "key_points": ["年初来高値更新", "2.1%上昇", "好調な企業決算", "海外投資家の買い"]
+            "key_points": ["年初来高値更新", "2.1%上昇", "好調な企業決算", "海外投資家の買い"],
         }
 
         news_summary = f"""
@@ -82,6 +82,7 @@ def test_simple_script_generation():
     except Exception as e:
         print(f"\n✗ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -114,16 +115,16 @@ def test_minimal_crew_execution():
                 "title": "日銀が政策金利を据え置き",
                 "summary": "日本銀行は金融政策決定会合で、政策金利を0.25%に据え置くことを決定した。市場予想通りの結果となった。",
                 "source": "日本経済新聞",
-                "impact_level": "medium"
+                "impact_level": "medium",
             }
         ]
 
-        news_summary = "\n".join([
-            f"■ {i+1}. {item['title']}\n"
-            f"   出典: {item['source']}\n"
-            f"   要約: {item['summary']}"
-            for i, item in enumerate(test_news)
-        ])
+        news_summary = "\n".join(
+            [
+                f"■ {i+1}. {item['title']}\n" f"   出典: {item['source']}\n" f"   要約: {item['summary']}"
+                for i, item in enumerate(test_news)
+            ]
+        )
 
         print("1. Creating 3 agents...")
         factory = AgentFactory()
@@ -149,7 +150,7 @@ def test_minimal_crew_execution():
 各ポイント50文字以内で簡潔に。
 """,
             expected_output="驚きポイント3つのリスト",
-            agent=agent1
+            agent=agent1,
         )
 
         # Task 2: 短い台本作成（2分）
@@ -166,7 +167,7 @@ def test_minimal_crew_execution():
 """,
             expected_output="対談形式の台本（600文字）",
             agent=agent2,
-            context=[task1]
+            context=[task1],
         )
 
         # Task 3: 日本語チェック
@@ -177,17 +178,14 @@ def test_minimal_crew_execution():
 """,
             expected_output="日本語純度100%の台本",
             agent=agent3,
-            context=[task2]
+            context=[task2],
         )
 
         print("✓ Tasks created")
 
         print("\n3. Creating Crew...")
         crew = Crew(
-            agents=[agent1, agent2, agent3],
-            tasks=[task1, task2, task3],
-            process=Process.sequential,
-            verbose=True
+            agents=[agent1, agent2, agent3], tasks=[task1, task2, task3], process=Process.sequential, verbose=True
         )
 
         print("✓ Crew created")
@@ -219,6 +217,7 @@ def test_minimal_crew_execution():
     except Exception as e:
         print(f"\n✗ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

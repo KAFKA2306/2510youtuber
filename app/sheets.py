@@ -220,7 +220,9 @@ class SheetsManager:
                     if len(str_value) > max_chars:
                         truncate_msg = f"\n\n[TRUNCATED: Original length was {len(str_value)} characters]"
                         str_value = str_value[: max_chars - len(truncate_msg)] + truncate_msg
-                        logger.warning(f"Field '{field}' truncated from {len(str(value))} to {len(str_value)} characters")
+                        logger.warning(
+                            f"Field '{field}' truncated from {len(str(value))} to {len(str_value)} characters"
+                        )
 
                     current_row[col_index] = str_value
 
@@ -264,7 +266,7 @@ class SheetsManager:
         # Sheets接続がない場合、キャッシュを試す
         if not self.service:
             logger.warning("Sheets service not available, trying cache...")
-            cached_prompts = prompt_manager.load_prompts_from_cache(mode) # PromptManagerにキャッシュ機能がある場合
+            cached_prompts = prompt_manager.load_prompts_from_cache(mode)  # PromptManagerにキャッシュ機能がある場合
             if cached_prompts:
                 logger.info(f"Using cached prompts for mode '{mode}'")
                 return cached_prompts
@@ -356,9 +358,7 @@ class SheetsManager:
         try:
             # 既存データを取得
             result = self._rate_limit_retry(
-                self.service.spreadsheets().values().get,
-                spreadsheetId=self.sheet_id,
-                range="prompts!A1:E10"
+                self.service.spreadsheets().values().get, spreadsheetId=self.sheet_id, range="prompts!A1:E10"
             ).execute()
 
             rows = result.get("values", [])
@@ -438,9 +438,7 @@ class SheetsManager:
         try:
             # runs シートから最近の実行データを取得
             result = self._rate_limit_retry(
-                self.service.spreadsheets().values().get,
-                spreadsheetId=self.sheet_id,
-                range="runs!A:S"
+                self.service.spreadsheets().values().get, spreadsheetId=self.sheet_id, range="runs!A:S"
             ).execute()
 
             rows = result.get("values", [])
@@ -489,17 +487,15 @@ class SheetsManager:
 
         try:
             # prompt_history シートを作成（存在しない場合）
-            spreadsheet = self._rate_limit_retry(
-                self.service.spreadsheets().get,
-                spreadsheetId=self.sheet_id
-            ).execute()
+            spreadsheet = self._rate_limit_retry(self.service.spreadsheets().get, spreadsheetId=self.sheet_id).execute()
 
             existing_sheets = [sheet["properties"]["title"] for sheet in spreadsheet["sheets"]]
 
             if "prompt_history" not in existing_sheets:
-                self._create_sheet("prompt_history", [
-                    "timestamp", "prompt_name", "mode", "prompt_content", "version_note", "created_by"
-                ])
+                self._create_sheet(
+                    "prompt_history",
+                    ["timestamp", "prompt_name", "mode", "prompt_content", "version_note", "created_by"],
+                )
 
             # 現在のプロンプトを取得
             current_prompts = self.load_prompts("daily")
@@ -509,6 +505,7 @@ class SheetsManager:
 
             # 履歴に追加
             from datetime import datetime
+
             now = datetime.now().isoformat()
 
             history_row = [
@@ -517,7 +514,7 @@ class SheetsManager:
                 "daily",  # デフォルトモード
                 current_prompts[prompt_name],
                 version_note,
-                "system"
+                "system",
             ]
 
             self._rate_limit_retry(
@@ -853,10 +850,15 @@ Tier 3: Yahoo Finance, MarketWatch, Investing.com
 
             # 各モードのデフォルトプロンプトを設定
             modes_data = [
-                ["daily", default_prompts["prompt_a"], default_prompts["prompt_b"],
-                 default_prompts["prompt_c"], default_prompts["prompt_d"]],
+                [
+                    "daily",
+                    default_prompts["prompt_a"],
+                    default_prompts["prompt_b"],
+                    default_prompts["prompt_c"],
+                    default_prompts["prompt_d"],
+                ],
                 ["special", "", "", "", ""],  # 空白（dailyから継承）
-                ["test", "", "", "", ""],      # 空白（dailyから継承）
+                ["test", "", "", "", ""],  # 空白（dailyから継承）
             ]
 
             self._rate_limit_retry(

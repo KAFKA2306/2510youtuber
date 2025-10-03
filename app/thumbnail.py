@@ -18,6 +18,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+try:
+    from PIL import Image, ImageDraw, ImageEnhance, ImageFont
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,13 +36,10 @@ class ThumbnailGenerator:
         self.color_schemes = self._load_color_schemes()
         self.default_icon = "/home/kafka/projects/youtuber/assets/icon/ChatGPT Image 2025年10月2日 19_53_38.png"
 
-        try:
-            from PIL import Image, ImageDraw, ImageFont
-
-            self.has_pil = True
+        self.has_pil = HAS_PIL
+        if self.has_pil:
             logger.info("Thumbnail generator initialized with PIL")
-        except ImportError:
-            self.has_pil = False
+        else:
             logger.warning("PIL not available, thumbnail generation will be limited")
 
     def _get_available_fonts(self) -> Dict[str, str]:
@@ -148,7 +151,6 @@ class ThumbnailGenerator:
             if not self.has_pil:
                 return self._generate_fallback_thumbnail(title, output_path)
 
-            from PIL import Image
 
             # 出力パスを決定
             if not output_path:
@@ -181,8 +183,7 @@ class ThumbnailGenerator:
             return self._generate_fallback_thumbnail(title, output_path)
 
     def _add_background_effects(self, image, style: str, mode: str):
-        """背景エフェクトを追加"""
-        from PIL import ImageDraw
+
 
         draw = ImageDraw.Draw(image)
         colors = self.color_schemes[style]
@@ -248,8 +249,6 @@ class ThumbnailGenerator:
 
     def _draw_text_elements(self, image, title: str, news_items: List[Dict], style: str, mode: str):
         """テキスト要素を描画"""
-        from PIL import ImageDraw
-
         draw = ImageDraw.Draw(image)
         colors = self.color_schemes[style]
         width, height = self.output_size
@@ -459,7 +458,6 @@ class ThumbnailGenerator:
 
     def _get_font(self, size: int):
         """フォントを取得（日本語フォント優先）"""
-        from PIL import ImageFont
 
         # 日本語フォントを優先的に試行
         japanese_font_names = ["ipag", "ipagp", "msgothic", "meiryo", "yugothb", "yugothm", "notosanscjk"]
@@ -490,7 +488,6 @@ class ThumbnailGenerator:
 
     def _add_decorative_elements(self, image, style: str, mode: str):
         """装飾要素を追加"""
-        from PIL import ImageDraw
 
         draw = ImageDraw.Draw(image)
         colors = self.color_schemes[style]
@@ -532,7 +529,6 @@ class ThumbnailGenerator:
 
     def _optimize_image_quality(self, image):
         """画像品質を最適化"""
-        from PIL import ImageEnhance
 
         try:
             # コントラスト調整
@@ -570,7 +566,6 @@ class ThumbnailGenerator:
                 logger.warning(f"Generated text fallback thumbnail: {output_path}")
                 return output_path
 
-            from PIL import Image, ImageDraw
 
             # シンプルな画像を生成
             image = Image.new("RGB", self.output_size, (25, 35, 45))
@@ -637,7 +632,6 @@ class ThumbnailGenerator:
             return self._generate_fallback_thumbnail(title, output_path)
 
         try:
-
             if not output_path:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_path = f"thumbnail_v2_{timestamp}.png"
@@ -664,7 +658,6 @@ class ThumbnailGenerator:
 
     def _create_modern_background(self, mode: str):
         """モダンなグラデーション背景（V2専用）"""
-        from PIL import Image, ImageDraw
 
         width, height = self.output_size
 
@@ -678,6 +671,7 @@ class ThumbnailGenerator:
 
         image = Image.new("RGB", (width, height))
 
+        draw = ImageDraw.Draw(image)
         # 斜めグラデーション
         for y in range(height):
             ratio = y / height
@@ -689,8 +683,6 @@ class ThumbnailGenerator:
             g = max(0, min(255, g))
             b = max(0, min(255, b))
 
-            from PIL import ImageDraw
-            draw = ImageDraw.Draw(image)
             draw.line([(0, y), (width, y)], fill=(r, g, b))
 
         # 中央分割線
@@ -700,8 +692,9 @@ class ThumbnailGenerator:
         center_x = width // 2
         for offset in range(-3, 4):
             alpha = 40 - abs(offset) * 10
-            overlay_draw.line([(center_x + offset, 0), (center_x + offset, height)],
-                            fill=(255, 255, 255, alpha), width=1)
+            overlay_draw.line(
+                [(center_x + offset, 0), (center_x + offset, height)], fill=(255, 255, 255, alpha), width=1
+            )
 
         image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
 
@@ -709,8 +702,6 @@ class ThumbnailGenerator:
 
     def _add_right_icon(self, image, icon_path: str):
         """右側に大きなアイコンを配置"""
-        from PIL import Image, ImageDraw
-
         width, height = self.output_size
 
         try:
@@ -735,9 +726,8 @@ class ThumbnailGenerator:
                 shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
                 shadow_draw = ImageDraw.Draw(shadow)
                 shadow_draw.ellipse(
-                    [icon_x - 10, icon_y + icon_height - 50,
-                     icon_x + icon_width + 10, icon_y + icon_height + 20],
-                    fill=(0, 0, 0, 60)
+                    [icon_x - 10, icon_y + icon_height - 50, icon_x + icon_width + 10, icon_y + icon_height + 20],
+                    fill=(0, 0, 0, 60),
                 )
                 image = Image.alpha_composite(image.convert("RGBA"), shadow).convert("RGB")
 
@@ -756,8 +746,6 @@ class ThumbnailGenerator:
 
     def _add_left_catchcopy(self, image, title: str, mode: str):
         """左側にWOWキャッチコピーを配置"""
-        from PIL import ImageDraw
-
         draw = ImageDraw.Draw(image)
         width, height = self.output_size
 
@@ -788,8 +776,7 @@ class ThumbnailGenerator:
             # 背景ボックス
             padding = 15
             draw.rectangle(
-                [x - padding, y - padding, x + text_width + padding, y + text_height + padding],
-                fill=(0, 0, 0, 150)
+                [x - padding, y - padding, x + text_width + padding, y + text_height + padding], fill=(0, 0, 0, 150)
             )
 
             # 多層影
@@ -883,8 +870,6 @@ class ThumbnailGenerator:
 
     def _enhance_v2_for_mobile(self, image):
         """V2用モバイル最適化"""
-        from PIL import ImageEnhance
-
         enhancer = ImageEnhance.Contrast(image)
         image = enhancer.enhance(1.35)
 

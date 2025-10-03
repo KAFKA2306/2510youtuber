@@ -15,6 +15,7 @@ from app.youtube import YouTubeManager
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+
 def get_failed_upload_videos(output_dir: str) -> List[Dict[str, str]]:
     """
     outputディレクトリからアップロードに失敗した動画のパスとメタデータを取得します。
@@ -34,16 +35,21 @@ def get_failed_upload_videos(output_dir: str) -> List[Dict[str, str]]:
 
                     # video_idまたはvideo_urlが存在しない場合、失敗とみなす
                     if "video_id" not in metadata and "video_url" not in metadata:
-                        failed_videos.append({
-                            "video_path": video_path,
-                            "metadata": metadata,
-                            "thumbnail_path": os.path.join(full_path, "thumbnail.png") if os.path.exists(os.path.join(full_path, "thumbnail.png")) else None
-                        })
+                        failed_videos.append(
+                            {
+                                "video_path": video_path,
+                                "metadata": metadata,
+                                "thumbnail_path": os.path.join(full_path, "thumbnail.png")
+                                if os.path.exists(os.path.join(full_path, "thumbnail.png"))
+                                else None,
+                            }
+                        )
                 except json.JSONDecodeError as e:
                     logger.error(f"Error decoding JSON from {metadata_path}: {e}")
                 except Exception as e:
                     logger.error(f"Error processing {metadata_path}: {e}")
     return failed_videos
+
 
 async def test_youtube_uploads():
     """
@@ -65,11 +71,15 @@ async def test_youtube_uploads():
     logger.info(f"Found {len(failed_videos)} failed upload videos to re-test.")
 
     if not cfg.youtube_client_secret:
-        logger.error("YouTube client secrets not configured. Please set YOUTUBE_CLIENT_SECRET in config.py or environment.")
+        logger.error(
+            "YouTube client secrets not configured. Please set YOUTUBE_CLIENT_SECRET in config.py or environment."
+        )
         return
 
     # cfg.youtube_client_secret は既に辞書として解析されているため、os.path.exists() は不要
-    logger.info(f"YOUTUBE_CLIENT_SECRET (from cfg): {cfg.youtube_client_secret.get('installed', {}).get('client_id', 'N/A')[:20]}...")
+    logger.info(
+        f"YOUTUBE_CLIENT_SECRET (from cfg): {cfg.youtube_client_secret.get('installed', {}).get('client_id', 'N/A')[:20]}..."
+    )
 
     try:
         manager = YouTubeManager()
@@ -87,20 +97,21 @@ async def test_youtube_uploads():
 
         # privacy_statusをprivateに設定してテストアップロード
         upload_result = manager.upload_video(
-            video_path=video_path,
-            metadata=metadata,
-            thumbnail_path=thumbnail_path,
-            privacy_status="private"
+            video_path=video_path, metadata=metadata, thumbnail_path=thumbnail_path, privacy_status="private"
         )
 
         if upload_result.get("video_id"):
-            logger.info(f"  ✅ Re-upload successful! Video ID: {upload_result['video_id']}, URL: {upload_result['video_url']}")
+            logger.info(
+                f"  ✅ Re-upload successful! Video ID: {upload_result['video_id']}, URL: {upload_result['video_url']}"
+            )
             # 成功した場合、metadata.jsonを更新することも検討できるが、ここではテストに留める
         else:
             logger.error(f"  ❌ Re-upload failed for {video_path}: {upload_result.get('error', 'Unknown error')}")
 
     logger.info("YouTube re-upload test completed.")
 
+
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(test_youtube_uploads())
