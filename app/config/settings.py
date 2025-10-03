@@ -94,6 +94,45 @@ class AppSettings(BaseModel):
     use_three_stage_quality_check: bool = True
     max_video_duration_minutes: int = 15
 
+    # Google Drive/Sheets settings (for backward compatibility)
+    google_sheet_id: Optional[str] = None
+    google_credentials_json: Optional[Dict[str, Any]] = None
+    google_drive_folder_id: Optional[str] = None
+    discord_webhook_url: Optional[str] = None
+
+    # Legacy properties for backward compatibility
+    @property
+    def gemini_api_key(self) -> Optional[str]:
+        """Get primary Gemini API key"""
+        return self.api_keys.get("gemini")
+
+    @property
+    def gemini_api_keys(self) -> List[str]:
+        """Get all Gemini API keys (primary + rotation keys)"""
+        keys = []
+        if self.api_keys.get("gemini"):
+            keys.append(self.api_keys["gemini"])
+        for i in range(2, 10):
+            key = os.getenv(f"GEMINI_API_KEY_{i}")
+            if key:
+                keys.append(key)
+        return keys
+
+    @property
+    def perplexity_api_key(self) -> Optional[str]:
+        """Get Perplexity API key"""
+        return self.api_keys.get("perplexity")
+
+    @property
+    def elevenlabs_api_key(self) -> Optional[str]:
+        """Get ElevenLabs API key"""
+        return self.api_keys.get("elevenlabs")
+
+    @property
+    def youtube_client_secret(self) -> Optional[str]:
+        """Get YouTube client secret"""
+        return self.api_keys.get("youtube")
+
     @classmethod
     def load(cls) -> 'AppSettings':
         """環境変数 + YAMLから設定を読み込み"""
@@ -166,6 +205,26 @@ class AppSettings(BaseModel):
         config["use_crewai_script_generation"] = config.get("crew", {}).get("enabled", True)
         config["use_three_stage_quality_check"] = not config.get("crew", {}).get("enabled", True)
         config["max_video_duration_minutes"] = config.get("video", {}).get("max_duration_minutes", 15)
+
+        # Load Google-related settings from environment variables and api_keys
+        config["google_sheet_id"] = os.getenv("GOOGLE_SHEET_ID")
+        config["google_drive_folder_id"] = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
+        config["discord_webhook_url"] = os.getenv("DISCORD_WEBHOOK_URL")
+
+        # Load Google credentials from file or JSON string
+        google_creds_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if google_creds_env:
+            if os.path.exists(google_creds_env):
+                with open(google_creds_env, "r") as f:
+                    config["google_credentials_json"] = json.load(f)
+            else:
+                try:
+                    config["google_credentials_json"] = json.loads(google_creds_env)
+                except json.JSONDecodeError:
+                    config["google_credentials_json"] = None
+        else:
+            # Fallback to api_keys if available
+            config["google_credentials_json"] = api_keys.get("google_credentials_json")
 
         return cls(**config)
 

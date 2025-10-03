@@ -60,7 +60,7 @@ class SpeakerConfig(BaseModel):
     """話者設定"""
     name: str
     role: str
-    voice_id: str
+    voice_id: Optional[str] = "default"
     stability: float = 0.5
     speaking_style: str
 
@@ -88,6 +88,8 @@ class CrewConfig(BaseModel):
 class AppSettings(BaseModel):
     """アプリケーション統合設定"""
 
+    model_config = {"arbitrary_types_allowed": True}
+
     # API設定
     api_keys: Dict[str, str]
 
@@ -108,6 +110,7 @@ class AppSettings(BaseModel):
     max_video_duration_minutes: int = 15
     discord_webhook_url: Optional[str] = None
     google_credentials_json: Optional[Dict[str, Any]] = None # Google Sheets認証情報
+    google_sheet_id: Optional[str] = None # Google Sheet ID
 
     # プロンプトマネージャーインスタンス
     prompt_manager: PromptManager
@@ -147,6 +150,9 @@ class AppSettings(BaseModel):
 
         # Add discord_webhook_url from environment variable
         config["discord_webhook_url"] = os.getenv("DISCORD_WEBHOOK_URL")
+
+        # Add google_sheet_id from environment variable
+        config["google_sheet_id"] = os.getenv("GOOGLE_SHEET_ID")
 
         # Google Credentials JSON
         google_creds_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")

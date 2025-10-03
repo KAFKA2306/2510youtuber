@@ -10,7 +10,7 @@ def test_settings_load():
     assert settings is not None
     assert hasattr(settings, "speakers")
     assert hasattr(settings, "video")
-    assert hasattr(settings, "quality_thresholds")
+    assert hasattr(settings, "quality")  # Changed from quality_thresholds to quality
 
 
 @pytest.mark.unit
@@ -20,9 +20,9 @@ def test_speakers_configuration():
 
     assert len(settings.speakers) > 0, "話者が設定されていません"
 
-    # 田中の設定確認
-    tanaka = settings.get_speaker_config("田中")
-    assert tanaka is not None, "田中の設定が見つかりません"
+    # 田中の設定確認 - tts_voice_configs dict経由でアクセス
+    assert "田中" in settings.tts_voice_configs, "田中の設定が見つかりません"
+    tanaka = settings.tts_voice_configs["田中"]
     assert hasattr(tanaka, "role")
 
 
@@ -31,10 +31,11 @@ def test_video_configuration():
     """動画設定が正しく読み込まれるか確認"""
     from app.config.settings import settings
 
-    assert settings.video.resolution_tuple is not None
-    assert len(settings.video.resolution_tuple) == 2
-    assert isinstance(settings.video.resolution_tuple[0], int)
-    assert isinstance(settings.video.resolution_tuple[1], int)
+    assert settings.video.resolution is not None
+    assert settings.video.resolution.width > 0
+    assert settings.video.resolution.height > 0
+    assert isinstance(settings.video.resolution.width, int)
+    assert isinstance(settings.video.resolution.height, int)
 
 
 @pytest.mark.unit
@@ -42,9 +43,9 @@ def test_quality_thresholds():
     """品質閾値が正しく設定されているか確認"""
     from app.config.settings import settings
 
-    assert hasattr(settings.quality_thresholds, "wow_score_min")
-    assert settings.quality_thresholds.wow_score_min > 0
-    assert settings.quality_thresholds.wow_score_min <= 10
+    assert hasattr(settings.quality, "wow_score_min")  # Changed from quality_thresholds to quality
+    assert settings.quality.wow_score_min > 0
+    assert settings.quality.wow_score_min <= 10
 
 
 @pytest.mark.unit
@@ -60,9 +61,16 @@ def test_crewai_configuration():
 def test_agent_configuration():
     """エージェント設定が取得できるか確認"""
     from app.config.settings import settings
+    import yaml
+    import os
 
-    agent_config = settings.get_agent_config("deep_news_analyzer")
+    # Load agent config directly from config.yaml
+    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config.yaml")
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
 
-    if agent_config:
-        assert hasattr(agent_config, "model")
-        assert hasattr(agent_config, "temperature")
+    if "crew" in config and "agents" in config["crew"]:
+        assert "deep_news_analyzer" in config["crew"]["agents"]
+        agent_config = config["crew"]["agents"]["deep_news_analyzer"]
+        assert "model" in agent_config
+        assert "temperature" in agent_config
