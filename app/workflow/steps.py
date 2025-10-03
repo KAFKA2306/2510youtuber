@@ -12,6 +12,7 @@ from app.config import cfg
 from app.drive import upload_video_package
 from app.metadata import generate_youtube_metadata
 from app.search_news import collect_news
+from app.services.visual_design import create_unified_design
 from app.sheets import load_prompts as load_prompts_from_sheets
 from app.sheets import sheets_manager
 from app.stt import transcribe_long_audio
@@ -188,6 +189,78 @@ class GenerateScriptStep(WorkflowStep):
 - 出典情報を適切に言及
 - 視聴者にとって価値のある分析を含める
 """
+
+
+class GenerateVisualDesignStep(WorkflowStep):
+    """Step 2.5: Generate unified visual design for thumbnail and video."""
+
+    @property
+    def step_name(self) -> str:
+        return "visual_design_generation"
+
+    async def execute(self, context: WorkflowContext) -> StepResult:
+        logger.info(f"Step 2.5: Starting {self.step_name}...")
+
+        news_items = context.get("news_items")
+        script_content = context.get("script_content")
+
+        if not news_items or not script_content:
+            logger.warning("Missing news_items or script_content, using default design")
+            # デフォルトデザインを使用
+            from app.services.visual_design import UnifiedVisualDesign
+            from app.background_theme import get_theme_manager
+
+            theme_manager = get_theme_manager()
+            default_theme = theme_manager.select_theme_for_ab_test()
+
+            design = UnifiedVisualDesign(
+                theme_name=default_theme.name,
+                background_theme=default_theme,
+                sentiment="neutral",
+                primary_color=(0, 120, 215),
+                accent_color=(255, 215, 0),
+                text_color=(255, 255, 255),
+            )
+        else:
+            try:
+                design = create_unified_design(
+                    news_items=news_items,
+                    script_content=script_content,
+                    mode=context.mode
+                )
+            except Exception as e:
+                logger.error(f"Failed to create unified design: {e}, using default")
+                from app.services.visual_design import UnifiedVisualDesign
+                from app.background_theme import get_theme_manager
+
+                theme_manager = get_theme_manager()
+                default_theme = theme_manager.select_theme_for_ab_test()
+
+                design = UnifiedVisualDesign(
+                    theme_name=default_theme.name,
+                    background_theme=default_theme,
+                    sentiment="neutral",
+                    primary_color=(0, 120, 215),
+                    accent_color=(255, 215, 0),
+                    text_color=(255, 255, 255),
+                )
+
+        # Contextに保存 (サムネイル・動画生成で使用)
+        context.set("visual_design", design)
+        context.set("visual_design_dict", design.to_dict())
+
+        logger.info(
+            f"Generated visual design: theme={design.theme_name}, "
+            f"sentiment={design.sentiment}, primary={design.primary_color}"
+        )
+
+        return self._success(
+            data={
+                "theme_name": design.theme_name,
+                "sentiment": design.sentiment,
+                "primary_color": design.primary_color,
+            }
+        )
 
 
 class SynthesizeAudioStep(WorkflowStep):
@@ -438,17 +511,24 @@ class GenerateThumbnailStep(WorkflowStep):
 
         metadata = context.get("metadata")
         news_items = context.get("news_items")
+        visual_design = context.get("visual_design")
 
         if not metadata or not news_items:
             logger.warning("Missing metadata or news_items, skipping thumbnail")
             return self._success(data={"thumbnail_path": None, "warning": "Missing metadata or news_items"})
 
         try:
+            # 統一デザインからスタイルを取得
+            style = visual_design.get_thumbnail_style() if visual_design else "economic_blue"
+
             thumbnail_path = generate_thumbnail(
                 title=metadata.get("title", "Economic News"),
                 news_items=news_items,
                 mode=context.mode,
+                style=style,  # 統一デザインのスタイルを使用
             )
+
+            logger.info(f"Using visual design style: {style}")
 
             if thumbnail_path and os.path.exists(thumbnail_path):
                 context.set("thumbnail_path", thumbnail_path)

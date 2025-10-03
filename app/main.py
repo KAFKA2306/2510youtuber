@@ -23,6 +23,7 @@ from .workflow import (
     GenerateScriptStep,
     GenerateThumbnailStep,
     GenerateVideoStep,
+    GenerateVisualDesignStep,
     SynthesizeAudioStep,
     TranscribeAudioStep,
     UploadToDriveStep,
@@ -54,16 +55,17 @@ class YouTubeWorkflow:
         self.context: Optional[WorkflowContext] = None
 
         # Define workflow steps (dependency injection ready)
-        # NOTE: サムネイル/メタデータを動画生成の前に配置し、視覚的統一性を確保
+        # NOTE: 視覚デザイン生成→サムネイル/メタデータ→動画生成の順序で視覚的統一性を確保
         self.steps: List[WorkflowStep] = [
             CollectNewsStep(),           # Step 1: ニュース収集
             GenerateScriptStep(),        # Step 2: 台本生成
-            GenerateMetadataStep(),      # Step 3: メタデータ生成 (移動)
-            GenerateThumbnailStep(),     # Step 4: サムネイル生成 (移動)
+            GenerateVisualDesignStep(),  # Step 2.5: 統一ビジュアルデザイン生成 (NEW)
+            GenerateMetadataStep(),      # Step 3: メタデータ生成
+            GenerateThumbnailStep(),     # Step 4: サムネイル生成
             SynthesizeAudioStep(),       # Step 5: 音声合成
             TranscribeAudioStep(),       # Step 6: 音声認識
             AlignSubtitlesStep(),        # Step 7: 字幕整合
-            GenerateVideoStep(),         # Step 8: 動画生成 (サムネイルのテーマ情報を参照可能)
+            GenerateVideoStep(),         # Step 8: 動画生成 (統一デザインを使用)
             UploadToDriveStep(),         # Step 9: Drive アップロード
             UploadToYouTubeStep(),       # Step 10: YouTube アップロード
         ]
