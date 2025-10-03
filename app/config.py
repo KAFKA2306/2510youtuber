@@ -60,6 +60,11 @@ class Config:
         """ElevenLabs API キー."""
         return os.getenv("ELEVENLABS_API_KEY", "")
 
+    @property
+    def gemini_daily_quota_limit(self) -> int:
+        """Gemini API プロジェクト全体の日次クォータ制限."""
+        return int(os.getenv("GEMINI_DAILY_QUOTA_LIMIT", "0"))
+
     # ===== Stock Footage APIs (FREE) =====
     @property
     def pexels_api_key(self) -> str:
@@ -444,6 +449,7 @@ def debug_config():
     print(f"  TTS concurrent: {cfg.max_concurrent_tts}")
     print(f"  TTS chunk size: {cfg.tts_chunk_size}")
     print(f"  Gemini keys available: {len(cfg.gemini_api_keys)}")
+    print(f"  Gemini daily quota limit: {cfg.gemini_daily_quota_limit} requests/day")
 
 
 if __name__ == "__main__":

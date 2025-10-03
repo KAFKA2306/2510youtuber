@@ -73,11 +73,57 @@ def test_key_rotation_mechanism():
     manager.register_keys("rotation_test", test_keys)
 
     # キーを順次取得
-    key1 = manager.get_next_key("rotation_test")
-    key2 = manager.get_next_key("rotation_test")
-    key3 = manager.get_next_key("rotation_test")
+    key1 = manager.get_best_key("rotation_test").key
+    key2 = manager.get_best_key("rotation_test").key
+    key3 = manager.get_best_key("rotation_test").key
 
     # すべて有効なキーが取得できることを確認
     assert key1 in test_keys, "取得されたキーが登録されたキーに含まれていません"
     assert key2 in test_keys, "取得されたキーが登録されたキーに含まれていません"
     assert key3 in test_keys, "取得されたキーが登録されたキーに含まれていません"
+
+
+@pytest.mark.api
+def test_gemini_daily_quota_limit_exceeded():
+    """Geminiの日次クォータ制限に達したときにExceptionが発生することを確認"""
+    from app.api_rotation import APIKeyRotationManager
+    from unittest.mock import MagicMock
+    import datetime
+
+    manager = APIKeyRotationManager()
+    manager.register_keys("gemini", ["key1"])
+    manager.set_gemini_daily_quota_limit(1)  # 制限を1に設定
+    manager.gemini_daily_calls = 0
+    manager.last_quota_reset_date = datetime.datetime.now() - datetime.timedelta(days=1) # リセットを強制
+
+    mock_api_call = MagicMock(return_value="Success")
+
+    # 1回目の呼び出しは成功
+    manager.execute_with_rotation("gemini", mock_api_call)
+    assert manager.gemini_daily_calls == 1
+
+    # 2回目の呼び出しは制限超過で失敗
+    with pytest.raises(Exception, match="Gemini daily quota .* exceeded"):
+        manager.execute_with_rotation("gemini", mock_api_call)
+    assert manager.gemini_daily_calls == 1 # 失敗してもカウントは増えない
+
+
+@pytest.mark.api
+def test_gemini_daily_quota_reset():
+    """日付が変わるとGeminiの日次クォータがリセットされることを確認"""
+    from app.api_rotation import APIKeyRotationManager
+    from unittest.mock import MagicMock
+    import datetime
+
+    manager = APIKeyRotationManager()
+    manager.register_keys("gemini", ["key1"])
+    manager.set_gemini_daily_quota_limit(1)  # 制限を1に設定
+    manager.gemini_daily_calls = 1
+    manager.last_quota_reset_date = datetime.datetime.now() - datetime.timedelta(days=1) # リセットを強制
+
+    mock_api_call = MagicMock(return_value="Success")
+
+    # 日付が変わったので、クォータがリセットされ、呼び出しが成功する
+    manager.execute_with_rotation("gemini", mock_api_call)
+    assert manager.gemini_daily_calls == 1 # リセット後、1回目の呼び出し
+    assert manager.last_quota_reset_date.date() == datetime.datetime.now().date()

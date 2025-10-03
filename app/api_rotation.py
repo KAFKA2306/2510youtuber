@@ -71,6 +71,26 @@ class APIKeyRotationManager:
     def __init__(self):
         self.key_pools: Dict[str, List[APIKey]] = {}
         self.current_indices: Dict[str, int] = {}
+        self.gemini_daily_quota_limit: int = 0
+        self.gemini_daily_calls: int = 0
+        self.last_quota_reset_date: Optional[datetime] = None
+
+    def _check_and_reset_daily_quota(self):
+        """日次クォータをチェックし、必要であればリセットする"""
+        now = datetime.now()
+        # UTC午前0時にリセットされると仮定
+        if (
+            self.last_quota_reset_date is None
+            or self.last_quota_reset_date.date() < now.date()
+        ):
+            logger.info("Resetting Gemini daily quota.")
+            self.gemini_daily_calls = 0
+            self.last_quota_reset_date = now
+
+    def set_gemini_daily_quota_limit(self, limit: int):
+        """Gemini APIの日次クォータ制限を設定する"""
+        self.gemini_daily_quota_limit = limit
+        logger.info(f"Gemini daily quota limit set to {limit}")
 
     def register_keys(self, provider: str, keys: List[str]):
         """APIキーを登録
@@ -155,6 +175,21 @@ class APIKeyRotationManager:
         last_exception = None
         attempted_keys = set()
 
+        # Gemini APIの場合、日次クォータをチェック
+        if provider == "gemini":
+            self._check_and_reset_daily_quota()
+            if (
+                self.gemini_daily_quota_limit > 0
+                and self.gemini_daily_calls >= self.gemini_daily_quota_limit
+            ):
+                error_msg = (
+                    f"Gemini daily quota ({self.gemini_daily_quota_limit}) exceeded. "
+                    f"Current calls: {self.gemini_daily_calls}. "
+                    f"Will reset on {self.last_quota_reset_date.date() + timedelta(days=1)}"
+                )
+                logger.error(error_msg)
+                raise Exception(error_msg)
+
         for attempt in range(max_attempts):
             key_obj = self.get_best_key(provider)
 
@@ -174,6 +209,11 @@ class APIKeyRotationManager:
                 result = api_call(key_obj.key)
                 key_obj.mark_success()
                 logger.info(f"API call succeeded with {provider}")
+
+                if provider == "gemini":
+                    self.gemini_daily_calls += 1
+                    logger.debug(f"Gemini daily calls: {self.gemini_daily_calls}/{self.gemini_daily_quota_limit}")
+
                 return result
 
             except Exception as e:
@@ -260,6 +300,10 @@ def initialize_from_config():
     gemini_keys = cfg.gemini_api_keys
     if gemini_keys:
         manager.register_keys("gemini", gemini_keys)
+    
+    # Gemini daily quota limit
+    if cfg.gemini_daily_quota_limit > 0:
+        manager.set_gemini_daily_quota_limit(cfg.gemini_daily_quota_limit)
 
     # Perplexity keys (単一キーを配列化)
     perplexity_keys = [cfg.perplexity_api_key] if cfg.perplexity_api_key else []
