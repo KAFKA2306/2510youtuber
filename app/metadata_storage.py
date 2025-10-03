@@ -1,16 +1,17 @@
-"""メタデータ記録・管理モジュール.
+"""メタデータ記録・管理モジュール + フィードバックループ統合.
 
-生成されたメタデータをローカルCSVとGoogle Sheetsに記録し、
-過去の履歴を分析・再活用する機能を提供します。
+生成されたメタデータをローカルJSONL + Google Sheetsに記録し、
+YouTube統計と組み合わせて継続的改善のためのフィードバックループを提供します。
 """
 
 import csv
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,16 +19,25 @@ logger = logging.getLogger(__name__)
 class MetadataStorage:
     """メタデータ記録・管理クラス."""
 
-    def __init__(self, csv_path: str = None):
+    def __init__(self, csv_path: str = None, jsonl_path: str = None):
         """初期化.
 
         Args:
             csv_path: CSVファイルのパス（デフォルト: data/metadata_history.csv）
+            jsonl_path: JSONLファイルのパス（デフォルト: output/execution_log.jsonl）
         """
         self.csv_path = csv_path or self._get_default_csv_path()
+        self.jsonl_path = jsonl_path or self._get_default_jsonl_path()
         self.sheets_manager = None
         self._ensure_csv_exists()
+        self._ensure_jsonl_dir()
         self._initialize_sheets()
+
+    def _get_default_jsonl_path(self) -> str:
+        """デフォルトJSONLパスを取得."""
+        output_dir = Path(__file__).parent.parent / "output"
+        output_dir.mkdir(exist_ok=True)
+        return str(output_dir / "execution_log.jsonl")
 
     def _get_default_csv_path(self) -> str:
         """デフォルトCSVパスを取得."""
@@ -65,6 +75,10 @@ class MetadataStorage:
                 writer.writeheader()
 
             logger.info(f"Created metadata CSV: {self.csv_path}")
+
+    def _ensure_jsonl_dir(self):
+        """JSONLディレクトリが存在することを確認."""
+        Path(self.jsonl_path).parent.mkdir(parents=True, exist_ok=True)
 
     def _initialize_sheets(self):
         """Google Sheets接続を初期化."""
@@ -353,6 +367,174 @@ class MetadataStorage:
             keywords.append("数字強調")
 
         return keywords
+
+    def log_execution(self, workflow_result: "WorkflowResult") -> bool:
+        """ワークフロー実行結果をJSONL + Sheets に記録.
+
+        Args:
+            workflow_result: WorkflowResultインスタンス
+
+        Returns:
+            成功時True
+        """
+        try:
+            # 1. JSONLに完全データを保存（分析用）
+            self._save_to_jsonl(workflow_result)
+
+            # 2. Google Sheetsに人間向けフォーマットで保存
+            if self.sheets_manager and self.sheets_manager.service:
+                self._sync_to_sheets(workflow_result)
+
+            logger.info(f"Logged execution for run {workflow_result.run_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to log execution: {e}")
+            return False
+
+    def _save_to_jsonl(self, result: "WorkflowResult"):
+        """JSONLに追加（append-only log）."""
+        with open(self.jsonl_path, "a", encoding="utf-8") as f:
+            f.write(result.model_dump_json() + "\n")
+        logger.debug(f"Saved to JSONL: {self.jsonl_path}")
+
+    def _sync_to_sheets(self, result: "WorkflowResult"):
+        """Google Sheetsの3タブに同期."""
+        if not self.sheets_manager or not self.sheets_manager.service:
+            return
+
+        try:
+            # Tab 1: Performance Dashboard（人間向けサマリー）
+            dashboard_row = self._format_dashboard_row(result)
+            self._append_to_sheet("performance_dashboard", dashboard_row)
+
+            # Tab 2: Quality Metrics（品質詳細）
+            quality_row = self._format_quality_row(result)
+            self._append_to_sheet("quality_metrics", quality_row)
+
+            # Tab 3: Production Insights（実行詳細）
+            production_row = self._format_production_row(result)
+            self._append_to_sheet("production_insights", production_row)
+
+            logger.info(f"Synced to Sheets: {result.run_id}")
+
+        except Exception as e:
+            logger.warning(f"Failed to sync to Sheets: {e}")
+
+    def _format_dashboard_row(self, result: "WorkflowResult") -> List[Any]:
+        """Tab 1: Performance Dashboard用にフォーマット."""
+        video_num = self._extract_video_number(result.run_id)
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        hook_type = result.hook_type or self._classify_hook(result)
+        topic = result.topic or "一般"
+
+        # YouTube link
+        yt_link = f"https://youtube.com/watch?v={result.video_id}" if result.video_id else ""
+
+        # Feedback data (populated later)
+        fb = result.youtube_feedback
+        views_24h = fb.views_24h if fb else None
+        retention = fb.avg_view_percentage if fb else result.retention_prediction
+        ctr = fb.ctr if fb else None
+        comments = " / ".join(fb.top_comments[:3]) if fb and fb.top_comments else ""
+
+        return [
+            date_str,
+            f"#{video_num:04d}",
+            result.title or "",
+            topic,
+            hook_type,
+            f"{result.wow_score:.1f}" if result.wow_score else "",
+            f"{retention:.1f}%" if retention else "",
+            self._format_number(views_24h) if views_24h else "",
+            f"{ctr:.2f}%" if ctr else "",
+            comments,
+            result.status_icon,
+            yt_link,
+        ]
+
+    def _format_quality_row(self, result: "WorkflowResult") -> List[Any]:
+        """Tab 2: Quality Metrics用にフォーマット."""
+        video_num = self._extract_video_number(result.run_id)
+        return [
+            f"#{video_num:04d}",
+            f"{result.wow_score:.1f}" if result.wow_score else "",
+            result.surprise_points or "",
+            result.emotion_peaks or "",
+            result.curiosity_gap_score or "",
+            result.visual_instructions or "",
+            f"{result.japanese_purity:.1f}%" if result.japanese_purity else "",
+            result.script_grade,
+            "",  # Agent iterations (TODO: extract from processing_history)
+        ]
+
+    def _format_production_row(self, result: "WorkflowResult") -> List[Any]:
+        """Tab 3: Production Insights用にフォーマット."""
+        video_num = self._extract_video_number(result.run_id)
+        total_time = self._format_duration(result.execution_time_seconds)
+        total_cost = f"${result.total_cost:.2f}" if result.total_cost else ""
+        api_breakdown = self._format_api_costs(result.api_costs)
+
+        return [
+            f"#{video_num:04d}",
+            "Unknown",  # News source (TODO: extract)
+            total_time,
+            "Unknown",  # TTS provider (TODO: extract)
+            "",  # Video gen time (TODO: extract)
+            total_cost,
+            api_breakdown,
+            result.error or "None",
+        ]
+
+    def _classify_hook(self, result: "WorkflowResult") -> str:
+        """フック戦略を分類（script先頭から推定）."""
+        # Note: WorkflowResultにはscript textがないので、
+        # 実際はmain.pyからhook_typeを設定すべき
+        return "その他"
+
+    def _extract_video_number(self, run_id: str) -> int:
+        """run_idから動画番号を抽出（sequential）."""
+        # Simple approach: count JSONL lines
+        try:
+            if os.path.exists(self.jsonl_path):
+                with open(self.jsonl_path, "r") as f:
+                    return sum(1 for _ in f) + 1
+            return 1
+        except Exception:
+            return 1
+
+    def _format_number(self, num: int) -> str:
+        """数字を人間向けフォーマット (1.2K, 15.3K)."""
+        if num >= 1000:
+            return f"{num/1000:.1f}K"
+        return str(num)
+
+    def _format_duration(self, seconds: float) -> str:
+        """秒を分秒フォーマット (3m 24s)."""
+        minutes = int(seconds // 60)
+        secs = int(seconds % 60)
+        return f"{minutes}m {secs:02d}s"
+
+    def _format_api_costs(self, api_costs: Dict[str, float]) -> str:
+        """API別コストをフォーマット."""
+        if not api_costs:
+            return ""
+        parts = [f"{k}: ${v:.2f}" for k, v in api_costs.items()]
+        return ", ".join(parts)
+
+    def _append_to_sheet(self, sheet_name: str, row: List[Any]):
+        """指定シートに行を追加."""
+        try:
+            range_name = f"{sheet_name}!A:Z"
+            self.sheets_manager._rate_limit_retry(
+                self.sheets_manager.service.spreadsheets().values().append,
+                spreadsheetId=self.sheets_manager.sheet_id,
+                range=range_name,
+                valueInputOption="RAW",
+                body={"values": [row]},
+            ).execute()
+        except Exception as e:
+            logger.warning(f"Failed to append to {sheet_name}: {e}")
 
     def update_video_stats(
         self,

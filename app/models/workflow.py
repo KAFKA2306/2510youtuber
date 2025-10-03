@@ -153,7 +153,7 @@ class WorkflowState(BaseModel):
 
 
 class WorkflowResult(BaseModel):
-    """ワークフロー全体の最終結果"""
+    """ワークフロー全体の最終結果 + フィードバックループ用データ"""
     success: bool = Field(..., description="全体成功フラグ")
     run_id: str = Field(..., description="実行ID")
     mode: str = Field(..., description="実行モード")
@@ -167,16 +167,31 @@ class WorkflowResult(BaseModel):
     video_path: Optional[str] = Field(default=None, description="動画ファイルパス")
     video_url: Optional[str] = Field(default=None, description="YouTube URL")
     video_id: Optional[str] = Field(default=None, description="YouTube動画ID")
+    title: Optional[str] = Field(default=None, description="動画タイトル")
+    thumbnail_path: Optional[str] = Field(default=None, description="サムネイルパス")
 
-    # 品質指標
+    # 品質指標（CrewAI output）
     quality_score: Optional[float] = Field(default=None, description="品質スコア")
     wow_score: Optional[float] = Field(default=None, description="WOWスコア")
     curiosity_gap_score: Optional[float] = Field(default=0.0, description="好奇心ギャップスコア")
+    surprise_points: Optional[int] = Field(default=None, description="驚きポイント数")
+    emotion_peaks: Optional[int] = Field(default=None, description="感情ピーク数")
+    visual_instructions: Optional[int] = Field(default=None, description="視覚指示数")
+    japanese_purity: Optional[float] = Field(default=None, description="日本語純度（%）")
+    retention_prediction: Optional[float] = Field(default=None, description="リテンション予測（%）")
+
+    # フック戦略（script分析から自動分類）
+    hook_type: Optional[str] = Field(default=None, description="フック戦略タイプ")
+    topic: Optional[str] = Field(default=None, description="トピック")
 
     # ステップサマリー
     completed_steps: int = Field(default=0, description="完了ステップ数")
     failed_steps: int = Field(default=0, description="失敗ステップ数")
     total_steps: int = Field(default=10, description="総ステップ数")
+
+    # 実行コスト
+    api_costs: Dict[str, float] = Field(default_factory=dict, description="API別コスト")
+    total_cost: Optional[float] = Field(default=None, description="総コスト（$）")
 
     # ファイル
     generated_files: List[str] = Field(default_factory=list, description="生成されたファイル")
@@ -185,12 +200,39 @@ class WorkflowResult(BaseModel):
     error: Optional[str] = Field(default=None, description="エラーメッセージ")
     failed_step: Optional[str] = Field(default=None, description="失敗したステップ")
 
+    # フィードバックデータ（YouTube Analytics - 後で更新）
+    youtube_feedback: Optional["YouTubeFeedback"] = Field(default=None, description="YouTube統計")
+
     @property
     def success_rate(self) -> float:
         """成功率（%）"""
         if self.total_steps == 0:
             return 0.0
         return (self.completed_steps / self.total_steps) * 100.0
+
+    @property
+    def script_grade(self) -> str:
+        """品質スコアからグレードを計算 (S/A/B/C)"""
+        if not self.wow_score:
+            return "N/A"
+        if self.wow_score >= 8.5:
+            return "S"
+        if self.wow_score >= 8.0:
+            return "A"
+        if self.wow_score >= 7.5:
+            return "B"
+        return "C"
+
+    @property
+    def status_icon(self) -> str:
+        """ステータスアイコン"""
+        if not self.success:
+            return "❌"
+        if self.retention_prediction and self.retention_prediction >= 50:
+            return "✅"
+        if self.wow_score and self.wow_score >= 8.0:
+            return "✅"
+        return "⚠️"
 
     @classmethod
     def from_workflow_state(cls, state: WorkflowState) -> "WorkflowResult":
@@ -205,3 +247,37 @@ class WorkflowResult(BaseModel):
             total_steps=len(state.step_results),
             generated_files=state.generated_files,
         )
+
+
+class YouTubeFeedback(BaseModel):
+    """YouTube統計フィードバックデータ"""
+    video_id: str = Field(..., description="YouTube動画ID")
+
+    # 基本統計
+    views: Optional[int] = Field(default=None, description="視聴回数")
+    views_24h: Optional[int] = Field(default=None, description="24時間視聴回数")
+    likes: Optional[int] = Field(default=None, description="高評価数")
+    comments_count: Optional[int] = Field(default=None, description="コメント数")
+
+    # エンゲージメント
+    ctr: Optional[float] = Field(default=None, description="クリック率（%）")
+    avg_view_duration: Optional[float] = Field(default=None, description="平均視聴時間（秒）")
+    avg_view_percentage: Optional[float] = Field(default=None, description="平均視聴割合（%）")
+
+    # コメント内容（sentiment分析用）
+    top_comments: List[str] = Field(default_factory=list, description="上位コメント")
+
+    # 更新時刻
+    fetched_at: datetime = Field(default_factory=datetime.now, description="取得日時")
+
+    @property
+    def engagement_rate(self) -> Optional[float]:
+        """エンゲージメント率"""
+        if self.views and self.views > 0:
+            return ((self.likes or 0) + (self.comments_count or 0)) / self.views * 100
+        return None
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }

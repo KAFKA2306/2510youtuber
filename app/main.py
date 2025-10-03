@@ -7,9 +7,10 @@ YouTube動画自動生成の全工程を統合・実行します。
 import asyncio
 import logging
 import os
+import re
 import traceback
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .align_subtitles import align_script_with_stt, export_srt
 
@@ -541,6 +542,47 @@ class YouTubeWorkflow:
         return {"success": False, "failed_step": step_name, "error": result.get("error"), "run_id": self.run_id}
 
     def _compile_final_result(self, *step_results, execution_time: float) -> Dict[str, Any]:
+        from app.models.workflow import WorkflowResult
+
+        # Extract data from step results
+        step2 = step_results[1]  # script_generation
+        step7 = step_results[6]  # metadata_generation
+        step8 = step_results[7]  # thumbnail_generation
+        step9 = step_results[8]  # drive_upload
+        step10 = step_results[9]  # youtube_upload
+
+        # Create WorkflowResult with rich data
+        workflow_result = WorkflowResult(
+            success=True,
+            run_id=self.run_id,
+            mode=self.mode,
+            execution_time_seconds=execution_time,
+            news_count=step_results[0].get("count", 0),
+            script_length=step_results[1].get("length", 0),
+            video_path=step_results[5].get("video_path"),
+            video_id=step10.get("video_id"),
+            video_url=step10.get("video_url"),
+            title=step7.get("metadata", {}).get("title"),
+            thumbnail_path=step8.get("thumbnail_path"),
+            # Quality metrics (extract if available)
+            wow_score=self._extract_wow_score(step2),
+            japanese_purity=self._extract_japanese_purity(step2),
+            # Hook classification
+            hook_type=self._classify_hook_from_script(step2),
+            topic=self._extract_topic(step_results[0]),
+            completed_steps=sum(1 for s in step_results if s.get("success")),
+            failed_steps=sum(1 for s in step_results if not s.get("success")),
+            total_steps=10,
+            generated_files=self.generated_files,
+        )
+
+        # Log to feedback system
+        try:
+            metadata_storage.log_execution(workflow_result)
+        except Exception as e:
+            logger.warning(f"Failed to log execution to feedback system: {e}")
+
+        # Return dict for backward compatibility
         result = {
             "success": True,
             "run_id": self.run_id,
@@ -570,6 +612,53 @@ class YouTubeWorkflow:
         result["video_url"] = step_results[9].get("video_url")
         result["drive_folder"] = step_results[8].get("folder_id")
         return result
+
+    def _extract_wow_score(self, script_step: Dict) -> Optional[float]:
+        """Extract WOW score from script generation step."""
+        # TODO: Extract from CrewAI output if available
+        return None
+
+    def _extract_japanese_purity(self, script_step: Dict) -> Optional[float]:
+        """Extract Japanese purity from script generation step."""
+        # TODO: Extract from quality check if available
+        return None
+
+    def _classify_hook_from_script(self, script_step: Dict) -> str:
+        """Classify hook strategy from script content."""
+        script_content = script_step.get("script", "")
+        if not script_content:
+            return "その他"
+
+        # Get first 200 chars
+        first_segment = script_content[:200]
+
+        if re.search(r'(驚き|衝撃|まさか|信じられない)', first_segment):
+            return "衝撃的事実"
+        elif re.search(r'(なぜ|どうして|理由|原因)', first_segment):
+            return "疑問提起"
+        elif re.search(r'\d+[%％]|\d+億|\d+倍', first_segment):
+            return "意外な数字"
+        elif re.search(r'(知らない|隠された|裏側|真実)', first_segment):
+            return "隠された真実"
+        return "その他"
+
+    def _extract_topic(self, news_step: Dict) -> str:
+        """Extract main topic from news items."""
+        news_items = news_step.get("news_items", [])
+        if not news_items:
+            return "一般"
+
+        # Simple extraction from first news title
+        first_title = news_items[0].get("title", "") if news_items else ""
+        if "株" in first_title or "日経" in first_title:
+            return "株式市場"
+        elif "金利" in first_title or "利上げ" in first_title or "日銀" in first_title:
+            return "金融政策"
+        elif "円安" in first_title or "円高" in first_title or "為替" in first_title:
+            return "為替"
+        elif "GDP" in first_title or "景気" in first_title:
+            return "経済指標"
+        return "一般"
 
     async def _notify_workflow_start(self, mode: str):
         message = f"YouTube動画生成ワークフローを開始しました\nモード: {mode}\nRun ID: {self.run_id}"
