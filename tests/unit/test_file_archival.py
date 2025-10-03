@@ -12,8 +12,6 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from app.workflow.base import WorkflowContext
 
 
@@ -216,8 +214,8 @@ class TestVideoFileArchival:
             manager = FileArchivalManager(base_output_dir=tmpdir, retention_days=30)
 
             # Create a workflow directory
-            old_dir = manager.create_output_directory("old_run", "20200101_000000", "Old Video")
-            recent_dir = manager.create_output_directory("new_run", "20251003_000000", "Recent Video")
+            _old_dir = manager.create_output_directory("old_run", "20200101_000000", "Old Video")
+            _recent_dir = manager.create_output_directory("new_run", "20251003_000000", "Recent Video")
 
             # Mock file creation time
             old_time = datetime(2020, 1, 1).timestamp()
@@ -253,7 +251,7 @@ class TestWorkflowIntegration:
                 mock_manager.return_value = mock_instance
                 mock_instance.get_video_output_path.return_value = f"{tmpdir}/test_video.mp4"
 
-                generator = VideoGenerator()
+                _generator = VideoGenerator()
                 # Should use archival manager when context is provided
                 # (This will fail until implementation)
 
@@ -262,7 +260,7 @@ class TestWorkflowIntegration:
         from app.workflow.steps import GenerateVideoStep
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            step = GenerateVideoStep()
+            _step = GenerateVideoStep()
             context = WorkflowContext(run_id="test123", mode="daily")
             context.set("audio_path", f"{tmpdir}/test_audio.wav")
             context.set("subtitle_path", f"{tmpdir}/test_subs.srt")

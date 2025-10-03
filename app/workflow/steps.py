@@ -415,16 +415,22 @@ class GenerateVideoStep(WorkflowStep):
             archival_manager = FileArchivalManager()
             timestamp = context.get("output_timestamp") or datetime.now().strftime("%Y%m%d_%H%M%S")
             title = metadata.get("title", "Untitled")
+            thumbnail_path = context.get("thumbnail_path")
+
+            # Prepare files for archival (include thumbnail if exists)
+            files_to_archive = {
+                "video": video_path,
+                "audio": audio_path,
+                "subtitle": subtitle_path,
+            }
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                files_to_archive["thumbnail"] = thumbnail_path
 
             archived_files = archival_manager.archive_workflow_files(
                 run_id=context.run_id,
                 timestamp=timestamp,
                 title=title,
-                files={
-                    "video": video_path,
-                    "audio": audio_path,
-                    "subtitle": subtitle_path,
-                }
+                files=files_to_archive
             )
 
             # Update context with archived paths
@@ -432,6 +438,10 @@ class GenerateVideoStep(WorkflowStep):
             context.set("video_path", archived_video)
             context.set("archived_audio_path", archived_files.get("audio"))
             context.set("archived_subtitle_path", archived_files.get("subtitle"))
+
+            # Update thumbnail_path to archived location if it was archived
+            if "thumbnail" in archived_files:
+                context.set("thumbnail_path", archived_files["thumbnail"])
 
             video_size = os.path.getsize(archived_video)
 

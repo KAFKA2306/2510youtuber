@@ -10,7 +10,7 @@ import re
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from app.workflow.base import WorkflowContext
 

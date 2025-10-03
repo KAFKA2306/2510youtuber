@@ -6,7 +6,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from app.background_theme import BackgroundTheme, get_theme_manager
 
