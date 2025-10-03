@@ -245,9 +245,11 @@ class JapaneseQualityChecker:
         for pattern in self.allowed_patterns:
             temp_text = re.sub(pattern, "", temp_text)
 
-        # 経済用語アクロニムも除去
+        # 経済用語アクロニムも除去 (前後が英字でない場合のみ)
         for acronym in self.allowed_economic_acronyms:
-            temp_text = temp_text.replace(acronym, "")
+            # 前後が英字でない場合のみ置換（日本語や記号に囲まれている場合）
+            pattern = rf'(?<![a-zA-Z]){re.escape(acronym)}(?![a-zA-Z])'
+            temp_text = re.sub(pattern, "", temp_text, flags=re.IGNORECASE)
 
         # 英字が残っているかチェック
         has_english = bool(re.search(r"[a-zA-Z]", temp_text))
