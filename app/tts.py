@@ -38,9 +38,9 @@ class TTSManager:
     """音声合成管理クラス"""
 
     def __init__(self):
-        self.api_key = settings.elevenlabs_api_key
+        self.api_key = settings.api_keys.get("elevenlabs")
         self.client = None
-        self.max_concurrent = settings.max_concurrent_tts  # 動的に調整（デフォルトは設定値）
+        self.max_concurrent = settings.max_concurrent_tts
         self.chunk_size = settings.tts_chunk_size
         self.voicevox_port = settings.tts_voicevox_port
         self.voicevox_speaker = settings.tts_voicevox_speaker
@@ -325,17 +325,24 @@ class TTSManager:
     def _get_voice_config(self, speaker: str) -> Dict[str, Any]:
         """話者に応じた音声設定を取得"""
         voice_configs = settings.tts_voice_configs
-        config = voice_configs.get(speaker, voice_configs.get("田中", {}))
+        config = voice_configs.get(speaker)
+        if not config:
+            config = voice_configs.get("田中") # デフォルト話者
+
+        if not config:
+            logger.warning(f"No voice configuration found for speaker '{speaker}' or default '田中'. Using default VoiceSettings.")
+            return {"voice_id": "default_voice_id", "settings": VoiceSettings()} # フォールバック
 
         # Add VoiceSettings object for ElevenLabs
-        if config:
-            config["settings"] = VoiceSettings(
-                stability=config.get("stability", 0.5),
-                similarity_boost=config.get("similarity_boost", 0.75),
-                style=config.get("style", 0.1),
-                use_speaker_boost=config.get("use_speaker_boost", True)
-            )
-        return config
+        # SpeakerConfigはPydanticモデルなので、直接属性にアクセス
+        config_dict = config.dict() # Pydanticモデルを辞書に変換
+        config_dict["settings"] = VoiceSettings(
+            stability=config.stability,
+            similarity_boost=config.similarity_boost,
+            style=config.style, # speaking_styleをstyleにマッピング
+            use_speaker_boost=True # デフォルトでTrue
+        )
+        return config_dict
 
     def _calculate_optimal_concurrency(self, total_chunks: int, estimated_duration_minutes: float) -> int:
         """動画長に基づいて最適な並列度を計算

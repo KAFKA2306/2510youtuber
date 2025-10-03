@@ -7,7 +7,7 @@ import logging
 from typing import Dict, List, Any, Optional
 from crewai import Task, Agent
 
-from app.config_prompts.prompts import get_prompt_manager, render_prompt
+from app.config_prompts.settings import get_prompt_manager, render_prompt
 
 logger = logging.getLogger(__name__)
 

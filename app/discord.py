@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from .config import cfg
+from app.config_prompts.settings import settings as cfg
 
 logger = logging.getLogger(__name__)
 

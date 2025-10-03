@@ -33,7 +33,7 @@ class YouTubeManager:
     def __init__(self):
         self.service = None
         self.credentials = None
-        self.client_secrets = settings.youtube_client_secret
+        self.client_secrets = settings.api_keys.get("youtube")
         self._setup_service()
 
     def _setup_service(self):
@@ -470,7 +470,7 @@ class YouTubeManager:
 
 
 # グローバルインスタンス
-youtube_manager = YouTubeManager() if settings.youtube_client_secret else None
+youtube_manager = YouTubeManager() if settings.api_keys.get("youtube") else None
 
 
 def upload_video(

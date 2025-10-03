@@ -25,7 +25,7 @@ class VideoGenerator:
     """動画生成クラス"""
 
     def __init__(self):
-        self.video_quality = settings.video_quality or "high"
+        self.video_quality = settings.video.quality_preset
         self.output_format = "mp4"
         self.theme_manager = get_theme_manager()
         self.current_theme: Optional[BackgroundTheme] = None
@@ -372,8 +372,8 @@ class VideoGenerator:
     def _get_quality_settings(self) -> Dict[str, Any]:
         presets = settings.video_quality_presets
         quality_settings = presets.get(self.video_quality, presets["medium"])
-        settings.update({"c:a": "aac", "b:a": "128k", "ar": "44100", "pix_fmt": "yuv420p", "movflags": "+faststart"})
-        return settings
+        quality_settings.update({"c:a": "aac", "b:a": "128k", "ar": "44100", "pix_fmt": "yuv420p", "movflags": "+faststart"})
+        return quality_settings
 
     def _build_subtitle_filter(self, subtitle_path: str) -> str:
         """字幕フィルタを構築（プロYouTuber品質、見切れ防止、最下部配置）"""

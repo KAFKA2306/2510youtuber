@@ -13,7 +13,7 @@ import google.generativeai as genai
 import httpx
 import os # 追加
 
-from app.config import cfg as settings
+from app.config.settings import settings
 from app.api_rotation import get_rotation_manager, APIKey # 追加
 
 logger = logging.getLogger(__name__)
@@ -76,14 +76,24 @@ class GeminiClient(AIClient):
         self.rotation_manager = get_rotation_manager()
 
         # Gemini APIキーを登録（GEMINI_API_KEY_2から5を使用）
-        gemini_key_names = [f"GEMINI_API_KEY_{i}" for i in range(2, 6)]
-        gemini_keys_with_names = [(name, os.getenv(name)) for name in gemini_key_names if os.getenv(name)]
+        gemini_keys_to_register = []
 
-        if gemini_keys_with_names:
-            self.rotation_manager.register_keys("gemini", gemini_keys_with_names)
-            logger.info(f"Registered {len(gemini_keys_with_names)} Gemini API keys for CrewAI rotation")
+        # AppSettingsからGEMINI_API_KEY_1を取得
+        if settings.api_keys.get("gemini"):
+            gemini_keys_to_register.append(("GEMINI_API_KEY_1", settings.api_keys["gemini"]))
+
+        # 環境変数からGEMINI_API_KEY_2から5を取得
+        for i in range(2, 6):
+            key_name = f"GEMINI_API_KEY_{i}"
+            key_value = os.getenv(key_name)
+            if key_value:
+                gemini_keys_to_register.append((key_name, key_value))
+
+        if gemini_keys_to_register:
+            self.rotation_manager.register_keys("gemini", gemini_keys_to_register)
+            logger.info(f"Registered {len(gemini_keys_to_register)} Gemini API keys for CrewAI rotation")
         else:
-            raise ValueError("No Gemini API keys (GEMINI_API_KEY_2 to 5) configured for CrewAI")
+            raise ValueError("No Gemini API keys (GEMINI_API_KEY_1 to 5) configured for CrewAI")
 
         self.client = None # 実際のAPI呼び出し時にキーを取得するため、ここでは初期化しない
 
@@ -223,9 +233,9 @@ class PerplexityClient(AIClient):
         model: str = "sonar",
         timeout_seconds: int = 120
     ):
-        self.api_key = api_key or settings.perplexity_api_key
+        self.api_key = api_key or settings.api_keys.get("perplexity") or os.getenv("PERPLEXITY_API_KEY")
         if not self.api_key:
-            raise ValueError("Perplexity API key not found")
+            raise ValueError("Perplexity API key not found. Please set PERPLEXITY_API_KEY or configure in AppSettings.")
 
         self.model = model
         self.api_url = "https://api.perplexity.ai/chat/completions"

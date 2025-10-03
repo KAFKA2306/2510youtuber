@@ -341,7 +341,7 @@ def get_rotation_manager() -> APIKeyRotationManager:
 
 def initialize_from_config():
     """設定ファイルからキーを初期化"""
-    from .config import cfg
+    from app.config.settings import settings
 
     manager = get_rotation_manager()
 
@@ -353,8 +353,8 @@ def initialize_from_config():
         manager.register_keys("gemini", gemini_keys_with_names)
     
     # Gemini daily quota limit
-    if cfg.gemini_daily_quota_limit > 0:
-        manager.set_gemini_daily_quota_limit(cfg.gemini_daily_quota_limit)
+    if settings.gemini_daily_quota_limit > 0:
+        manager.set_gemini_daily_quota_limit(settings.gemini_daily_quota_limit)
 
     # Perplexity keys
     perplexity_key_names = ["PERPLEXITY_API_KEY"] + [f"PERPLEXITY_API_KEY_{i}" for i in range(2, 10)]

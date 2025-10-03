@@ -103,7 +103,7 @@ def test_prompt_manager():
     print("TEST 3: Prompt Manager")
     print("=" * 60)
 
-    from app.config.prompts import get_prompt_manager
+    from app.prompt_cache import get_prompt_manager
 
     manager = get_prompt_manager()
 

@@ -13,8 +13,8 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from .config import cfg
-from .prompt_cache import get_prompt_cache
+from app.config.settings import settings
+from app.config_prompts.settings import get_prompt_manager
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +24,13 @@ class SheetsManager:
 
     def __init__(self):
         self.service = None
-        self.sheet_id = cfg.google_sheet_id
+        self.sheet_id = settings.api_keys.get("google_sheet_id")
         self._connect()
 
     def _connect(self):
         """Google Sheets APIに接続"""
         try:
-            creds_dict = cfg.google_credentials_json
+            creds_dict = settings.api_keys.get("google_credentials_json")
             if not creds_dict:
                 logger.warning("Google credentials not configured - Sheets integration disabled")
                 self.service = None
@@ -243,12 +243,12 @@ class SheetsManager:
         Returns:
             プロンプトの辞書 {prompt_a: "...", prompt_b: "...", ...}
         """
-        prompt_cache = get_prompt_cache()
+        prompt_manager = get_prompt_manager()
 
         # Sheets接続がない場合、キャッシュを試す
         if not self.service:
             logger.warning("Sheets service not available, trying cache...")
-            cached_prompts = prompt_cache.load_prompts(mode)
+            cached_prompts = prompt_manager.load_prompts_from_cache(mode)
             if cached_prompts:
                 logger.info(f"Using cached prompts for mode '{mode}'")
                 return cached_prompts
@@ -283,12 +283,12 @@ class SheetsManager:
                 logger.info(f"Loaded {len(prompts)} prompts from Sheets for mode '{mode}'")
 
                 # キャッシュに保存
-                prompt_cache.save_prompts(mode, prompts)
+                prompt_manager.save_prompts_to_cache(mode, prompts)
 
                 return prompts
             else:
                 logger.warning("Prompts sheet is empty or malformed, trying cache...")
-                cached_prompts = prompt_cache.load_prompts(mode)
+                cached_prompts = prompt_manager.load_prompts_from_cache(mode)
                 if cached_prompts:
                     return cached_prompts
                 return self._get_default_prompts()
@@ -296,7 +296,7 @@ class SheetsManager:
         except Exception as e:
             logger.error(f"Failed to load prompts from Sheets: {e}, trying cache...")
             # Sheets失敗時はキャッシュフォールバック
-            cached_prompts = prompt_cache.load_prompts(mode)
+            cached_prompts = prompt_manager.load_prompts_from_cache(mode)
             if cached_prompts:
                 logger.info(f"Using cached prompts as fallback for mode '{mode}'")
                 return cached_prompts
@@ -858,7 +858,7 @@ Tier 3: Yahoo Finance, MarketWatch, Investing.com
 
 
 # グローバルインスタンス
-sheets_manager = SheetsManager() if cfg.google_sheet_id else None
+sheets_manager = SheetsManager() if settings.api_keys.google_sheet_id else None
 
 
 def get_sheets() -> Optional[SheetsManager]:

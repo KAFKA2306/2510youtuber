@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 from crewai import Agent
 
 from app.config.settings import settings
-from app.config_prompts.prompts import get_prompt_manager
+from app.prompt_cache import get_prompt_manager
 from app.crew.tools import AIClientFactory
 
 logger = logging.getLogger(__name__)
