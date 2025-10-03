@@ -338,7 +338,6 @@ class ThumbnailGenerator:
             # テキストサイズを取得
             bbox = draw.textbbox((0, 0), line, font=font)
             text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
 
             # X位置（中央配置）
             x = (width - text_width) // 2

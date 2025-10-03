@@ -268,7 +268,7 @@ class BRollGenerator:
 
             logger.debug(f"FFmpeg command: {' '.join(cmd)}")
 
-            result = subprocess.run(
+            subprocess.run(
                 cmd,
                 check=True,
                 capture_output=True,

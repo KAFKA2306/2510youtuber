@@ -126,7 +126,7 @@ def test_broll_generator():
     print("🎬 B-roll Generator Test")
     print("="*60)
 
-    generator = BRollGenerator()
+    _generator = BRollGenerator()
     print("✓ B-roll generator initialized")
 
     print("\nℹ️  Note: Full B-roll test requires actual video clips")

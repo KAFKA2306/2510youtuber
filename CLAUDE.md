@@ -94,18 +94,15 @@ Agents run in sequence, with parallel execution for agents 1-3 when `crew.parall
 The system tracks per-key cooldowns and automatically resumes when rate limits reset.
 
 ### Configuration System
-**Two config systems coexist** (for backward compatibility):
+**Unified Pydantic-based configuration**:
 
-1. **New system** (`app/config/settings.py`): Pydantic-based, reads `config.yaml`
-   - Use `from app.config import cfg` for new code
-   - Unified settings for CrewAI, video, quality thresholds
-   - Located at project root: `config.yaml`
+- **System**: `app/config/settings.py` reads `config.yaml`
+- **Usage**: `from app.config import settings` (or legacy `cfg` alias)
+- **Unified settings**: CrewAI, video, quality thresholds, API keys
+- **Location**: `config.yaml` at project root
+- **Environment variables**: Loaded via `python-dotenv` from `secret/.env`
 
-2. **Legacy system** (`app/config_old.py`): Environment variables only
-   - Being phased out but still used by some modules
-   - Use `.env` files in `secret/` directory
-
-**Important**: When modifying configuration, update both `config.yaml` (new) and document any `.env` requirements.
+**Important**: All configuration changes go to `config.yaml`. Environment variables are only for secrets (API keys, credentials).
 
 ### Data Models
 `app/models/` contains Pydantic models:

@@ -227,9 +227,6 @@ class JapaneseQualityChecker:
 
         字幕は短いので、より厳格にチェックします。
         """
-        # 許可される文字: 日本語、数字、記号
-        allowed_pattern = r"^[ぁ-んァ-ヶー一-龯々〆〤\d\s　！？。、：（）「」『』【】\-\+\*\/\%]*$"
-
         # 許可される略語を一時的に除去
         temp_text = subtitle_text
         for pattern in self.allowed_patterns:

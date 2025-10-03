@@ -557,7 +557,7 @@ class YouTubeWorkflow:
         step2 = step_results[1]  # script_generation
         step7 = step_results[6]  # metadata_generation
         step8 = step_results[7]  # thumbnail_generation
-        step9 = step_results[8]  # drive_upload
+        _step9 = step_results[8]  # drive_upload (unused but kept for clarity)
         step10 = step_results[9]  # youtube_upload
 
         # Create WorkflowResult with rich data

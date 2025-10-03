@@ -42,18 +42,7 @@ select = ["E", "F", "W", "I"]
 ignore = ["E501", "E402", "E722"]
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
-"tests/**/*.py" = ["F841"]
-"app/thumbnail*.py" = ["F401", "F811", "F841"]  # PIL関連の警告を無視
-"app/tts.py" = ["F811", "F841"]  # asyncio再定義と未使用変数を無視
-"app/utils.py" = ["F821"]  # timezone未定義を無視
-"app/web.py" = ["F821"]  # Flask関連の未定義を無視
-"app/youtube.py" = ["F841"]  # 未使用response変数を無視
-"app/video_feedback.py" = ["F811"]  # get_theme_manager再定義を無視
 "app/crew/tools/ai_clients.py" = ["F811"]  # List再定義を無視
-"app/japanese_quality.py" = ["F841"]  # allowed_pattern未使用を無視
-"app/services/media/broll_generator.py" = ["F841"]  # result未使用を無視
-"app/verify.py" = ["E402"]  # インポート位置を無視
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

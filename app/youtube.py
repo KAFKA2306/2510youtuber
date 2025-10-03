@@ -296,7 +296,7 @@ class YouTubeManager:
             request = self.service.thumbnails().set(
                 videoId=video_id, media_body=MediaFileUpload(thumbnail_path, mimetype="image/png")
             )
-            response = request.execute()
+            request.execute()
 
             logger.info(f"Thumbnail uploaded for video: {video_id}")
             return {"uploaded": True, "thumbnail_path": thumbnail_path, "uploaded_at": datetime.now().isoformat()}
@@ -354,7 +354,7 @@ class YouTubeManager:
                 update_body["status"]["privacyStatus"] = updates["privacy_status"]
 
             # 更新実行
-            response = self.service.videos().update(part="snippet,status", body=update_body).execute()
+            self.service.videos().update(part="snippet,status", body=update_body).execute()
 
             logger.info(f"Video updated: {video_id}")
             return {"updated": True, "video_id": video_id, "updated_at": datetime.now().isoformat()}
@@ -440,7 +440,7 @@ class YouTubeManager:
                 },
             }
 
-            response = self.service.videos().update(part="status", body=update_body).execute()
+            self.service.videos().update(part="status", body=update_body).execute()
 
             logger.info(f"Video scheduled for {publish_time}: {video_id}")
             return {"scheduled": True, "video_id": video_id, "publish_time": scheduled_time}

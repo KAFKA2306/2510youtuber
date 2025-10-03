@@ -415,7 +415,8 @@ class TTSManager:
                 f"Starting TTS for {len(chunks)} chunks "
                 f"(concurrency: {optimal_concurrency}, estimated: {estimated_duration_minutes:.1f}min)"
             )
-            semaphore = asyncio.Semaphore(optimal_concurrency)
+            # Note: semaphore removed - current implementation doesn't use parallel synthesis
+            # TODO: Re-implement parallel TTS with semaphore when needed
 
             audio_paths = []
             for chunk in chunks:
