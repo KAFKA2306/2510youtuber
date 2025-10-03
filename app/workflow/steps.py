@@ -191,14 +191,14 @@ class GenerateScriptStep(WorkflowStep):
 
 
 class SynthesizeAudioStep(WorkflowStep):
-    """Step 3: Synthesize audio from script using TTS."""
+    """Step 5: Synthesize audio from script using TTS."""
 
     @property
     def step_name(self) -> str:
         return "audio_synthesis"
 
     async def execute(self, context: WorkflowContext) -> StepResult:
-        logger.info(f"Step 3: Starting {self.step_name}...")
+        logger.info(f"Step 5: Starting {self.step_name}...")
 
         script_content = context.get("script_content")
         if not script_content:
@@ -222,19 +222,19 @@ class SynthesizeAudioStep(WorkflowStep):
             )
 
         except Exception as e:
-            logger.error(f"Step 3 failed: {e}")
+            logger.error(f"Step 5 failed: {e}")
             return self._failure(str(e))
 
 
 class TranscribeAudioStep(WorkflowStep):
-    """Step 4: Transcribe audio using Whisper STT."""
+    """Step 6: Transcribe audio using Whisper STT."""
 
     @property
     def step_name(self) -> str:
         return "audio_transcription"
 
     async def execute(self, context: WorkflowContext) -> StepResult:
-        logger.info(f"Step 4: Starting {self.step_name}...")
+        logger.info(f"Step 6: Starting {self.step_name}...")
 
         audio_path = context.get("audio_path")
         if not audio_path:
@@ -256,19 +256,19 @@ class TranscribeAudioStep(WorkflowStep):
             )
 
         except Exception as e:
-            logger.error(f"Step 4 failed: {e}")
+            logger.error(f"Step 6 failed: {e}")
             return self._failure(str(e))
 
 
 class AlignSubtitlesStep(WorkflowStep):
-    """Step 5: Align script text with audio timing for subtitles."""
+    """Step 7: Align script text with audio timing for subtitles."""
 
     @property
     def step_name(self) -> str:
         return "subtitle_alignment"
 
     async def execute(self, context: WorkflowContext) -> StepResult:
-        logger.info(f"Step 5: Starting {self.step_name}...")
+        logger.info(f"Step 7: Starting {self.step_name}...")
 
         script_content = context.get("script_content")
         stt_words = context.get("stt_words")
@@ -300,19 +300,19 @@ class AlignSubtitlesStep(WorkflowStep):
             )
 
         except Exception as e:
-            logger.error(f"Step 5 failed: {e}")
+            logger.error(f"Step 7 failed: {e}")
             return self._failure(str(e))
 
 
 class GenerateVideoStep(WorkflowStep):
-    """Step 6: Generate video combining audio, subtitles, and visuals."""
+    """Step 8: Generate video combining audio, subtitles, and visuals."""
 
     @property
     def step_name(self) -> str:
         return "video_generation"
 
     async def execute(self, context: WorkflowContext) -> StepResult:
-        logger.info(f"Step 6: Starting {self.step_name}...")
+        logger.info(f"Step 8: Starting {self.step_name}...")
 
         audio_path = context.get("audio_path")
         subtitle_path = context.get("subtitle_path")
@@ -354,19 +354,19 @@ class GenerateVideoStep(WorkflowStep):
             )
 
         except Exception as e:
-            logger.error(f"Step 6 failed: {e}")
+            logger.error(f"Step 8 failed: {e}")
             return self._failure(str(e))
 
 
 class GenerateMetadataStep(WorkflowStep):
-    """Step 7: Generate YouTube metadata (title, description, tags)."""
+    """Step 3: Generate YouTube metadata (title, description, tags)."""
 
     @property
     def step_name(self) -> str:
         return "metadata_generation"
 
     async def execute(self, context: WorkflowContext) -> StepResult:
-        logger.info(f"Step 7: Starting {self.step_name}...")
+        logger.info(f"Step 3: Starting {self.step_name}...")
 
         news_items = context.get("news_items")
         script_content = context.get("script_content")
@@ -406,7 +406,7 @@ class GenerateMetadataStep(WorkflowStep):
             )
 
         except Exception as e:
-            logger.error(f"Step 7 failed: {e}")
+            logger.error(f"Step 3 failed: {e}")
             # Fallback metadata
             from datetime import datetime
 
@@ -427,14 +427,14 @@ class GenerateMetadataStep(WorkflowStep):
 
 
 class GenerateThumbnailStep(WorkflowStep):
-    """Step 8: Generate YouTube thumbnail image."""
+    """Step 4: Generate YouTube thumbnail image."""
 
     @property
     def step_name(self) -> str:
         return "thumbnail_generation"
 
     async def execute(self, context: WorkflowContext) -> StepResult:
-        logger.info(f"Step 8: Starting {self.step_name}...")
+        logger.info(f"Step 4: Starting {self.step_name}...")
 
         metadata = context.get("metadata")
         news_items = context.get("news_items")

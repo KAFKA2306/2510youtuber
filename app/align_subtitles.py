@@ -30,7 +30,8 @@ class SubtitleAligner:
     def __init__(self):
         """Initialize the SubtitleAligner."""
         self.min_similarity_threshold = 60  # 類似度閾値
-        self.max_subtitle_length = 80  # 字幕の最大文字数
+        self.max_subtitle_length = 25  # 字幕の最大文字数 (1920px幅対応: 1720px表示領域 ÷ 61px/文字)
+        self.enable_two_line_mode = True  # 2行字幕モード (25文字 × 2行 = 50文字分の情報量)
         self.min_display_duration = 1.0  # 最小表示時間（秒）
         self.max_display_duration = 8.0  # 最大表示時間（秒）
 
@@ -116,9 +117,15 @@ class SubtitleAligner:
         return sentences
 
     def _split_long_sentence(self, sentence: str) -> List[str]:
-        """長い文を適切な長さに分割."""
+        """長い文を適切な長さに分割 (2行字幕対応)."""
         if len(sentence) <= self.max_subtitle_length:
             return [sentence]
+
+        # 2行モードが有効で、50文字以内なら2行に分割
+        if self.enable_two_line_mode and len(sentence) <= self.max_subtitle_length * 2:
+            two_line_text = self._wrap_subtitle_two_lines(sentence)
+            if two_line_text:
+                return [two_line_text]
 
         # 句読点で分割を試行
         parts = re.split(r"[、。！？]", sentence)
@@ -141,6 +148,50 @@ class SubtitleAligner:
             result.append(current_part.rstrip("、"))
 
         return result
+
+    def _wrap_subtitle_two_lines(self, text: str) -> str:
+        """字幕を2行に折り返し (FFmpeg ASS形式の\\N改行コード使用)
+
+        Args:
+            text: 字幕テキスト (最大50文字)
+
+        Returns:
+            2行に分割されたテキスト ("line1\\Nline2" 形式)、失敗時はNone
+        """
+        if len(text) <= self.max_subtitle_length:
+            return None  # 1行で収まる
+
+        max_total = self.max_subtitle_length * 2
+        if len(text) > max_total:
+            text = text[:max_total]  # 50文字で切り詰め
+
+        # 句読点で自然に分割
+        punctuation_positions = [i for i, char in enumerate(text) if char in '、。！？']
+
+        if punctuation_positions:
+            # 最も中央に近い句読点を探す
+            mid_point = len(text) // 2
+            best_split = min(punctuation_positions, key=lambda x: abs(x - mid_point))
+
+            line1 = text[:best_split + 1].strip()
+            line2 = text[best_split + 1:].strip()
+
+            # 各行が最大文字数以内か確認
+            if len(line1) <= self.max_subtitle_length and len(line2) <= self.max_subtitle_length:
+                return f"{line1}\\N{line2}"
+
+        # 句読点での分割が失敗した場合、強制的に中央で分割
+        mid = len(text) // 2
+        # 日本語の文字境界を考慮して調整
+        for offset in range(0, 5):
+            if mid + offset < len(text):
+                line1 = text[:mid + offset].strip()
+                line2 = text[mid + offset:].strip()
+                if len(line1) <= self.max_subtitle_length and len(line2) <= self.max_subtitle_length:
+                    return f"{line1}\\N{line2}"
+
+        # どうしても分割できない場合はNone
+        return None
 
     def _find_matching_word_range(
         self, sentence: str, stt_words: List[Dict[str, Any]], start_index: int

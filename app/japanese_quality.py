@@ -38,6 +38,16 @@ class JapaneseQualityChecker:
             r"DX",
         ]
 
+        # 経済ニュースで許容される英語アクロニム
+        self.allowed_economic_acronyms = {
+            'Fed', 'QE', 'GDP', 'CPI', 'PPI', 'ECB', 'BOJ', 'IMF', 'OECD',
+            'WTO', 'OPEC', 'G7', 'G20', 'BRICS', 'ASEAN',
+            'ETF', 'REIT', 'ESG', 'IPO', 'M&A', 'CEO', 'CFO', 'CTO',
+            'AI', 'IT', 'DX', 'IoT', 'API', 'SaaS', 'FinTech',
+            'VC', 'PE', 'ROE', 'ROI', 'PER', 'PBR', 'EPS',
+            'FOMC', 'RBNZ', 'SNB', 'BOE', 'RBA',
+        }
+
     def _setup_client(self):
         """Gemini APIクライアントを初期化"""
         try:
@@ -121,6 +131,11 @@ class JapaneseQualityChecker:
 
         for match in matches:
             word = match.group()
+
+            # 経済用語アクロニムは許可
+            if word in self.allowed_economic_acronyms:
+                continue
+
             # 短い接頭語・接尾語は許可（例: e-mail, Mr.）
             if len(word) >= 3:
                 issues.append(
@@ -230,11 +245,15 @@ class JapaneseQualityChecker:
         for pattern in self.allowed_patterns:
             temp_text = re.sub(pattern, "", temp_text)
 
+        # 経済用語アクロニムも除去
+        for acronym in self.allowed_economic_acronyms:
+            temp_text = temp_text.replace(acronym, "")
+
         # 英字が残っているかチェック
         has_english = bool(re.search(r"[a-zA-Z]", temp_text))
 
         if has_english:
-            logger.warning(f"Subtitle contains English: '{subtitle_text}'")
+            logger.warning(f"Subtitle contains non-Japanese text: '{subtitle_text}'")
             return False
 
         return True
@@ -268,9 +287,13 @@ class JapaneseQualityChecker:
         # 残った英単語を検出して警告
         remaining_english = re.findall(r"[a-zA-Z]{2,}", cleaned)
         if remaining_english:
-            # 許可されたパターンを除外
+            # 許可されたパターンと経済用語アクロニムを除外
             filtered_english = []
             for word in remaining_english:
+                # 経済用語アクロニムは許可
+                if word in self.allowed_economic_acronyms:
+                    continue
+
                 is_allowed = False
                 for pattern in self.allowed_patterns:
                     if re.match(pattern, word):
