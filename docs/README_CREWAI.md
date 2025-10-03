@@ -299,7 +299,4 @@ app/
 3. ✅ 満足したら本番実行（`uv run python3 -m app.main`）
 
 ### 推奨設定（優先度順）
-1. **P0**: VOICEVOX Nemoサーバー起動（完全無料）
-   ```bash
-   ./scripts/voicevox_manager.sh start
-   ```
+1. **P0**: VOICEVOX Nemoサーバー起動（完全無料） — `docs/VOICEVOX_NEMO.md` 参照

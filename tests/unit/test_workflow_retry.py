@@ -1,12 +1,11 @@
-import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
 
 from app.config import cfg
+from app.main import YouTubeWorkflow
 from app.workflow.base import StepResult, WorkflowContext, WorkflowStep
 from app.workflow.steps import QualityAssuranceStep
-from app.main import YouTubeWorkflow
 
 
 class StubNewsStep(WorkflowStep):

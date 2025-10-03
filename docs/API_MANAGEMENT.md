@@ -48,11 +48,9 @@ ElevenLabs → VOICEVOX Nemo → OpenAI TTS → gTTS → Coqui TTS → pyttsx3
    - 効果: 30,000文字/月 = 月10本程度対応可能
 
 2. **VOICEVOX Nemoサーバー起動**（完全無料）
-   ```bash
-   ./scripts/voicevox_manager.sh start
-   ```
    - 理由: ElevenLabsのバックアップとして高品質な日本語TTS
    - 効果: 完全無料で無制限利用
+   - 詳細: `docs/VOICEVOX_NEMO.md` を参照（起動/テスト/設定手順）
 
 ### **短期対応（P1: 1週間以内）**
 3. **Gemini API Tier 1移行**: ~$10/月

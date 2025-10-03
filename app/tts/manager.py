@@ -104,6 +104,7 @@ class TTSManager:
         speaker_lines: List[Dict[str, str]] = []
         current_speaker = None
         current_content: List[str] = []
+        unmatched_content: List[str] = []
 
         for line in lines:
             line = line.strip()
@@ -119,15 +120,13 @@ class TTSManager:
                 if current_speaker is not None:
                     current_content.append(line)
                 else:
-                    logger.debug("Line without speaker before any speaker declaration: %s", line)
+                    unmatched_content.append(line)
 
         if current_speaker and current_content:
             speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
 
-        if not speaker_lines:
-            if text.strip():
-                logger.warning("No recognizable speaker format detected; returning empty result")
-            return []
+        if not speaker_lines and (unmatched_content or text.strip()):
+            logger.warning("No recognizable speaker labels found; returning empty speaker list")
 
         return speaker_lines
 

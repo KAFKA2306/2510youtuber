@@ -10,11 +10,11 @@ from .steps import (
     GenerateVideoStep,
     GenerateVisualDesignStep,
     QualityAssuranceStep,
+    ReviewVideoStep,
     SynthesizeAudioStep,
     TranscribeAudioStep,
     UploadToDriveStep,
     UploadToYouTubeStep,
-    ReviewVideoStep,
 )
 
 __all__ = [
