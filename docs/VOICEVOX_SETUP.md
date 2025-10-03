@@ -75,6 +75,48 @@ docker ps
 
 ---
 
+問題が判明しました。Dockerデーモンは正常に起動していますが（`Active: active (running)`）、現在のユーザーが`docker.sock`にアクセスする権限がありません。`voicevox_manager.sh`の`check_docker()`関数が`docker info`を実行する際に権限エラーが発生しています。[1][2][3]
+
+以下のコマンドで解決します:
+
+```bash
+# dockerグループにユーザーを追加
+sudo usermod -aG docker $USER
+
+# グループ変更を即座に反映
+newgrp docker
+
+# docker.sockのパーミッション設定
+sudo chown root:docker /var/run/docker.sock
+sudo chmod 660 /var/run/docker.sock
+
+# 動作確認
+docker ps
+```
+
+これでsudoなしで`docker`コマンドが実行できるようになります。その後、VOICEVOXスクリプトを再実行してください:[2][1]
+
+```bash
+./scripts/voicevox_manager.sh start
+```
+
+**注意**: `newgrp docker`は現在のシェルセッションのみに適用されます。恒久的に反映するには、一度ログアウトして再ログインするか、WSLを再起動してください:[1]
+
+```powershell
+# PowerShellから
+wsl --shutdown
+```
+
+その後、WSLを再起動すれば、どのシェルセッションでもsudoなしでdockerコマンドが使用できるようになります。[2][1]
+
+[1](https://linuxbeast.com/blog/resolving-wsl-permission-denied-when-connecting-to-docker-daemon/)
+[2](https://dev.to/kenji_goh/got-permission-denied-while-trying-to-connect-to-the-docker-daemon-socket-3dne)
+[3](https://docs.docker.com/go/wsl2/)
+[4](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/52522745/c3b21baa-8a0d-40b1-9182-fa269b3353f0/voicevox_manager.sh)
+
+
+---
+
 ### 2. VOICEVOX Nemoコンテナの起動
 
 #### 自動起動（推奨）
@@ -84,6 +126,9 @@ docker ps
 ```bash
 # プロジェクトルートで実行
 cd /home/kafka/projects/youtuber
+
+sudo service docker start
+
 
 # VOICEVOX Nemoを起動
 ./scripts/voicevox_manager.sh start
