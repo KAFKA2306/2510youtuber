@@ -77,6 +77,7 @@ class APIKeyRotationManager:
         self.gemini_daily_quota_limit: int = 0
         self.gemini_daily_calls: int = 0
         self.last_quota_reset_date: Optional[datetime] = None
+        self._gemini_current_key_index: int = 0 # Geminiキーの現在のインデックス
 
     def _check_and_reset_daily_quota(self):
         """日次クォータをチェックし、必要であればリセットする"""
@@ -113,6 +114,9 @@ class APIKeyRotationManager:
         
         self.current_indices[provider] = 0
         logger.info(f"Registered {len(self.key_pools[provider])} keys for {provider}")
+        if provider == "gemini":
+            # GEMINI_API_KEY_2から開始するため、初期インデックスを調整
+            self._gemini_current_key_index = 0
 
     def get_best_key(self, provider: str) -> Optional[APIKey]:
         """最適なキーを取得（成功率と可用性を考慮）
@@ -127,31 +131,69 @@ class APIKeyRotationManager:
             logger.error(f"No keys registered for {provider}")
             return None
 
-        available_keys = [k for k in self.key_pools[provider] if k.is_available]
+        if provider == "gemini":
+            # GEMINI_API_KEY_2から5をラウンドロビンで選択
+            if not self.key_pools["gemini"]:
+                logger.error("No Gemini keys available for rotation (GEMINI_API_KEY_2 to 5)")
+                return None
 
-        if not available_keys:
-            logger.warning(f"All {provider} keys are unavailable, trying anyway...")
-            # 全キーが使用不可の場合、最も古い失敗のキーを返す
-            available_keys = sorted(
-                self.key_pools[provider],
-                key=lambda k: k.last_failure or datetime.min
+            # 利用可能なキーのみを対象とする
+            gemini_available_keys = [k for k in self.key_pools["gemini"] if k.is_available]
+            if not gemini_available_keys:
+                logger.warning("All Gemini keys are unavailable, trying anyway (round-robin fallback)...")
+                # 全キーが使用不可の場合でも、ラウンドロビンで試す
+                selected_key = self.key_pools["gemini"][self._gemini_current_key_index]
+            else:
+                # 利用可能なキーの中から、現在のインデックスのキーを探す
+                current_key_candidate = self.key_pools["gemini"][self._gemini_current_key_index]
+                if current_key_candidate.is_available:
+                    selected_key = current_key_candidate
+                else:
+                    # 現在のキーが利用不可の場合、次の利用可能なキーを探す
+                    start_index = self._gemini_current_key_index
+                    while True:
+                        self._gemini_current_key_index = (self._gemini_current_key_index + 1) % len(self.key_pools["gemini"])
+                        if self._gemini_current_key_index == start_index: # 一周した
+                            selected_key = self.key_pools["gemini"][self._gemini_current_key_index] # どれか一つを返す
+                            logger.warning("All Gemini keys are unavailable, returning the current one.")
+                            break
+                        if self.key_pools["gemini"][self._gemini_current_key_index].is_available:
+                            selected_key = self.key_pools["gemini"][self._gemini_current_key_index]
+                            break
+            
+            # 次のキーのインデックスを更新
+            self._gemini_current_key_index = (self._gemini_current_key_index + 1) % len(self.key_pools["gemini"])
+
+            key_identifier = selected_key.key_name if selected_key.key_name else selected_key.provider
+            logger.debug(
+                f"Selected Gemini key: {key_identifier} (success_rate: {selected_key.success_rate:.2%}, "
+                f"total_calls: {selected_key.total_calls})"
             )
+            return selected_key
 
-        # 成功率が高いキーを優先（ランダム要素も加える）
-        if len(available_keys) > 1:
-            # 上位80%から選択（探索的選択）
-            sorted_keys = sorted(available_keys, key=lambda k: k.success_rate, reverse=True)
-            top_80_count = max(1, int(len(sorted_keys) * 0.8))
-            selected_key = random.choice(sorted_keys[:top_80_count])
-        else:
-            selected_key = available_keys[0]
-        
-        key_identifier = selected_key.key_name if selected_key.key_name else selected_key.provider
-        logger.debug(
-            f"Selected {key_identifier} key (success_rate: {selected_key.success_rate:.2%}, "
-            f"total_calls: {selected_key.total_calls})"
-        )
-        return selected_key
+        else: # Gemini以外のプロバイダーは既存のロジック
+            available_keys = [k for k in self.key_pools[provider] if k.is_available]
+
+            if not available_keys:
+                logger.warning(f"All {provider} keys are unavailable, trying anyway...")
+                available_keys = sorted(
+                    self.key_pools[provider],
+                    key=lambda k: k.last_failure or datetime.min
+                )
+
+            if len(available_keys) > 1:
+                sorted_keys = sorted(available_keys, key=lambda k: k.success_rate, reverse=True)
+                top_80_count = max(1, int(len(sorted_keys) * 0.8))
+                selected_key = random.choice(sorted_keys[:top_80_count])
+            else:
+                selected_key = available_keys[0]
+            
+            key_identifier = selected_key.key_name if selected_key.key_name else selected_key.provider
+            logger.debug(
+                f"Selected {key_identifier} key (success_rate: {selected_key.success_rate:.2%}, "
+                f"total_calls: {selected_key.total_calls})"
+            )
+            return selected_key
 
     def execute_with_rotation(
         self,

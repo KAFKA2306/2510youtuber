@@ -27,10 +27,10 @@ def test_gemini_key_registration(has_gemini_key):
 
     manager = get_rotation_manager()
 
-    # Geminiキーとキー名を収集
+    # Geminiキーとキー名を収集 (GEMINI_API_KEY_2から5を対象)
     gemini_keys_with_names = []
-    for i in range(1, 6):
-        key_name = f'GEMINI_API_KEY_{i}' if i > 1 else 'GEMINI_API_KEY'
+    for i in range(2, 6): # GEMINI_API_KEY_1はスキップ
+        key_name = f'GEMINI_API_KEY_{i}'
         key_value = os.getenv(key_name)
         if key_value and 'your-' not in key_value:
             gemini_keys_with_names.append((key_name, key_value))
@@ -44,8 +44,10 @@ def test_gemini_key_registration(has_gemini_key):
         
         # 登録されたキーのkey_nameが正しく設定されていることを確認
         for i, key_obj in enumerate(manager.key_pools["gemini"]):
-            expected_key_name = f'GEMINI_API_KEY_{i+1}' if i > 0 else 'GEMINI_API_KEY'
+            expected_key_name = f'GEMINI_API_KEY_{i+2}' # インデックス調整
             assert key_obj.key_name == expected_key_name, f"キー {key_obj.key} のkey_nameが正しくありません"
+    else:
+        pytest.skip("GEMINI_API_KEY_2から5が設定されていません")
 
 
 @pytest.mark.api
@@ -100,7 +102,7 @@ def test_gemini_daily_quota_limit_exceeded():
     import datetime
 
     manager = APIKeyRotationManager()
-    manager.register_keys("gemini", [("GEMINI_API_KEY", "key1")]) # 修正
+    manager.register_keys("gemini", [("GEMINI_API_KEY_2", "key2")]) # GEMINI_API_KEY_2を使用
     manager.set_gemini_daily_quota_limit(1)  # 制限を1に設定
     manager.gemini_daily_calls = 0
     manager.last_quota_reset_date = datetime.datetime.now() - datetime.timedelta(days=1) # リセットを強制
@@ -125,7 +127,7 @@ def test_gemini_daily_quota_reset():
     import datetime
 
     manager = APIKeyRotationManager()
-    manager.register_keys("gemini", [("GEMINI_API_KEY", "key1")]) # 修正
+    manager.register_keys("gemini", [("GEMINI_API_KEY_2", "key2")]) # GEMINI_API_KEY_2を使用
     manager.set_gemini_daily_quota_limit(1)  # 制限を1に設定
     manager.gemini_daily_calls = 1
     manager.last_quota_reset_date = datetime.datetime.now() - datetime.timedelta(days=1) # リセットを強制

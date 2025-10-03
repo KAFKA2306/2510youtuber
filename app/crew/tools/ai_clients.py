@@ -11,8 +11,10 @@ from typing import Dict, Any, Optional, List
 
 import google.generativeai as genai
 import httpx
+import os # 追加
 
 from app.config import cfg as settings
+from app.api_rotation import get_rotation_manager, APIKey # 追加
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +57,6 @@ class GeminiClient(AIClient):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
         model: str = "gemini-2.5-flash",
         temperature: float = 0.7,
         max_tokens: int = 4096,
@@ -63,26 +64,30 @@ class GeminiClient(AIClient):
     ):
         """
         Args:
-            api_key: Gemini API Key（Noneの場合は設定から取得）
             model: モデル名
             temperature: 温度パラメータ
             max_tokens: 最大トークン数
             timeout_seconds: タイムアウト（秒）
         """
-        self.api_key = api_key or settings.gemini_api_key
-        if not self.api_key:
-            raise ValueError("Gemini API key not found")
-
         self.model_name = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout_seconds = timeout_seconds
+        self.rotation_manager = get_rotation_manager()
 
-        # Gemini APIクライアントを初期化 (Google AI Studio API directly)
-        genai.configure(api_key=self.api_key)
-        self.client = genai.GenerativeModel(f"models/{model}")
+        # Gemini APIキーを登録（GEMINI_API_KEY_2から5を使用）
+        gemini_key_names = [f"GEMINI_API_KEY_{i}" for i in range(2, 6)]
+        gemini_keys_with_names = [(name, os.getenv(name)) for name in gemini_key_names if os.getenv(name)]
 
-        logger.info(f"GeminiClient initialized: model={model}, temp={temperature}")
+        if gemini_keys_with_names:
+            self.rotation_manager.register_keys("gemini", gemini_keys_with_names)
+            logger.info(f"Registered {len(gemini_keys_with_names)} Gemini API keys for CrewAI rotation")
+        else:
+            raise ValueError("No Gemini API keys (GEMINI_API_KEY_2 to 5) configured for CrewAI")
+
+        self.client = None # 実際のAPI呼び出し時にキーを取得するため、ここでは初期化しない
+
+        logger.info(f"GeminiClient initialized for CrewAI: model={model}, temp={temperature}")
 
     def generate(
         self,
@@ -118,55 +123,42 @@ class GeminiClient(AIClient):
             max_output_tokens=tokens,
         )
 
-        for attempt in range(max_retries):
+        rotation_manager = self.rotation_manager
+
+        def api_call_with_key(api_key_value: str) -> str:
+            """単一APIキーでの呼び出し"""
             try:
-                logger.debug(f"Gemini API call (attempt {attempt+1}/{max_retries})")
+                genai.configure(api_key=api_key_value)
+                client = genai.GenerativeModel(f"models/{self.model_name}")
 
-                # Note: request_options is not supported in this version of google-generativeai
-                # タイムアウトはhttpxレベルで管理
-                response = self.client.generate_content(
+                response = client.generate_content(
                     prompt,
-                    generation_config=generation_config
+                    generation_config=generation_config,
+                    timeout=timeout
                 )
-
                 content = response.text
                 logger.debug(f"Generated {len(content)} characters")
                 return content
-
             except Exception as e:
                 error_str = str(e).lower()
+                if any(kw in error_str for kw in ["429", "rate limit", "quota"]):
+                    logger.warning(f"Gemini rate limit detected: {e}")
+                    raise # rotation_managerがハンドリング
+                if any(kw in error_str for kw in ["504", "deadline exceeded", "timeout"]):
+                    logger.warning(f"Gemini timeout detected: {e}")
+                    raise # rotation_managerがハンドリング
+                logger.warning(f"Gemini API error: {e}")
+                raise # rotation_managerがハンドリング
 
-                # 504 Deadline Exceeded エラーの特別処理
-                if "504" in error_str or "deadline exceeded" in error_str or "timeout" in error_str:
-                    if attempt < max_retries - 1:
-                        wait_time = 5 + (attempt * 3)
-                        logger.warning(f"API timeout (504), retrying in {wait_time}s (attempt {attempt+1}/{max_retries})")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        logger.error("API timeout after all retries")
-                        raise Exception("Gemini API timeout after all retries")
-
-                # Rate limit エラー処理
-                if "rate_limit" in error_str or "429" in error_str:
-                    if attempt < max_retries - 1:
-                        wait_time = (2 ** attempt) + random.uniform(0, 1)
-                        logger.warning(f"Rate limit hit, waiting {wait_time:.2f}s...")
-                        time.sleep(wait_time)
-                        continue
-
-                # その他のエラー
-                if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 3
-                    logger.warning(f"Gemini API error, retrying in {wait_time}s: {e}")
-                    time.sleep(wait_time)
-                    continue
-
-                # 最大リトライ回数到達
-                logger.error(f"Gemini API failed after {max_retries} attempts: {e}")
-                raise
-
-        raise Exception(f"Gemini API: Max retries ({max_retries}) exceeded")
+        try:
+            return rotation_manager.execute_with_rotation(
+                provider="gemini",
+                api_call=api_call_with_key,
+                max_attempts=max_retries
+            )
+        except Exception as e:
+            logger.error(f"All Gemini API attempts failed for CrewAI: {e}")
+            raise Exception("Gemini API failed with all keys for CrewAI")
 
     def generate_structured(self, prompt: str, schema: Optional[Dict] = None) -> Dict[str, Any]:
         """構造化データ生成（JSON出力）
@@ -531,7 +523,7 @@ try:
     class GeminiDirectLLM(BaseLLM):
         """Direct Gemini SDK LLM - bypasses ALL LiteLLM/Vertex AI routing"""
 
-        model_name: str = "gemini-1.5-pro"
+        model_name: str = "gemini-2.0-flash-exp" # デフォルトモデル名を修正
         temperature: float = 0.7
         api_key: str = ""
         _genai_client: Any = None
@@ -570,7 +562,7 @@ try:
         # モデル名の正規化 - Google AI Studio API compatible names
         model_mapping = {
             'gemini-2.0-flash-exp': 'gemini-2.0-flash-exp',
-            'gemini-2.5-flash': 'gemini-1.5-flash-latest',
+            'gemini-2.5-flash': 'gemini-2.5-flash', # 最新のモデル名に修正
             'gemini-pro': 'gemini-1.5-pro-latest',
             'gemini-1.5-pro': 'gemini-1.5-pro-latest',
             'gemini-1.5-flash': 'gemini-1.5-flash-latest',
@@ -582,9 +574,9 @@ try:
         logger.info(f"CrewAI LLM: {model} -> {final_model} (Direct Gemini SDK)")
 
         return GeminiDirectLLM(
-            model_name=final_model,
+            model=final_model, # model_nameをmodelに変更
             temperature=temperature,
-            api_key=settings.gemini_api_key
+            # api_keyはGeminiClient内でrotation_managerから取得するため不要
         )
 
 except ImportError as e:
