@@ -1,0 +1,298 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+This is an automated YouTube video generation system that creates high-engagement financial news videos using AI agents. The system uses CrewAI with 7 specialized agents to generate scripts optimized for viewer retention (50%+ target), synthesizes multi-speaker Japanese audio, generates videos with B-roll footage, and uploads to YouTube.
+
+## Essential Commands
+
+### Development
+```bash
+# Run full workflow (news → script → video → upload)
+uv run python3 -m app.main daily
+
+# Test CrewAI script generation only (recommended for testing)
+uv run python3 test_crewai_flow.py
+
+# Verify API keys and environment
+uv run python -m app.verify
+
+# Lint code
+uv run ruff check .
+
+# Format code
+uv run ruff format .
+```
+
+### Testing
+```bash
+# Run all tests
+pytest
+
+# Run only fast unit tests (no external APIs)
+pytest tests/unit -v
+
+# Run integration tests (mocked APIs)
+pytest tests/integration -v
+
+# Run by marker
+pytest -m unit           # Unit tests only
+pytest -m crewai         # CrewAI-related tests
+pytest -m "not slow"     # Skip slow tests
+
+# Run single test file
+pytest tests/unit/test_config.py -v
+
+# Run with coverage
+pytest --cov=app --cov-report=html
+```
+
+## Architecture Overview
+
+### Core Workflow (10 Steps)
+The main workflow in `app/main.py` executes these steps sequentially:
+
+1. **News Collection** (`search_news.py`) - Perplexity AI → NewsAPI → fallback dummy news
+2. **Script Generation** (`crew/flows.py`) - 7 CrewAI agents generate dialogue script
+3. **Script Quality Check** (`japanese_quality.py`) - Validates Japanese purity 95%+
+4. **Audio Synthesis** (`tts.py`) - ElevenLabs → VOICEVOX → OpenAI → gTTS → Coqui → pyttsx3
+5. **STT for Alignment** (`stt.py`) - Whisper transcription of generated audio
+6. **Subtitle Alignment** (`align_subtitles.py`) - Match script to actual audio timing
+7. **B-roll Generation** (`services/media/`) - Stock footage matching + visual effects
+8. **Video Rendering** (`video.py`) - FFmpeg compositing with subtitles
+9. **Metadata Generation** (`metadata.py`) - Title, description, tags
+10. **YouTube Upload** (`youtube.py`) - Automated upload with OAuth
+
+### CrewAI Agent Pipeline (7 Agents)
+Located in `app/crew/`:
+
+1. **Deep News Analyzer** - Finds hidden insights and surprising facts
+2. **Curiosity Gap Researcher** - Designs viewer engagement hooks
+3. **Emotional Story Architect** - Structures narrative arc
+4. **Script Writer** - Generates initial dialogue (3 speakers: 田中, 鈴木, ナレーター)
+5. **Engagement Optimizer** - Maximizes retention with pattern interrupts
+6. **Quality Guardian** - Validates WOW score 8.0+, metrics, pacing
+7. **Japanese Purity Polisher** - Removes English artifacts, ensures 95%+ Japanese
+
+Agents run in sequence, with parallel execution for agents 1-3 when `crew.parallel_analysis: true`.
+
+**Critical Implementation Detail**: All CrewAI agents use `litellm` with Google AI Studio (NOT Vertex AI). The `flows.py` module explicitly removes Vertex AI environment variables to prevent misrouting. Agent prompts are in `app/config/prompts/*.yaml` files.
+
+### API Key Rotation System
+`app/api_rotation.py` implements resilient API handling:
+
+- **Gemini**: Rotates through 5 keys on 429 errors (5-min wait per key, 10-min cooldown after all keys exhausted)
+- **Perplexity**: Similar rotation with backoff
+- **TTS**: 6-level fallback cascade (see TTS section)
+
+The system tracks per-key cooldowns and automatically resumes when rate limits reset.
+
+### Configuration System
+**Two config systems coexist** (for backward compatibility):
+
+1. **New system** (`app/config/settings.py`): Pydantic-based, reads `config.yaml`
+   - Use `from app.config import cfg` for new code
+   - Unified settings for CrewAI, video, quality thresholds
+   - Located at project root: `config.yaml`
+
+2. **Legacy system** (`app/config_old.py`): Environment variables only
+   - Being phased out but still used by some modules
+   - Use `.env` files in `secret/` directory
+
+**Important**: When modifying configuration, update both `config.yaml` (new) and document any `.env` requirements.
+
+### Data Models
+`app/models/` contains Pydantic models:
+
+- `script.py`: `ScriptSegment`, `WOWMetrics`, `Script` (dialogue structure)
+- `news.py`: `NewsItem` (news article data)
+- `workflow.py`: `StepStatus`, `StepResult`, `WorkflowSummary` (execution tracking)
+
+All models use Pydantic v2 with validation. Scripts are structured as lists of `ScriptSegment` with speaker, text, timestamps, visual instructions.
+
+### Media Processing Pipeline
+`app/services/media/`:
+
+- `stock_footage_manager.py`: Downloads clips from Pixabay/Pexels, caches 24h
+- `visual_matcher.py`: Matches script keywords to appropriate stock footage
+- `broll_generator.py`: FFmpeg composition with crossfade transitions
+
+B-roll clips are selected based on visual instructions in script segments. The system applies ken-burns effects, color grading, and smooth transitions.
+
+## Quality Assurance System
+
+### Japanese Purity Check
+`app/japanese_quality.py` enforces Japanese-only output:
+
+- **Target**: 95%+ Japanese characters (configurable in `config.yaml`)
+- **Phase 3 fix**: Agent 6-7 prompts modified to prevent output contamination with English metadata ("json", "wow_score", "Task", etc.)
+- **Enforcement point**: After Agent 7 (Japanese Purity Polisher) completes
+
+If purity check fails, the script is rejected and regeneration may be triggered.
+
+### WOW Score Metrics
+Scripts must achieve minimum thresholds (defined in `config.yaml`):
+
+- WOW score: 8.0+ (10-point scale)
+- Surprise points: 5+
+- Emotion peaks: 5+
+- Curiosity gaps: 3+
+- Visual instructions: 15+
+- Concrete numbers: 10+
+
+These metrics are calculated by Agent 6 (Quality Guardian) and validated before proceeding.
+
+### Video Generation Stability
+**Phase 3 fix** in `app/video.py`:
+
+- Previously, FFmpeg parameters (`crf`, `preset`, `vcodec`) were duplicated between quality settings and explicit arguments, causing failures
+- **Solution**: All three video generation code paths (main, fallback, test) now exclusively use `**self._get_quality_settings()` without additional explicit parameters
+- Quality presets: `low`, `medium`, `high`, `ultra` (defined in `config.yaml`)
+
+## Common Development Patterns
+
+### Adding a New CrewAI Agent
+1. Add agent definition to `app/config/prompts/agents.yaml`
+2. Create corresponding task in `app/config/prompts/<task_type>.yaml`
+3. Update `app/crew/agents.py` to instantiate the agent
+4. Update `app/crew/tasks.py` to create the task
+5. Update `app/crew/flows.py` to include in crew sequence
+
+### Modifying Quality Thresholds
+Edit `config.yaml`:
+```yaml
+quality_thresholds:
+  wow_score_min: 8.0              # Decrease if too strict
+  japanese_purity_min: 95.0       # Minimum Japanese %
+  retention_prediction_min: 50.0  # Target viewer retention
+```
+
+### Adding TTS Providers
+TTS fallback chain is in `app/tts.py`. To add a provider:
+1. Implement a new synthesis method (e.g., `_synthesize_with_newprovider()`)
+2. Add to fallback chain in `synthesize_script()` method
+3. Add configuration keys to `config.yaml` under `tts:` section
+
+### Working with FFmpeg
+- All FFmpeg operations use subprocess with timeout protection
+- Quality settings centralized in `_get_quality_settings()` methods
+- **Never** manually specify `crf`, `preset`, or `vcodec` alongside quality settings dict
+- Test video generation with: `pytest tests/test_stock_footage.py -v`
+
+## File Structure Conventions
+
+- `app/` - Main application code
+  - `crew/` - CrewAI agents, tasks, flows
+  - `config/` - New Pydantic-based configuration
+  - `config_prompts/` - Legacy prompt system (being migrated)
+  - `models/` - Pydantic data models
+  - `services/media/` - Video/audio processing services
+- `tests/` - Test suites (see `tests/README.md` for details)
+  - `unit/` - Fast, no external dependencies
+  - `integration/` - Mocked external APIs
+  - `e2e/` - Real API calls (requires `--run-e2e` flag)
+  - `api/` - API stability tests
+- `output/` - Generated videos, scripts, audio (gitignored)
+- `cache/` - Temporary downloads, API responses (gitignored)
+- `secret/` - `.env` files with API keys (gitignored)
+
+## Environment Variables
+
+Required API keys (set in `secret/.env`):
+
+```bash
+# Required
+GEMINI_API_KEY=AIza-your-key
+ELEVENLABS_API_KEY=your-key    # or VOICEVOX_API_KEY
+
+# Recommended (with rotation)
+GEMINI_API_KEY_2=AIza-key-2
+GEMINI_API_KEY_3=AIza-key-3
+PERPLEXITY_API_KEY=pplx-your-key
+
+# Optional but improves quality
+PIXABAY_API_KEY=your-key
+PEXELS_API_KEY=your-key
+YOUTUBE_CLIENT_SECRETS_FILE=path/to/credentials.json
+GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
+```
+
+## Important Implementation Notes
+
+### CrewAI + LiteLLM + Gemini
+- The system MUST use Google AI Studio (Generative AI SDK), NOT Vertex AI
+- `flows.py` removes all Vertex-related environment variables before CrewAI initialization
+- API key rotation happens at the `litellm.completion` call level, not via environment variables
+- Each agent can use different models (configured in `config.yaml` under `crew.agents`)
+
+### Speaker Format Enforcement
+Scripts MUST follow this format:
+```
+田中: セリフテキスト
+鈴木: セリフテキスト
+ナレーター: セリフテキスト
+```
+
+Agent 7 (Japanese Purity Polisher) enforces this format. Any deviation breaks TTS processing.
+
+### Video Generation Failure Points
+Common causes:
+1. Parameter duplication (`crf`, `preset` specified twice)
+2. Missing audio files (TTS failure)
+3. Insufficient disk space for temp files
+4. FFmpeg not installed or wrong version
+
+Always check `ffmpeg -version` shows version 4.4+ for subtitle rendering support.
+
+### Testing Strategy
+- **Unit tests** (`tests/unit/`): Mock all external APIs, test pure logic
+- **Integration tests** (`tests/integration/`): Use fixtures, test component interaction
+- **E2E tests** (`tests/e2e/`): Real APIs, costs money, requires `--run-e2e` flag
+- **Always run unit tests before commit**: `pytest tests/unit -v`
+
+## Troubleshooting Quick Reference
+
+### "Could not clean all English" warnings
+- **Cause**: Agent 6/7 outputting metadata in English (Phase 3 issue)
+- **Fix**: Update `app/config/prompts/quality_check.yaml` with explicit JSON-only output instructions
+- **Check**: `grep "最終出力は、以下のJSON形式のみ" app/config/prompts/quality_check.yaml`
+
+### FFmpeg "crf or preset" errors
+- **Cause**: Duplicate parameter specification in video generation
+- **Fix**: Ensure only `**self._get_quality_settings()` is used, no explicit quality params
+- **Check**: `grep -A 2 "\*\*self._get_quality_settings()" app/video.py`
+
+### Agent creation failures
+- **Cause**: Missing `GEMINI_API_KEY` or incorrect format
+- **Fix**: Verify with `uv run python -m app.verify`
+- **Check**: `.env` file exists in `secret/` directory
+
+### TTS quota exhausted
+- **Cause**: ElevenLabs free tier used up (10k chars/month)
+- **Fix**: System auto-falls back to gTTS/VOICEVOX
+- **Permanent fix**: Start VOICEVOX Nemo server (free, unlimited): `./scripts/voicevox_manager.sh start`
+
+### Rate limit 429 errors
+- **Cause**: Gemini/Perplexity API rate limits hit
+- **Fix**: System automatically rotates keys and waits
+- **Prevent**: Add more rotation keys (`GEMINI_API_KEY_2`, `GEMINI_API_KEY_3`, etc.)
+
+## Code Style
+
+- **Linting**: Ruff with line length 120
+- **Imports**: `isort` with `app` as first-party
+- **Per-file ignores**: See `pyproject.toml` for specific file exemptions
+- **Type hints**: Preferred but not enforced everywhere
+- **Docstrings**: Use for public APIs, modules should have module-level docstrings
+- **Logging**: Use Python logging, not print statements
+
+## References
+
+- **Setup guide**: `docs/setup.md`
+- **API management**: `docs/API_MANAGEMENT.md`
+- **CrewAI details**: `docs/README_CREWAI.md`
+- **Test documentation**: `tests/README.md`
+- **Main config**: `config.yaml`
+- **Pytest config**: `pytest.ini`

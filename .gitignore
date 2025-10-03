@@ -115,6 +115,9 @@ output/
 !docs/README_CREWAI.md
 !docs/API*.md
 !docs/VOICEVOX_SETUP.md
-
+!*CLAUDE.md*
+!*README.md*
 *Zone.Identifier*
 *csv
+
+*claude-desktop-debian*
