@@ -19,6 +19,7 @@ class APIKey:
     """APIキー情報"""
     key: str
     provider: str  # "gemini", "perplexity", etc.
+    key_name: Optional[str] = None # 環境変数名などを記録
     failure_count: int = 0
     last_failure: Optional[datetime] = None
     last_success: Optional[datetime] = None
@@ -62,7 +63,8 @@ class APIKey:
         if is_rate_limit:
             # Rate limitの場合は5分間待機
             self.rate_limit_until = datetime.now() + timedelta(minutes=5)
-            logger.warning(f"{self.provider} key rate limited until {self.rate_limit_until}")
+            key_identifier = self.key_name if self.key_name else self.provider
+            logger.warning(f"{key_identifier} key rate limited until {self.rate_limit_until}")
 
 
 class APIKeyRotationManager:
@@ -103,9 +105,12 @@ class APIKeyRotationManager:
             logger.warning(f"No keys provided for {provider}")
             return
 
-        self.key_pools[provider] = [
-            APIKey(key=key, provider=provider) for key in keys if key
-        ]
+        self.key_pools[provider] = []
+        for key_value in keys:
+            if key_value:
+                # key_nameはinitialize_from_configで設定されるため、ここではNone
+                self.key_pools[provider].append(APIKey(key=key_value, provider=provider))
+        
         self.current_indices[provider] = 0
         logger.info(f"Registered {len(self.key_pools[provider])} keys for {provider}")
 
@@ -140,9 +145,10 @@ class APIKeyRotationManager:
             selected_key = random.choice(sorted_keys[:top_80_count])
         else:
             selected_key = available_keys[0]
-
+        
+        key_identifier = selected_key.key_name if selected_key.key_name else selected_key.provider
         logger.debug(
-            f"Selected {provider} key (success_rate: {selected_key.success_rate:.2%}, "
+            f"Selected {key_identifier} key (success_rate: {selected_key.success_rate:.2%}, "
             f"total_calls: {selected_key.total_calls})"
         )
         return selected_key
@@ -203,12 +209,13 @@ class APIKeyRotationManager:
                 raise Exception(f"No available keys for {provider}")
 
             attempted_keys.add(key_obj.key)
+            key_identifier = key_obj.key_name if key_obj.key_name else provider
 
             try:
-                logger.info(f"Attempting API call with {provider} (attempt {attempt + 1}/{max_attempts})")
+                logger.info(f"Attempting API call with {key_identifier} (attempt {attempt + 1}/{max_attempts})")
                 result = api_call(key_obj.key)
                 key_obj.mark_success()
-                logger.info(f"API call succeeded with {provider}")
+                logger.info(f"API call succeeded with {key_identifier}")
 
                 if provider == "gemini":
                     self.gemini_daily_calls += 1
@@ -227,7 +234,7 @@ class APIKeyRotationManager:
                 last_exception = e
 
                 logger.warning(
-                    f"{provider} API call failed (attempt {attempt + 1}/{max_attempts}): {e}"
+                    f"{key_identifier} API call failed (attempt {attempt + 1}/{max_attempts}): {e}"
                 )
 
                 # Rate limitでない場合、短い待機
@@ -297,25 +304,33 @@ def initialize_from_config():
     manager = get_rotation_manager()
 
     # Gemini keys
-    gemini_keys = cfg.gemini_api_keys
-    if gemini_keys:
-        manager.register_keys("gemini", gemini_keys)
+    gemini_key_names = ["GEMINI_API_KEY"] + [f"GEMINI_API_KEY_{i}" for i in range(2, 6)]
+    gemini_keys_with_names = [(name, os.getenv(name)) for name in gemini_key_names if os.getenv(name)]
+    
+    if gemini_keys_with_names:
+        # APIKeyオブジェクトを生成し、key_nameを設定
+        manager.key_pools["gemini"] = [
+            APIKey(key=key_value, provider="gemini", key_name=key_name)
+            for key_name, key_value in gemini_keys_with_names
+        ]
+        manager.current_indices["gemini"] = 0
+        logger.info(f"Registered {len(manager.key_pools['gemini'])} keys for gemini")
     
     # Gemini daily quota limit
     if cfg.gemini_daily_quota_limit > 0:
         manager.set_gemini_daily_quota_limit(cfg.gemini_daily_quota_limit)
 
-    # Perplexity keys (単一キーを配列化)
-    perplexity_keys = [cfg.perplexity_api_key] if cfg.perplexity_api_key else []
-    # 環境変数から複数キーを取得（PERPLEXITY_API_KEY_2, PERPLEXITY_API_KEY_3等）
-    import os
-    for i in range(2, 10):
-        extra_key = os.getenv(f"PERPLEXITY_API_KEY_{i}")
-        if extra_key:
-            perplexity_keys.append(extra_key)
+    # Perplexity keys
+    perplexity_key_names = ["PERPLEXITY_API_KEY"] + [f"PERPLEXITY_API_KEY_{i}" for i in range(2, 10)]
+    perplexity_keys_with_names = [(name, os.getenv(name)) for name in perplexity_key_names if os.getenv(name)]
 
-    if perplexity_keys:
-        manager.register_keys("perplexity", perplexity_keys)
+    if perplexity_keys_with_names:
+        manager.key_pools["perplexity"] = [
+            APIKey(key=key_value, provider="perplexity", key_name=key_name)
+            for key_name, key_value in perplexity_keys_with_names
+        ]
+        manager.current_indices["perplexity"] = 0
+        logger.info(f"Registered {len(manager.key_pools['perplexity'])} keys for perplexity")
 
     logger.info("API key rotation initialized from config")
     return manager
