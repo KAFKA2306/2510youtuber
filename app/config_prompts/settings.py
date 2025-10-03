@@ -1,11 +1,60 @@
 import os
 import yaml
+import json
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
+from typing import List, Dict, Any, Optional
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 # .envファイルを読み込む
 load_dotenv()
+
+class PromptManager:
+    """プロンプトテンプレート管理クラス"""
+
+    def __init__(self, prompt_config: Dict[str, Any]):
+        self.prompt_config = prompt_config
+        self.base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.env = self._setup_jinja_env()
+
+    def _setup_jinja_env(self):
+        """Jinja2環境をセットアップ"""
+        template_dirs = [
+            os.path.join(self.base_dir, "prompts"),
+            os.path.join(self.base_dir, "..", "config_prompts", "prompts") # 既存のプロンプトディレクトリ
+        ]
+        # config.yamlで指定されたディレクトリも追加
+        if "directory" in self.prompt_config:
+            template_dirs.append(os.path.join(self.base_dir, "..", "..", self.prompt_config["directory"]))
+
+        loader = FileSystemLoader(template_dirs)
+        return Environment(
+            loader=loader,
+            autoescape=select_autoescape(['html', 'xml']),
+            trim_blocks=True,
+            lstrip_blocks=True
+        )
+
+    def get_prompt_template(self, template_name: str) -> str:
+        """指定された名前のプロンプトテンプレートを読み込む"""
+        # config.yamlのfilesセクションからファイル名を解決
+        file_name = self.prompt_config.get("files", {}).get(template_name, f"{template_name}.yaml")
+        
+        # YAMLファイルを読み込み、Jinja2テンプレートとして返す
+        template_path = os.path.join("prompts", file_name) # デフォルトのpromptsサブディレクトリを想定
+        
+        # 直接ファイル名が指定された場合も考慮
+        if not os.path.exists(os.path.join(self.env.loader.searchpath[0], template_path)):
+             template_path = file_name
+
+        template = self.env.get_template(template_path)
+        return template.render() # テンプレート自体を文字列として返す
+
+    def render_prompt(self, template_name: str, data: Dict[str, Any]) -> str:
+        """プロンプトテンプレートをレンダリングする"""
+        template_content = self.get_prompt_template(template_name)
+        template = self.env.from_string(template_content)
+        return template.render(**data)
 
 class SpeakerConfig(BaseModel):
     """話者設定"""
@@ -58,6 +107,10 @@ class AppSettings(BaseModel):
     use_three_stage_quality_check: bool = True
     max_video_duration_minutes: int = 15
     discord_webhook_url: Optional[str] = None
+    google_credentials_json: Optional[Dict[str, Any]] = None # Google Sheets認証情報
+
+    # プロンプトマネージャーインスタンス
+    prompt_manager: PromptManager
 
     @classmethod
     def load(cls) -> 'AppSettings':
@@ -69,7 +122,7 @@ class AppSettings(BaseModel):
         api_keys = {
             "gemini": os.getenv("GEMINI_API_KEY"),
             "elevenlabs": os.getenv("ELEVENLABS_API_KEY"),
-            "youtube": os.getenv("YOUTUBE_API_KEY"),
+            "youtube": os.getenv("YOUTUBE_CLIENT_SECRET"),
         }
         
         config["api_keys"] = api_keys
@@ -77,7 +130,8 @@ class AppSettings(BaseModel):
         # Handle speakers voice_id_env
         for speaker in config.get("speakers", []):
             if "voice_id_env" in speaker:
-                speaker["voice_id"] = os.getenv(speaker["voice_id_env"])
+                env_var_name = speaker["voice_id_env"]
+                speaker["voice_id"] = os.getenv(env_var_name)
                 del speaker["voice_id_env"]
 
         # Handle video resolution
@@ -93,12 +147,26 @@ class AppSettings(BaseModel):
 
         # Add discord_webhook_url from environment variable
         config["discord_webhook_url"] = os.getenv("DISCORD_WEBHOOK_URL")
+
+        # Google Credentials JSON
+        google_creds_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if google_creds_env:
+            if os.path.exists(google_creds_env):
+                with open(google_creds_env, "r") as f:
+                    config["google_credentials_json"] = json.load(f)
+            else:
+                try:
+                    config["google_credentials_json"] = json.loads(google_creds_env)
+                except json.JSONDecodeError:
+                    pass # Invalid JSON, will be handled by Pydantic if field is not Optional
+
+        # PromptManagerのインスタンスを生成
+        config["prompt_manager"] = PromptManager(config.get("prompts", {}))
         
         # For compatibility with old cfg object
         config["use_crewai_script_generation"] = config.get("crew", {}).get("enabled", True)
         config["use_three_stage_quality_check"] = not config.get("crew", {}).get("enabled", True)
         config["max_video_duration_minutes"] = config.get("video", {}).get("max_duration_minutes", 15)
-
 
         return cls(**config)
 

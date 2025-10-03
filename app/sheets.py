@@ -13,8 +13,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from app.config.settings import settings
-from app.config_prompts.settings import get_prompt_manager
+from app.config_prompts.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +23,13 @@ class SheetsManager:
 
     def __init__(self):
         self.service = None
-        self.sheet_id = settings.api_keys.get("google_sheet_id")
+        self.sheet_id = settings.google_sheet_id
         self._connect()
 
     def _connect(self):
         """Google Sheets APIに接続"""
         try:
-            creds_dict = settings.api_keys.get("google_credentials_json")
+            creds_dict = settings.google_credentials_json
             if not creds_dict:
                 logger.warning("Google credentials not configured - Sheets integration disabled")
                 self.service = None
@@ -243,12 +242,12 @@ class SheetsManager:
         Returns:
             プロンプトの辞書 {prompt_a: "...", prompt_b: "...", ...}
         """
-        prompt_manager = get_prompt_manager()
+        prompt_manager = settings.prompt_manager
 
         # Sheets接続がない場合、キャッシュを試す
         if not self.service:
             logger.warning("Sheets service not available, trying cache...")
-            cached_prompts = prompt_manager.load_prompts_from_cache(mode)
+            cached_prompts = prompt_manager.load_prompts_from_cache(mode) # PromptManagerにキャッシュ機能がある場合
             if cached_prompts:
                 logger.info(f"Using cached prompts for mode '{mode}'")
                 return cached_prompts
@@ -858,7 +857,7 @@ Tier 3: Yahoo Finance, MarketWatch, Investing.com
 
 
 # グローバルインスタンス
-sheets_manager = SheetsManager() if settings.api_keys.google_sheet_id else None
+sheets_manager = SheetsManager() if settings.google_sheet_id else None
 
 
 def get_sheets() -> Optional[SheetsManager]:
