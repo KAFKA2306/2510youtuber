@@ -3,9 +3,9 @@ from pathlib import Path
 import ffmpeg
 import pytest
 
+from app.config.settings import settings
 from app.models.video_review import ScreenshotEvidence, VideoReviewFeedback
 from app.services.video_review import VideoReviewService, VideoScreenshotExtractor
-from app.config.settings import settings
 
 
 @pytest.mark.unit
@@ -74,7 +74,7 @@ def test_video_review_service_records_feedback(tmp_path, monkeypatch):
     Path(dummy_screenshots[1].path).write_bytes(b"fake")
 
     feedback = VideoReviewFeedback(
-        summary="良い動画", 
+        summary="良い動画",
         positive_highlights=["構成が明確"],
         improvement_suggestions=["Bロールを追加"],
         retention_risks=["画面の静止が長い"],

@@ -1,7 +1,8 @@
 import json
+from pathlib import Path
+
 import pytest
 from pydub.generators import Sine
-from pathlib import Path
 
 from app.config import cfg
 from app.config.settings import MediaQAConfig

@@ -8,7 +8,6 @@ import types
 import pytest
 from ffmpeg.nodes import FilterableStream
 
-
 pytestmark = pytest.mark.unit
 
 

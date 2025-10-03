@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable, List
 
-
 DEFAULT_TEST_COMMANDS: List[List[str]] = [
     ["pytest", "tests/unit/test_video_generator_motion.py", "-q"],
 ]

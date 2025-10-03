@@ -10,7 +10,7 @@ import re
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List
 
 if TYPE_CHECKING:
     from app.workflow.base import WorkflowContext
