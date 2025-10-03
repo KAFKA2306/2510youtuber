@@ -574,8 +574,6 @@ class VideoGenerator:
                 video_with_subs,
                 audio_stream,
                 output_path,
-                vcodec='libx264',
-                acodec='aac',
                 **self._get_quality_settings(),
             ).overwrite_output()
 
@@ -614,7 +612,7 @@ class VideoGenerator:
 
             quality_settings = self._get_quality_settings()
             stream = ffmpeg.output(
-                stream, audio_stream, output_path, crf=28, **quality_settings
+                stream, audio_stream, output_path, **quality_settings
             ).overwrite_output()
 
             ffmpeg.run(stream, quiet=True)

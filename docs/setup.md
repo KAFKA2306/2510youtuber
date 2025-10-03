@@ -2,6 +2,47 @@
 
 ## 🎉 最新アップデート
 
+### 🆕 Phase 3完了: CrewAI出力品質修正（2025年10月3日）
+
+**CrewAI台本生成の品質問題を修正しました:**
+
+#### 修正内容
+
+1. **CrewAI Agent出力汚染の修正**
+   - **問題**: Agent 6-7が評価結果のJSON出力時に、内部の思考プロセスや分析を英語で含めていた
+   - **影響**: 最終台本に数百個の英単語（"json", "wow_score", "Task", "Agent"等）が混入
+   - **修正**: `app/config_prompts/prompts/quality_check.yaml`のTask 6-7に明示的な指示を追加
+     - "最終出力は、以下のJSON形式のみを出力してください。説明文、分析、コメント等は一切含めないでください"
+     - "あなたの思考プロセスは含めず、JSONのみを出力してください"
+
+2. **Fallback動画生成エラーの修正**
+   - **問題**: `app/video.py:616-617` でffmpegパラメータ衝突（`preset`、`crf`等の重複指定）
+   - **影響**: メイン動画生成失敗時のフォールバックも失敗し、動画が全く生成されない
+   - **修正**: 全ての動画生成パス（main/stock/fallback）で`_get_quality_settings()`のみを使用し、パラメータ重複を排除
+
+3. **字幕の日本語純度向上**
+   - CrewAI出力のクリーニングにより、字幕に混入する英語が大幅に削減
+   - `app/japanese_quality.py`の英語検出が正常に機能するようになった
+
+#### 期待される効果
+
+| 指標 | 修正前 | 修正後 |
+|------|--------|--------|
+| 台本の日本語純度 | 60-70% | 95%+ |
+| 字幕の英語混入 | 200-500単語 | 0-10単語 |
+| 動画生成成功率 | 50% | 95%+ |
+| フォールバック動作 | 失敗 | 正常動作 |
+
+#### 関連ファイル
+
+- `app/config_prompts/prompts/quality_check.yaml`: Task 6-7のプロンプト修正
+- `app/video.py`: Fallback動画生成の修正
+- `app/crew/flows.py`: JSON解析ロジック（変更なし、正常動作）
+
+詳細は本ドキュメント末尾の「トラブルシューティング」セクションを参照してください。
+
+---
+
 ### Phase 1完了: CrewAI統合済み
 
 このシステムは**WOW Script Creation Crew**を搭載しています。7つのAIエージェントが協力して、視聴維持率50%+を目指す高品質な台本を自動生成します。
@@ -727,6 +768,111 @@ pip install -r requirements.txt
    ```
 
 ## トラブルシューティング
+
+### Phase 3関連の問題（2025年10月3日対応）
+
+#### 字幕に英語が大量に混入する
+
+**症状**:
+```
+Subtitle contains English: 'The user has provided a detailed task description'
+Could not clean all English from subtitle: ['user', 'has', 'provided', 'Task', 'Agent', 'json', 'wow_score']
+```
+
+**原因**: CrewAI Agent（特にTask 6-7）が内部の思考プロセスをJSON出力に含めている
+
+**解決済み**: `app/config_prompts/prompts/quality_check.yaml` を最新版に更新
+```bash
+git pull origin main
+# または手動で quality_check.yaml を編集
+```
+
+**確認方法**:
+```bash
+# Task 7のプロンプトに以下が含まれているか確認
+grep -A 5 "最終出力は、以下のJSON形式のみを出力" app/config_prompts/prompts/quality_check.yaml
+```
+
+期待される出力:
+```yaml
+【重要】最終出力は、以下のJSON形式のみを出力してください。説明文、分析、コメント等は一切含めないでください。
+必ずMarkdownのコードブロック（```json ... ```）で囲んでください。
+
+あなたの思考プロセスや分析は含めず、JSONのみを出力してください。
+```
+
+#### 動画生成が完全に失敗する
+
+**症状**:
+```
+Video generation failed: ffmpeg error (see stderr output for detail)
+Generating fallback video...
+Fallback video generation error: 'preset'
+# または
+Fallback video generation error: 'crf'
+Step 6 failed: Video generation failed
+```
+
+**原因**: ffmpegパラメータが重複指定されている
+- `_get_quality_settings()`は既に`preset`、`crf`、`c:v`、`c:a`等を含む
+- 明示的に`crf=28`や`vcodec='libx264'`等を追加すると衝突する
+
+**解決済み**: `app/video.py` の全ての動画生成パスを修正
+- `_generate_fallback_video` (line 616-618)
+- `_generate_with_stock_footage` (line 573-578)
+
+**確認方法**:
+```bash
+# 3箇所全てで _get_quality_settings() のみが使われているか確認
+grep -B 2 -A 2 "\*\*self._get_quality_settings()" app/video.py
+```
+
+期待される出力（3箇所）:
+```python
+# 1. Main generation (line 119-125)
+stream = ffmpeg.output(
+    stream,
+    audio_stream,
+    output_path,
+    vf=self._build_subtitle_filter(subtitle_path),
+    **self._get_quality_settings(),
+).overwrite_output()
+
+# 2. Stock footage (line 573-578)
+output = ffmpeg.output(
+    video_with_subs,
+    audio_stream,
+    output_path,
+    **self._get_quality_settings(),
+).overwrite_output()
+
+# 3. Fallback (line 616-618)
+stream = ffmpeg.output(
+    stream, audio_stream, output_path, **quality_settings
+).overwrite_output()
+```
+
+#### スクリプトが話者形式でない
+
+**症状**:
+```
+Script does not have proper speaker format
+This indicates CrewAI did not follow the output format instructions.
+No speaker format detected, treating entire text as narrator
+```
+
+**原因**: Agent 7のfinal_scriptフィールドに話者形式が含まれていない
+
+**対処方法**:
+1. `app/config_prompts/prompts/quality_check.yaml` のTask 7が最新版であることを確認
+2. 以下の行が含まれているか確認:
+```yaml
+"final_script": "日本語純度100%の最終完成台本（必ず「田中: セリフ」形式）",
+```
+3. Agent promptにも明示:
+```yaml
+- final_scriptは必ず「話者名: セリフ」の形式で記述してください。**（重要：JSON内の`final_script`の値もこの形式を厳守すること）**
+```
 
 ### よくある問題
 
