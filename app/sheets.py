@@ -266,10 +266,12 @@ class SheetsManager:
         # Sheets接続がない場合、キャッシュを試す
         if not self.service:
             logger.warning("Sheets service not available, trying cache...")
-            cached_prompts = prompt_manager.load_prompts_from_cache(mode)  # PromptManagerにキャッシュ機能がある場合
-            if cached_prompts:
-                logger.info(f"Using cached prompts for mode '{mode}'")
-                return cached_prompts
+            # Try to load from cache if method exists
+            if hasattr(prompt_manager, 'load_prompts_from_cache'):
+                cached_prompts = prompt_manager.load_prompts_from_cache(mode)
+                if cached_prompts:
+                    logger.info(f"Using cached prompts for mode '{mode}'")
+                    return cached_prompts
             logger.warning("No cache available, returning default prompts")
             return self._get_default_prompts()
 
@@ -300,24 +302,27 @@ class SheetsManager:
 
                 logger.info(f"Loaded {len(prompts)} prompts from Sheets for mode '{mode}'")
 
-                # キャッシュに保存
-                prompt_manager.save_prompts_to_cache(mode, prompts)
+                # キャッシュに保存 (if method exists)
+                if hasattr(prompt_manager, 'save_prompts_to_cache'):
+                    prompt_manager.save_prompts_to_cache(mode, prompts)
 
                 return prompts
             else:
                 logger.warning("Prompts sheet is empty or malformed, trying cache...")
-                cached_prompts = prompt_manager.load_prompts_from_cache(mode)
-                if cached_prompts:
-                    return cached_prompts
+                if hasattr(prompt_manager, 'load_prompts_from_cache'):
+                    cached_prompts = prompt_manager.load_prompts_from_cache(mode)
+                    if cached_prompts:
+                        return cached_prompts
                 return self._get_default_prompts()
 
         except Exception as e:
             logger.error(f"Failed to load prompts from Sheets: {e}, trying cache...")
             # Sheets失敗時はキャッシュフォールバック
-            cached_prompts = prompt_manager.load_prompts_from_cache(mode)
-            if cached_prompts:
-                logger.info(f"Using cached prompts as fallback for mode '{mode}'")
-                return cached_prompts
+            if hasattr(prompt_manager, 'load_prompts_from_cache'):
+                cached_prompts = prompt_manager.load_prompts_from_cache(mode)
+                if cached_prompts:
+                    logger.info(f"Using cached prompts as fallback for mode '{mode}'")
+                    return cached_prompts
             logger.warning("No cache available, returning default prompts")
             return self._get_default_prompts()
 

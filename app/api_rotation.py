@@ -339,7 +339,12 @@ def initialize_api_infrastructure() -> APIKeyRotationManager:
     Returns:
         初期化済みのAPIKeyRotationManager
     """
+    from dotenv import load_dotenv
     from app.config.settings import settings
+
+    # CRITICAL: .envファイルからAPIキーを読み込む（環境変数に設定）
+    load_dotenv("secret/.env")
+    logger.info("Loaded environment variables from secret/.env")
 
     manager = get_rotation_manager()
 

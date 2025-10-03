@@ -28,7 +28,11 @@ class YouTubeManager:
     """YouTube API管理クラス"""
 
     # OAuth 2.0 スコープ
-    SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube"]
+    SCOPES = [
+        "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube",
+        "https://www.googleapis.com/auth/youtube.force-ssl",
+    ]
 
     def __init__(self):
         self.service = None
@@ -135,7 +139,12 @@ class YouTubeManager:
             return None
 
     def upload_video(
-        self, video_path: str, metadata: Dict[str, Any], thumbnail_path: str = None, privacy_status: str = "private"
+        self,
+        video_path: str,
+        metadata: Dict[str, Any],
+        thumbnail_path: str = None,
+        subtitle_path: str = None,
+        privacy_status: str = "private",
     ) -> Dict[str, Any]:
         """動画をYouTubeにアップロード
 
@@ -143,6 +152,7 @@ class YouTubeManager:
             video_path: 動画ファイルのパス
             metadata: 動画メタデータ
             thumbnail_path: サムネイル画像のパス
+            subtitle_path: 字幕ファイルのパス (.srt形式)
             privacy_status: 公開設定 (private/unlisted/public)
 
         Returns:
@@ -186,6 +196,11 @@ class YouTubeManager:
             if thumbnail_path and os.path.exists(thumbnail_path):
                 thumbnail_result = self._upload_thumbnail(video_id, thumbnail_path)
 
+            # 字幕をアップロード
+            caption_result = None
+            if subtitle_path and os.path.exists(subtitle_path):
+                caption_result = self._upload_caption(video_id, subtitle_path)
+
             # 結果を整理
             result = {
                 "video_id": video_id,
@@ -196,10 +211,14 @@ class YouTubeManager:
                 "uploaded_at": datetime.now().isoformat(),
                 "file_size": file_size,
                 "thumbnail_uploaded": thumbnail_result is not None,
+                "caption_uploaded": caption_result is not None,
             }
 
             if thumbnail_result:
                 result["thumbnail_result"] = thumbnail_result
+
+            if caption_result:
+                result["caption_result"] = caption_result
 
             return result
 
@@ -327,6 +346,69 @@ class YouTubeManager:
         except Exception as e:
             logger.error(f"Thumbnail upload failed for {video_id}: {e}")
             return {"uploaded": False, "error": str(e), "thumbnail_path": thumbnail_path}
+
+    def _upload_caption(self, video_id: str, subtitle_path: str, language: str = "ja") -> Dict[str, Any]:
+        """字幕ファイルをアップロード
+
+        Args:
+            video_id: YouTube動画ID
+            subtitle_path: 字幕ファイルのパス (.srt形式)
+            language: 言語コード (デフォルト: ja=日本語)
+
+        Returns:
+            アップロード結果
+        """
+        try:
+            # 字幕メタデータを準備
+            caption_body = {
+                "snippet": {
+                    "videoId": video_id,
+                    "language": language,
+                    "name": "Japanese" if language == "ja" else language,
+                    "isDraft": False,
+                }
+            }
+
+            # 字幕ファイルをアップロード
+            media = MediaFileUpload(subtitle_path, mimetype="application/octet-stream", resumable=True)
+
+            request = self.service.captions().insert(
+                part="snippet", body=caption_body, media_body=media, sync=False
+            )
+
+            response = request.execute()
+
+            logger.info(f"Caption uploaded for video: {video_id} (language: {language})")
+            return {
+                "uploaded": True,
+                "caption_id": response.get("id"),
+                "language": language,
+                "subtitle_path": subtitle_path,
+                "uploaded_at": datetime.now().isoformat(),
+            }
+
+        except HttpError as e:
+            # 権限エラーの場合は警告のみ
+            if e.resp.status == 403:
+                logger.warning(
+                    f"Caption upload not authorized for video {video_id}. "
+                    f"This may be due to OAuth scope limitations. Video upload was successful. "
+                    f"You can manually add captions in YouTube Studio."
+                )
+                return {
+                    "uploaded": False,
+                    "skipped": True,
+                    "reason": "authorization_insufficient",
+                    "error": "OAuth scope may not include caption permissions",
+                    "subtitle_path": subtitle_path,
+                }
+
+            logger.error(f"Caption upload failed for {video_id}: {e}")
+            return {"uploaded": False, "error": str(e), "subtitle_path": subtitle_path}
+
+        except Exception as e:
+            logger.error(f"Caption upload failed for {video_id}: {e}")
+            return {"uploaded": False, "error": str(e), "subtitle_path": subtitle_path}
 
     def update_video(self, video_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         """動画情報を更新"""
@@ -476,11 +558,15 @@ youtube_manager = YouTubeManager() if settings.api_keys.get("youtube") else None
 
 
 def upload_video(
-    video_path: str, metadata: Dict[str, Any], thumbnail_path: str = None, privacy_status: str = "private"
+    video_path: str,
+    metadata: Dict[str, Any],
+    thumbnail_path: str = None,
+    subtitle_path: str = None,
+    privacy_status: str = "private",
 ) -> Dict[str, Any]:
     """動画アップロードの簡易関数"""
     if youtube_manager:
-        return youtube_manager.upload_video(video_path, metadata, thumbnail_path, privacy_status)
+        return youtube_manager.upload_video(video_path, metadata, thumbnail_path, subtitle_path, privacy_status)
     else:
         logger.warning("YouTube manager not available")
         return {"error": "YouTube manager not configured"}

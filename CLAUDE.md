@@ -122,6 +122,46 @@ All models use Pydantic v2 with validation. Scripts are structured as lists of `
 
 B-roll clips are selected based on visual instructions in script segments. The system applies ken-burns effects, color grading, and smooth transitions.
 
+### File Archival System
+`app/services/file_archival.py` - **NEW**: Manages persistent storage of workflow outputs
+
+**Directory Structure:**
+```
+output/{timestamp}_{run_id}_{sanitized_title}/
+  ├── video.mp4
+  ├── audio.wav
+  ├── thumbnail.png
+  ├── script.txt
+  └── subtitles.srt
+```
+
+**Key Features:**
+- **Automatic archival**: All workflow files copied to organized directories after generation
+- **Predictable paths**: Files grouped by run_id with timestamp and sanitized title
+- **No data loss**: Files persist after YouTube upload (previous issue: temp files disappeared)
+- **Recovery support**: `list_archived_workflows()` lists all past runs
+- **Optional cleanup**: Configurable retention policy (default: keep forever)
+
+**Implementation (TDD approach following t-wada):**
+- Tests written first: `tests/unit/test_file_archival.py` (13 tests, 100% pass)
+- `FileArchivalManager` class handles all file organization
+- Integrated with `GenerateVideoStep` in workflow
+- Files automatically archived after video generation completes
+
+**Usage:**
+```python
+from app.services.file_archival import FileArchivalManager
+
+manager = FileArchivalManager()
+archived = manager.archive_workflow_files(
+    run_id="abc123",
+    timestamp="20251003_150000",
+    title="Video Title",
+    files={"video": "/tmp/video.mp4", "audio": "/tmp/audio.wav"}
+)
+# Returns: {"video": "output/.../video.mp4", "audio": "output/.../audio.wav"}
+```
+
 ## Quality Assurance System
 
 ### Japanese Purity Check

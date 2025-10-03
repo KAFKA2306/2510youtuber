@@ -107,6 +107,16 @@ class SubtitleAligner:
                 speaker = None
                 content = line
 
+            # ビジュアル指示を除外（括弧内の映像指示）
+            if re.match(r"^\(.*\)$", content):
+                logger.debug(f"Skipping visual instruction: {content}")
+                continue
+
+            # WOW Script Creation Crew などのウォーターマークを除外
+            if "WOW Script Creation Crew" in content or "視聴者の皆様が明日を切り拓く" in content:
+                logger.debug(f"Skipping watermark: {content[:50]}...")
+                continue
+
             # 長い文を分割
             sub_sentences = self._split_long_sentence(content)
 
@@ -318,14 +328,24 @@ class SubtitleAligner:
             if processed and abs(processed[-1]["start"] - subtitle["start"]) < 0.1:
                 continue
 
-            # 時間の重複を解決
-            if processed and subtitle["start"] < processed[-1]["end"]:
-                # 前の字幕の終了時間を調整
-                processed[-1]["end"] = subtitle["start"] - 0.1
-
-            # 最小表示時間を確保
+            # 最小表示時間を確保（重複解決の前に）
             if subtitle["end"] - subtitle["start"] < self.min_display_duration:
                 subtitle["end"] = subtitle["start"] + self.min_display_duration
+
+            # 時間の重複を解決
+            if processed and subtitle["start"] < processed[-1]["end"]:
+                gap = 0.1  # 字幕間の最小ギャップ
+                # 前の字幕の終了時間を調整
+                new_prev_end = subtitle["start"] - gap
+
+                # 前の字幕が最小表示時間を満たすか確認
+                prev_duration = new_prev_end - processed[-1]["start"]
+                if prev_duration < self.min_display_duration:
+                    # 前の字幕が短くなりすぎる場合、現在の字幕の開始時間を後ろにずらす
+                    subtitle["start"] = processed[-1]["end"] + gap
+                    subtitle["end"] = max(subtitle["end"], subtitle["start"] + self.min_display_duration)
+                else:
+                    processed[-1]["end"] = new_prev_end
 
             # 日本語品質チェック＆クリーニング
             if HAS_JAPANESE_QUALITY_CHECK:

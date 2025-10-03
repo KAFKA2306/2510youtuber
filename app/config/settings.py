@@ -110,6 +110,8 @@ class AppSettings(BaseModel):
     google_credentials_json: Optional[Dict[str, Any]] = None
     google_drive_folder_id: Optional[str] = None
     discord_webhook_url: Optional[str] = None
+    gemini_daily_quota_limit: int = 0
+    save_local_backup: bool = False
 
     # Legacy properties for backward compatibility
     @property
@@ -233,6 +235,14 @@ class AppSettings(BaseModel):
         config["google_sheet_id"] = os.getenv("GOOGLE_SHEET_ID")
         config["google_drive_folder_id"] = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
         config["discord_webhook_url"] = os.getenv("DISCORD_WEBHOOK_URL")
+
+        # Load gemini_daily_quota_limit from config.yaml
+        if "api" in config:
+            config["gemini_daily_quota_limit"] = config["api"].get("gemini_daily_quota_limit", 0)
+
+        # Load save_local_backup from config.yaml
+        if "backup" in config:
+            config["save_local_backup"] = config["backup"].get("save_local_backup", False)
 
         # Load Google credentials from file or JSON string
         google_creds_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")

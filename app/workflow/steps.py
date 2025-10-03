@@ -5,6 +5,7 @@ Each step encapsulates a single responsibility from the original YouTubeWorkflow
 
 import logging
 import os
+from datetime import datetime
 from typing import Any, Dict, List
 
 from app.align_subtitles import align_script_with_stt, export_srt
@@ -12,6 +13,7 @@ from app.config import cfg
 from app.drive import upload_video_package
 from app.metadata import generate_youtube_metadata
 from app.search_news import collect_news
+from app.services.file_archival import FileArchivalManager
 from app.services.visual_design import create_unified_design
 from app.sheets import load_prompts as load_prompts_from_sheets
 from app.sheets import sheets_manager
@@ -207,8 +209,8 @@ class GenerateVisualDesignStep(WorkflowStep):
         if not news_items or not script_content:
             logger.warning("Missing news_items or script_content, using default design")
             # デフォルトデザインを使用
-            from app.services.visual_design import UnifiedVisualDesign
             from app.background_theme import get_theme_manager
+            from app.services.visual_design import UnifiedVisualDesign
 
             theme_manager = get_theme_manager()
             default_theme = theme_manager.select_theme_for_ab_test()
@@ -230,8 +232,8 @@ class GenerateVisualDesignStep(WorkflowStep):
                 )
             except Exception as e:
                 logger.error(f"Failed to create unified design: {e}, using default")
-                from app.services.visual_design import UnifiedVisualDesign
                 from app.background_theme import get_theme_manager
+                from app.services.visual_design import UnifiedVisualDesign
 
                 theme_manager = get_theme_manager()
                 default_theme = theme_manager.select_theme_for_ab_test()
@@ -391,15 +393,17 @@ class GenerateVideoStep(WorkflowStep):
         subtitle_path = context.get("subtitle_path")
         script_content = context.get("script_content", "")
         news_items = context.get("news_items", [])
+        metadata = context.get("metadata", {})
 
         if not audio_path or not subtitle_path:
             return self._failure("Missing audio_path or subtitle_path in context")
 
         try:
+            # Generate video (creates temp file)
             video_path = generate_video(
                 audio_path=audio_path,
                 subtitle_path=subtitle_path,
-                title="Economic News Analysis",
+                title=metadata.get("title", "Economic News Analysis"),
                 script_content=script_content,
                 news_items=news_items,
             )
@@ -407,23 +411,45 @@ class GenerateVideoStep(WorkflowStep):
             if not video_path or not os.path.exists(video_path):
                 return self._failure("Video generation failed")
 
-            video_size = os.path.getsize(video_path)
-            context.set("video_path", video_path)
+            # Archive video and related files to organized directory
+            archival_manager = FileArchivalManager()
+            timestamp = context.get("output_timestamp") or datetime.now().strftime("%Y%m%d_%H%M%S")
+            title = metadata.get("title", "Untitled")
+
+            archived_files = archival_manager.archive_workflow_files(
+                run_id=context.run_id,
+                timestamp=timestamp,
+                title=title,
+                files={
+                    "video": video_path,
+                    "audio": audio_path,
+                    "subtitle": subtitle_path,
+                }
+            )
+
+            # Update context with archived paths
+            archived_video = archived_files.get("video", video_path)
+            context.set("video_path", archived_video)
+            context.set("archived_audio_path", archived_files.get("audio"))
+            context.set("archived_subtitle_path", archived_files.get("subtitle"))
+
+            video_size = os.path.getsize(archived_video)
 
             # Record which method was used
             from app.video import video_generator
 
             generation_method = video_generator.last_generation_method
 
-            logger.info(f"Generated video: {video_path} ({video_size} bytes)")
+            logger.info(f"Generated and archived video: {archived_video} ({video_size} bytes)")
             return self._success(
                 data={
-                    "video_path": video_path,
+                    "video_path": archived_video,
                     "file_size": video_size,
                     "generation_method": generation_method,
                     "used_stock_footage": video_generator.last_used_stock_footage,
+                    "archived_files": archived_files,
                 },
-                files=[video_path],
+                files=[archived_video],
             )
 
         except Exception as e:
@@ -618,6 +644,7 @@ class UploadToYouTubeStep(WorkflowStep):
         video_path = context.get("video_path")
         metadata = context.get("metadata")
         thumbnail_path = context.get("thumbnail_path")
+        subtitle_path = context.get("subtitle_path")
 
         if not video_path or not metadata:
             return self._failure("Missing video_path or metadata in context")
@@ -627,6 +654,7 @@ class UploadToYouTubeStep(WorkflowStep):
                 video_path=video_path,
                 metadata=metadata,
                 thumbnail_path=thumbnail_path,
+                subtitle_path=subtitle_path,
                 privacy_status="public",
             )
 

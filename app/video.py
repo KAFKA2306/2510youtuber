@@ -16,6 +16,7 @@ import ffmpeg
 from pydub import AudioSegment
 
 from app.config.settings import settings
+from app.services.file_archival import FileArchivalManager
 
 from .background_theme import BackgroundTheme, get_theme_manager
 
@@ -37,6 +38,9 @@ class VideoGenerator:
         self._broll_generator = None
         self.last_used_stock_footage = False
         self.last_generation_method = "static"
+
+        # Initialize file archival manager
+        self.archival_manager = FileArchivalManager()
 
         logger.info("Video generator initialized with theme management and stock footage support")
 
