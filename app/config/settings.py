@@ -44,6 +44,19 @@ class VideoConfig(BaseModel):
     max_duration_minutes: int = 40
 
 
+class VideoReviewConfig(BaseModel):
+    """生成済み動画をAIがレビューするための設定"""
+
+    enabled: bool = True
+    screenshot_interval_seconds: int = 60
+    max_screenshots: int = 15
+    output_dir: str = "output/video_reviews"
+    model: str = "gemini-2.5-pro"
+    temperature: float = 0.4
+    max_output_tokens: int = 2048
+    store_feedback: bool = True
+
+
 class QualityThresholds(BaseModel):
     """品質基準"""
 
@@ -61,6 +74,55 @@ class CrewConfig(BaseModel):
     max_quality_iterations: int = 2
     parallel_analysis: bool = True
     verbose: bool = False
+
+
+class MediaQAGatingConfig(BaseModel):
+    """QAゲートの挙動設定"""
+
+    enforce: bool = True
+    skip_modes: List[str] = Field(default_factory=lambda: ["test"])
+    fail_on_missing_inputs: bool = True
+
+
+class AudioQAConfig(BaseModel):
+    """音声品質チェック設定"""
+
+    enabled: bool = True
+    peak_dbfs_max: float = -1.0
+    rms_dbfs_min: float = -24.0
+    rms_dbfs_max: float = -10.0
+    max_silence_seconds: float = 1.5
+
+
+class VideoQAConfig(BaseModel):
+    """動画品質チェック設定"""
+
+    enabled: bool = True
+    expected_resolution: VideoResolution = Field(
+        default_factory=lambda: VideoResolution(width=1920, height=1080)
+    )
+    min_fps: float = 24.0
+    max_fps: float = 61.0
+    min_bitrate_kbps: int = 3200
+
+
+class SubtitleQAConfig(BaseModel):
+    """字幕品質チェック設定"""
+
+    enabled: bool = True
+    min_line_coverage: float = 0.9
+    max_timing_gap_seconds: float = 1.5
+
+
+class MediaQAConfig(BaseModel):
+    """メディアQA統合設定"""
+
+    enabled: bool = True
+    report_dir: str = "data/qa_reports"
+    gating: MediaQAGatingConfig = Field(default_factory=MediaQAGatingConfig)
+    audio: AudioQAConfig = Field(default_factory=AudioQAConfig)
+    video: VideoQAConfig = Field(default_factory=VideoQAConfig)
+    subtitles: SubtitleQAConfig = Field(default_factory=SubtitleQAConfig)
 
 
 class AppSettings(BaseModel):
@@ -104,6 +166,8 @@ class AppSettings(BaseModel):
     use_crewai_script_generation: bool = True
     use_three_stage_quality_check: bool = True
     max_video_duration_minutes: int = 15
+    video_review: VideoReviewConfig = Field(default_factory=VideoReviewConfig)
+    media_quality: MediaQAConfig = Field(default_factory=MediaQAConfig)
 
     # Google Drive/Sheets settings (for backward compatibility)
     google_sheet_id: Optional[str] = None
@@ -111,6 +175,7 @@ class AppSettings(BaseModel):
     google_drive_folder_id: Optional[str] = None
     discord_webhook_url: Optional[str] = None
     gemini_daily_quota_limit: int = 0
+    newsapi_key: Optional[str] = None
     save_local_backup: bool = False
 
     # Legacy properties for backward compatibility
@@ -178,17 +243,28 @@ class AppSettings(BaseModel):
         config["api_keys"] = api_keys
 
         # speakersのvoice_idを環境変数からロード
-        speakers_config = []
+        speakers_config: List[SpeakerConfig] = []
         if "speakers" in config:
             for speaker_data in config["speakers"]:
                 # SpeakerConfigのバリデーターがvoice_id_envを処理するため、ここでは直接設定しない
                 speakers_config.append(SpeakerConfig(**speaker_data))
-            config["speakers"] = speakers_config
-            # tts_voice_configsを生成
-            config["tts_voice_configs"] = {s.name: s for s in speakers_config}
         else:
             config["speakers"] = []
-            config["tts_voice_configs"] = {}
+
+        config["speakers"] = speakers_config
+        config["tts_voice_configs"] = {s.name: s for s in speakers_config}
+
+        # 動画レビュー設定
+        if "video_review" in config:
+            config["video_review"] = VideoReviewConfig(**config["video_review"])
+        else:
+            config["video_review"] = VideoReviewConfig()
+
+        # メディア品質設定
+        if "media_quality" in config:
+            config["media_quality"] = MediaQAConfig(**config["media_quality"])
+        else:
+            config["media_quality"] = MediaQAConfig()
 
         # pydantic expects the quality field, but yaml has quality_thresholds
         if "quality_thresholds" in config:
@@ -214,6 +290,17 @@ class AppSettings(BaseModel):
             config["stock_footage_clips_per_video"] = config["stock_footage"].get("clips_per_video", 5)
             config["ffmpeg_path"] = config["stock_footage"].get("ffmpeg_path", "ffmpeg")
 
+        enable_stock_env = os.getenv("ENABLE_STOCK_FOOTAGE")
+        if enable_stock_env is not None:
+            config["enable_stock_footage"] = enable_stock_env.strip().lower() in {"1", "true", "yes", "on"}
+
+        stock_clips_env = os.getenv("STOCK_CLIPS_PER_VIDEO")
+        if stock_clips_env is not None:
+            try:
+                config["stock_footage_clips_per_video"] = max(1, int(stock_clips_env))
+            except ValueError:
+                pass
+
         # video.resolution のバリデーションエラー対策
         if "video" in config and "resolution" in config["video"] and isinstance(config["video"]["resolution"], dict):
             config["video"]["resolution"] = VideoResolution(**config["video"]["resolution"])
@@ -235,6 +322,9 @@ class AppSettings(BaseModel):
         config["google_sheet_id"] = os.getenv("GOOGLE_SHEET_ID")
         config["google_drive_folder_id"] = os.getenv("GOOGLE_DRIVE_FOLDER_ID")
         config["discord_webhook_url"] = os.getenv("DISCORD_WEBHOOK_URL")
+
+        # NewsAPI fallback key
+        config["newsapi_key"] = os.getenv("NEWSAPI_API_KEY")
 
         # Load gemini_daily_quota_limit from config.yaml
         if "api" in config:

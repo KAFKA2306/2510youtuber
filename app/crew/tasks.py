@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from crewai import Agent, Task
 
 from app.config_prompts.settings import settings
+from app.services.script.continuity import get_continuity_prompt_snippet
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +98,16 @@ def create_wow_tasks(agents: Dict[str, Agent], news_items: List[Dict[str, Any]])
         ]
     )
 
+    continuity_prompt = get_continuity_prompt_snippet()
+
     # Task 1: Deep News Analysis
     tasks["task1_deep_analysis"] = factory.create_task(
         task_name="analysis",  # agents.yamlのキーに合わせる
         agent=agents["deep_news_analyzer"],
-        context_data={"news_items": news_summary},
+        context_data={
+            "news_items": news_summary,
+            "continuity_prompt": continuity_prompt,
+        },
         expected_output="詳細なニュース分析結果",  # expected_outputを明示的に渡す
     )
 
@@ -110,7 +116,8 @@ def create_wow_tasks(agents: Dict[str, Agent], news_items: List[Dict[str, Any]])
         task_name="analysis",  # agents.yamlのキーに合わせる
         agent=agents["curiosity_gap_researcher"],
         context_data={
-            "deep_analysis_result": "{{ task1_deep_analysis.output }}"  # CrewAIのタスク出力参照形式
+            "deep_analysis_result": "{{ task1_deep_analysis.output }}",  # CrewAIのタスク出力参照形式
+            "continuity_prompt": continuity_prompt,
         },
         context_tasks=[tasks["task1_deep_analysis"]],
         expected_output="視聴者の好奇心を刺激するギャップのリスト",
@@ -123,6 +130,7 @@ def create_wow_tasks(agents: Dict[str, Agent], news_items: List[Dict[str, Any]])
         context_data={
             "deep_analysis_result": "{{ task1_deep_analysis.output }}",
             "curiosity_gaps": "{{ task2_curiosity_gaps.output }}",
+            "continuity_prompt": continuity_prompt,
         },
         context_tasks=[tasks["task1_deep_analysis"], tasks["task2_curiosity_gaps"]],
         expected_output="感情的なストーリーアークの設計",
@@ -136,6 +144,7 @@ def create_wow_tasks(agents: Dict[str, Agent], news_items: List[Dict[str, Any]])
             "surprise_points": "{{ task1_deep_analysis.output }}",  # 適切な出力に修正
             "curiosity_gaps": "{{ task2_curiosity_gaps.output }}",
             "story_arc": "{{ task3_story_arc.output }}",
+            "continuity_prompt": continuity_prompt,
         },
         context_tasks=[tasks["task1_deep_analysis"], tasks["task2_curiosity_gaps"], tasks["task3_story_arc"]],
         expected_output="高品質な動画スクリプト",
@@ -145,7 +154,10 @@ def create_wow_tasks(agents: Dict[str, Agent], news_items: List[Dict[str, Any]])
     tasks["task5_engagement"] = factory.create_task(
         task_name="quality_check",  # quality_check.yamlのキーに合わせる
         agent=agents["engagement_optimizer"],
-        context_data={"first_draft_script": "{{ task4_script_writing.output }}"},
+        context_data={
+            "first_draft_script": "{{ task4_script_writing.output }}",
+            "continuity_prompt": continuity_prompt,
+        },
         context_tasks=[tasks["task4_script_writing"]],
         expected_output="エンゲージメント最適化されたスクリプト",
     )
@@ -154,7 +166,10 @@ def create_wow_tasks(agents: Dict[str, Agent], news_items: List[Dict[str, Any]])
     tasks["task6_quality"] = factory.create_task(
         task_name="quality_check",  # quality_check.yamlのキーに合わせる
         agent=agents["quality_guardian"],
-        context_data={"optimized_script": "{{ task5_engagement.output }}"},
+        context_data={
+            "optimized_script": "{{ task5_engagement.output }}",
+            "continuity_prompt": continuity_prompt,
+        },
         context_tasks=[tasks["task5_engagement"]],
         expected_output="スクリプトの品質評価レポート",
     )
@@ -166,6 +181,7 @@ def create_wow_tasks(agents: Dict[str, Agent], news_items: List[Dict[str, Any]])
         context_data={
             "quality_approved_script": "{{ task6_quality.output }}",  # 適切な出力に修正
             "quality_evaluation_result": "{{ task6_quality.output }}",  # 適切な出力に修正
+            "continuity_prompt": continuity_prompt,
         },
         context_tasks=[tasks["task6_quality"]],
         expected_output="日本語純度チェック結果と修正案",

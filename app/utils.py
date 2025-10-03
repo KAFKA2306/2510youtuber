@@ -36,7 +36,10 @@ class FileUtils:
     def get_temp_file(prefix: str = "temp_", suffix: str = ".tmp") -> str:
         """一時ファイルパスを生成"""
         FileUtils.ensure_directory("temp")
-        return tempfile.mktemp(suffix=suffix, prefix=prefix, dir="temp")
+        temp_file = tempfile.NamedTemporaryFile(suffix=suffix, prefix=prefix, dir="temp", delete=False)
+        temp_path = temp_file.name
+        temp_file.close()
+        return temp_path
 
 
 class TextUtils:

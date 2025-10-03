@@ -24,6 +24,7 @@ from .workflow import (
     GenerateThumbnailStep,
     GenerateVideoStep,
     GenerateVisualDesignStep,
+    QualityAssuranceStep,
     SynthesizeAudioStep,
     TranscribeAudioStep,
     UploadToDriveStep,
@@ -66,6 +67,7 @@ class YouTubeWorkflow:
             TranscribeAudioStep(),       # Step 6: 音声認識
             AlignSubtitlesStep(),        # Step 7: 字幕整合
             GenerateVideoStep(),         # Step 8: 動画生成 (統一デザインを使用)
+            QualityAssuranceStep(),      # Step 8.5: 自動QAゲート
             UploadToDriveStep(),         # Step 9: Drive アップロード
             UploadToYouTubeStep(),       # Step 10: YouTube アップロード
         ]
@@ -101,7 +103,7 @@ class YouTubeWorkflow:
 
                 # Stop on failure
                 if not result.success:
-                    return self._handle_workflow_failure(step.step_name, result)
+                    return await self._handle_workflow_failure(step.step_name, result)
 
             # Update metadata storage with video URL if available
             video_url = self.context.get("video_url")
@@ -150,11 +152,11 @@ class YouTubeWorkflow:
             logger.error(f"Failed to initialize run: {e}")
             return f"fallback_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    def _handle_workflow_failure(self, step_name: str, result: Any) -> Dict[str, Any]:
+    async def _handle_workflow_failure(self, step_name: str, result: Any) -> Dict[str, Any]:
         """ステップ失敗時の処理"""
         error_message = f"{step_name} failed: {result.error if hasattr(result, 'error') else 'Unknown error'}"
         logger.error(error_message)
-        asyncio.create_task(self._notify_workflow_error(Exception(error_message)))
+        await self._notify_workflow_error(RuntimeError(error_message))
         self._update_run_status("failed", {"error": error_message})
         return {
             "success": False,

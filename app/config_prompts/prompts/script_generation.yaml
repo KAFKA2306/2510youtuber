@@ -14,6 +14,11 @@ tasks:
       - Agent 2の「好奇心ギャップ」: {{ curiosity_gaps }}
       - Agent 3の「ストーリーアーク」: {{ story_arc }}
 
+      {% if continuity_prompt %}
+      【前回動画とのつながり方針】
+      {{ continuity_prompt }}
+      {% endif %}
+
       【2025年YouTube最適化ルール】
 
       ## 最初の8秒ルール（超重要）
@@ -140,6 +145,11 @@ tasks:
       【初稿台本】
       {{ first_draft_script }}
 
+      {% if continuity_prompt %}
+      【継続視聴を促すリマインダー】
+      {{ continuity_prompt }}
+      {% endif %}
+
       【追加するエンゲージメント要素】
 
       ## 1. オープンループ（未解決の疑問）
@@ -206,4 +216,3 @@ tasks:
 
     expected_output: |
       エンゲージメント最適化台本 + 保持率予測データ + 改善リスト（JSON）
-

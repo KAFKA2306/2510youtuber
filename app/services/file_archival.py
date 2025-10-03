@@ -10,9 +10,10 @@ import re
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, TYPE_CHECKING
 
-from app.workflow.base import WorkflowContext
+if TYPE_CHECKING:
+    from app.workflow.base import WorkflowContext
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ class FileArchivalManager:
 
         return archived
 
-    def get_or_create_workflow_directory(self, context: WorkflowContext) -> str:
+    def get_or_create_workflow_directory(self, context: "WorkflowContext") -> str:
         """Get or create output directory from workflow context.
 
         Args:

@@ -258,6 +258,12 @@ VOICEVOX Nemoは完全無料のオープンソース日本語音声合成エン�
 ./scripts/voicevox_manager.sh logs
 # 音声合成テスト
 ./scripts/voicevox_manager.sh test
+
+**安定化ポイント:**
+- デフォルトで `voicevox/voicevox_engine:cpu-ubuntu20.04-0.24.1` を使用し、Dockerリスタートポリシー `unless-stopped` を付与
+- 起動時にヘルスチェック(`/health`)とポート競合検査を行い、失敗時は安全に停止/削除
+- `VOICEVOX_IMAGE`, `VOICEVOX_CONTAINER_NAME`, `VOICEVOX_PORT`, `VOICEVOX_SPEAKER`, `VOICEVOX_CPU_LIMIT`, `VOICEVOX_MEMORY_LIMIT` などの環境変数で挙動を上書き可能
+- 画像取得は最大3回リトライし、詳細ログは `logs/voicevox_nemo.log` に出力
 ```
 **設定（`config.yaml`）:**
 ```yaml

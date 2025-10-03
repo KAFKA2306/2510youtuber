@@ -7,8 +7,8 @@ FFmpegを使用して高品質な動画出力を実現します。
 """
 
 import logging
+import math
 import os
-import tempfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +17,7 @@ from pydub import AudioSegment
 
 from app.config.settings import settings
 from app.services.file_archival import FileArchivalManager
+from app.utils import FileUtils
 
 from .background_theme import BackgroundTheme, get_theme_manager
 
@@ -38,6 +39,7 @@ class VideoGenerator:
         self._broll_generator = None
         self.last_used_stock_footage = False
         self.last_generation_method = "static"
+        self.motion_fps = 30
 
         # Initialize file archival manager
         self.archival_manager = FileArchivalManager()
@@ -117,18 +119,27 @@ class VideoGenerator:
 
             bg_image_path = self._prepare_background_image(background_image, title)
 
-            stream = ffmpeg.input(bg_image_path, loop=1, t=audio_duration)
+            motion_stream = self._build_motion_background_stream(bg_image_path, audio_duration)
+            subtitle_style = self._build_subtitle_style()
+            sanitized_subtitle_path = self._normalize_subtitle_path(subtitle_path)
+
+            video_stream = motion_stream.filter(
+                "subtitles",
+                sanitized_subtitle_path,
+                force_style=subtitle_style,
+            )
+
             audio_stream = ffmpeg.input(audio_path)
 
-            stream = ffmpeg.output(
-                stream,
+            output = ffmpeg.output(
+                video_stream,
                 audio_stream,
                 output_path,
-                vf=self._build_subtitle_filter(subtitle_path),
+                shortest=None,
                 **self._get_quality_settings(),
             ).overwrite_output()
 
-            ffmpeg.run(stream, quiet=True)
+            ffmpeg.run(output, quiet=True)
 
             video_info = self._get_video_info(output_path)
             logger.info(f"Video generated successfully: {output_path}")
@@ -327,7 +338,7 @@ class VideoGenerator:
                 subtitle_zone_y = int(height * theme.subtitle_zone_height_ratio)
                 draw.rectangle([0, subtitle_zone_y - 3, width, subtitle_zone_y], fill=(0, 100, 180, 100))
 
-            temp_path = tempfile.mktemp(suffix=".png")
+            temp_path = FileUtils.get_temp_file(prefix="bg_", suffix=".png")
             image.save(temp_path, "PNG", quality=95)
             logger.info(f"Created professional background with robot icon and dynamic elements: {temp_path}")
             return temp_path
@@ -368,7 +379,7 @@ class VideoGenerator:
             from PIL import Image
 
             image = Image.new("RGB", (1920, 1080), color=(25, 35, 45))
-            temp_path = tempfile.mktemp(suffix=".png")
+            temp_path = FileUtils.get_temp_file(prefix="bg_", suffix=".png")
             image.save(temp_path, "PNG")
             return temp_path
         except Exception as e:
@@ -391,57 +402,99 @@ class VideoGenerator:
         )
         return quality_settings
 
+    def _normalize_subtitle_path(self, subtitle_path: str) -> str:
+        """Sanitize subtitle path for ffmpeg filter usage."""
+        if os.name == "nt":
+            return subtitle_path.replace("\\", "\\\\").replace(":", "\\:")
+        return subtitle_path
+
+    def _build_subtitle_style(self) -> str:
+        """Return force_style string for subtitles filter."""
+        japanese_fonts = [
+            "Noto Sans CJK JP Bold",
+            "Yu Gothic Bold",
+            "Hiragino Sans W6",
+            "IPAGothic",
+            "Meiryo Bold",
+            "MS Gothic",
+        ]
+
+        font_name = self._find_available_font(japanese_fonts)
+        subtitle_margin_v = 50
+        subtitle_margin_h = 100
+
+        style = (
+            f"FontName={font_name},"
+            f"FontSize={settings.subtitle_font_size},"
+            f"PrimaryColour=&H00FFFFFF,"
+            f"OutlineColour=&H00000000,"
+            f"BackColour=&HE0000000,"
+            f"BorderStyle=4,"
+            f"Outline={settings.subtitle_outline_width + 1},"
+            f"Shadow=3,"
+            f"Alignment=2,"
+            f"MarginV={subtitle_margin_v},"
+            f"MarginL={subtitle_margin_h},"
+            f"MarginR={subtitle_margin_h},"
+            f"Bold=1,"
+            f"Spacing=1,"
+            f"ScaleX=100,"
+            f"ScaleY=100"
+        )
+
+        style_str = "".join(style)
+        logger.info(
+            "Using subtitle font %s with margins (V:%spx, H:%spx)",
+            font_name,
+            subtitle_margin_v,
+            subtitle_margin_h,
+        )
+        return style_str
+
     def _build_subtitle_filter(self, subtitle_path: str) -> str:
-        """字幕フィルタを構築（プロYouTuber品質、見切れ防止、最下部配置）"""
+        """Legacy helper that returns full subtitles filter string."""
         try:
-            # On Windows, paths must be escaped.
-            if os.name == "nt":
-                subtitle_path = subtitle_path.replace("\\", "\\\\").replace(":", "\\:")
-
-            # 日本語フォントを優先的に使用（太字優先）
-            japanese_fonts = [
-                "Noto Sans CJK JP Bold",  # 最も読みやすい
-                "Yu Gothic Bold",  # Windows/Mac 太字
-                "Hiragino Sans W6",  # macOS 太字
-                "IPAGothic",  # IPA ゴシック (Linux)
-                "Meiryo Bold",  # Windows 太字
-                "MS Gothic",  # Windows
-            ]
-
-            # 利用可能な日本語フォントを検索
-            font_name = self._find_available_font(japanese_fonts)
-
-            # 改善: 字幕を下部20%エリア（864px以降）に確実に配置
-            # MarginV を大幅に増やして見切れを完全防止
-            subtitle_margin_v = 50  # 下部から50pxマージン（1080の下部20%内）
-            subtitle_margin_h = 100  # 左右100pxマージン（横の見切れ防止）
-
-            # プロYouTuber品質の字幕スタイル（最強視認性 + 見切れ防止）
-            subtitle_style = (
-                f"subtitles={subtitle_path}:force_style='FontName={font_name},"
-                f"FontSize={settings.subtitle_font_size},"  # config.py から取得（デフォルト48）
-                f"PrimaryColour=&H00FFFFFF,"  # 白文字（視認性最強）
-                f"OutlineColour=&H00000000,"  # 黒アウトライン
-                f"BackColour=&HE0000000,"  # より濃い半透明黒背景（E0=88%不透明）
-                f"BorderStyle=4,"  # 4=ボックス背景+アウトライン（最強視認性）
-                f"Outline={settings.subtitle_outline_width + 1},"  # アウトライン幅を1px増加
-                f"Shadow=3,"  # より強い影（立体感）
-                f"Alignment=2,"  # 下部中央
-                f"MarginV={subtitle_margin_v},"  # 下部マージン（見切れ防止）
-                f"MarginL={subtitle_margin_h},"  # 左マージン
-                f"MarginR={subtitle_margin_h},"  # 右マージン
-                f"Bold=1,"  # 太字
-                f"Spacing=1,"  # 文字間隔を少し開ける（読みやすさ向上）
-                f"ScaleX=100,"  # 横スケール
-                f"ScaleY=100'"  # 縦スケール
-            )
-
-            logger.info(f"Using subtitle font: {font_name}, MarginV: {subtitle_margin_v}px (bottom 20% zone)")
-            return subtitle_style
-
+            normalized = self._normalize_subtitle_path(subtitle_path)
+            style = self._build_subtitle_style()
+            return f"subtitles={normalized}:force_style='{style}'"
         except Exception as e:
             logger.warning(f"Failed to build subtitle filter: {e}")
-            return None
+            return f"subtitles={self._normalize_subtitle_path(subtitle_path)}"
+
+    def _build_motion_background_stream(self, bg_image_path: str, duration: float):
+        """Create subtle motion video stream from a static background."""
+        width = settings.video.resolution.width
+        height = settings.video.resolution.height
+        fps = self.motion_fps
+
+        frames = max(int(math.ceil(duration * fps)) + fps // 2, fps)
+        scale_factor = 1.18
+        scaled_width = int(width * scale_factor)
+        scaled_height = int(height * scale_factor)
+
+        stream = ffmpeg.input(bg_image_path, loop=1, t=duration + 2)
+        stream = stream.filter("scale", scaled_width, scaled_height)
+
+        pan_x_margin = max(2, (scaled_width - width) // 2)
+        pan_y_margin = max(2, (scaled_height - height) // 2)
+        pan_x_amp = max(2, min(pan_x_margin - 1, pan_x_margin // 2))
+        pan_y_amp = max(2, min(pan_y_margin - 1, pan_y_margin // 2))
+
+        x_expr = f"iw/2-(iw/zoom/2)+sin(on/{fps * 4})*{pan_x_amp}"
+        y_expr = f"ih/2-(ih/zoom/2)+cos(on/{fps * 5})*{pan_y_amp}"
+
+        stream = stream.filter(
+            "zoompan",
+            z="if(eq(on,0),1.0,min(1.12,zoom+0.00035))",
+            s=f"{width}x{height}",
+            fps=fps,
+            d=frames,
+            x=x_expr,
+            y=y_expr,
+        )
+        stream = stream.filter("eq", saturation=1.05, contrast=1.02, brightness=0.01)
+        stream = stream.filter("setsar", "1")
+        return stream
 
     def _find_available_font(self, font_candidates: list) -> str:
         """利用可能なフォントを検索"""
@@ -574,10 +627,13 @@ class VideoGenerator:
             audio_stream = ffmpeg.input(audio_path)
 
             # Apply subtitle overlay
+            subtitle_style = self._build_subtitle_style()
+            sanitized_subtitle_path = self._normalize_subtitle_path(subtitle_path)
+
             video_with_subs = video_stream.filter(
                 "subtitles",
-                subtitle_path,
-                force_style=self._get_subtitle_style_string(),
+                sanitized_subtitle_path,
+                force_style=subtitle_style,
             )
 
             # Combine video + audio
@@ -601,15 +657,11 @@ class VideoGenerator:
         return None
 
     def _get_subtitle_style_string(self) -> str:
-        """Get subtitle style as string for ffmpeg filter."""
-        # Reuse existing subtitle filter logic
-        filter_str = self._build_subtitle_filter("dummy.srt")
-        if filter_str and "force_style='" in filter_str:
-            # Extract style string
-            start = filter_str.find("force_style='") + len("force_style='")
-            end = filter_str.find("'", start)
-            return filter_str[start:end]
-        return ""
+        try:
+            return self._build_subtitle_style()
+        except Exception as e:
+            logger.warning(f"Failed to retrieve subtitle style: {e}")
+            return ""
 
     def _generate_fallback_video(self, audio_path: str, title: str) -> str:
         try:

@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Dict, Optional
 
 from .background_theme import get_theme_manager
+from .models.video_review import VideoReviewResult
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +147,34 @@ class VideoFeedbackCollector:
 
         except Exception as e:
             logger.error(f"Failed to record manual feedback: {e}")
+
+    def record_ai_review(self, video_id: str, review: VideoReviewResult):
+        """AIによる動画レビュー結果を保存"""
+        try:
+            with open(self.feedback_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            if video_id not in data:
+                data[video_id] = {
+                    "theme_name": "unknown",
+                    "created_at": datetime.now().isoformat(),
+                    "metadata": {},
+                    "analytics": {},
+                }
+
+            ai_review_entry = review.to_dict()
+            ai_review_entry["stored_at"] = datetime.now().isoformat()
+
+            history = data[video_id].setdefault("ai_review_history", [])
+            history.append(ai_review_entry)
+            data[video_id]["ai_review"] = ai_review_entry
+
+            with open(self.feedback_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+            logger.info("Recorded AI review feedback for video %s", video_id)
+        except Exception as e:
+            logger.error(f"Failed to record AI review: {e}")
 
     def get_video_feedback(self, video_id: str) -> Optional[Dict]:
         """特定動画のフィードバックを取得"""

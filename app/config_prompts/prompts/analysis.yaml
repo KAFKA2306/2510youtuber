@@ -12,6 +12,11 @@ tasks:
       【ニュース項目】
       {{ news_items }}
 
+      {% if continuity_prompt %}
+      【前回からの継続ヒント】
+      {{ continuity_prompt }}
+      {% endif %}
+
       【抽出すべき要素】
       1. **意外性（Surprise）**: 表面的な報道では語られない驚きの事実
          - 例: 「実は〇〇の真の狙いは△△だった」
@@ -79,6 +84,11 @@ tasks:
       【分析結果】
       {{ deep_analysis_result }}
 
+      {% if continuity_prompt %}
+      【視聴者フィードバックからの要望】
+      {{ continuity_prompt }}
+      {% endif %}
+
       【設計パターン】
       1. **パラドックス型**
          - 例: 「なぜ株価上昇なのに専門家は警告するのか?」
@@ -138,6 +148,11 @@ tasks:
 
       【好奇心ギャップ】
       {{ curiosity_gaps }}
+
+      {% if continuity_prompt %}
+      【前回の視聴者反応】
+      {{ continuity_prompt }}
+      {% endif %}
 
       【ストーリーアーク構造】（ヒーローズ・ジャーニー応用）
       1. **日常（0-30秒）**: 視聴者の日常に共鳴

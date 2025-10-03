@@ -12,6 +12,11 @@ tasks:
       【評価対象台本】
       {{ optimized_script }}
 
+      {% if continuity_prompt %}
+      【前回の学びと連続性】
+      {{ continuity_prompt }}
+      {% endif %}
+
       【8軸評価基準】（各10点満点）
 
       ## 1. 驚き度（Surprise Score）
@@ -161,6 +166,11 @@ tasks:
       【品質評価結果】
       {{ quality_evaluation_result }}
 
+      {% if continuity_prompt %}
+      【継続視聴のためのリマインダー】
+      {{ continuity_prompt }}
+      {% endif %}
+
       【チェック項目】
 
       ## 1. 英語単語の検出と置換
@@ -241,4 +251,3 @@ tasks:
 
     expected_output: |
       最終完成台本 + 日本語純度スコア + 品質保証データ（JSON）
-

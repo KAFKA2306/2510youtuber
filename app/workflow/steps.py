@@ -14,6 +14,7 @@ from app.drive import upload_video_package
 from app.metadata import generate_youtube_metadata
 from app.search_news import collect_news
 from app.services.file_archival import FileArchivalManager
+from app.services.media import MediaQAPipeline
 from app.services.visual_design import create_unified_design
 from app.sheets import load_prompts as load_prompts_from_sheets
 from app.sheets import sheets_manager
@@ -459,12 +460,76 @@ class GenerateVideoStep(WorkflowStep):
                     "used_stock_footage": video_generator.last_used_stock_footage,
                     "archived_files": archived_files,
                 },
-                files=[archived_video],
+                files=[video_path],
             )
 
         except Exception as e:
             logger.error(f"Step 8 failed: {e}")
             return self._failure(str(e))
+
+
+class QualityAssuranceStep(WorkflowStep):
+    """Step 8.5: Run automated QA before publication."""
+
+    @property
+    def step_name(self) -> str:
+        return "media_quality_assurance"
+
+    async def execute(self, context: WorkflowContext) -> StepResult:
+        logger.info(f"Step 8.5: Starting {self.step_name}...")
+
+        qa_config = getattr(cfg, "media_quality", None)
+        if not qa_config or not qa_config.enabled:
+            context.set("qa_passed", True)
+            return self._success(
+                data={
+                    "qa_passed": True,
+                    "qa_enabled": False,
+                    "skipped": True,
+                }
+            )
+
+        pipeline = MediaQAPipeline(qa_config)
+
+        report = pipeline.run(
+            run_id=context.run_id,
+            mode=context.mode,
+            script_path=context.get("script_path"),
+            script_content=context.get("script_content"),
+            audio_path=context.get("archived_audio_path") or context.get("audio_path"),
+            subtitle_path=context.get("archived_subtitle_path") or context.get("subtitle_path"),
+            video_path=context.get("video_path"),
+        )
+
+        context.set("qa_report", report.dict())
+        context.set("qa_report_path", report.report_path)
+        context.set("qa_passed", report.passed)
+
+        if report.warnings():
+            warning_names = ", ".join(check.name for check in report.warnings())
+            logger.warning(f"Media QA warnings: {warning_names}")
+
+        blocking = pipeline.should_block(report, mode=context.mode)
+        failures = report.blocking_failures()
+        if failures and not blocking:
+            failure_names = ", ".join(check.name for check in failures)
+            logger.warning(
+                "Blocking QA failures detected but bypassed due to configuration: %s",
+                failure_names,
+            )
+        if blocking:
+            failed_names = ", ".join(check.name for check in failures) or "unknown"
+            message = f"QA gate blocked publication due to: {failed_names}"
+            logger.error(message)
+            return self._failure(message)
+
+        return self._success(
+            data={
+                "qa_passed": report.passed,
+                "qa_report_path": report.report_path,
+                "qa_blocking": blocking,
+            }
+        )
 
 
 class GenerateMetadataStep(WorkflowStep):

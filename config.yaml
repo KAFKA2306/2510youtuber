@@ -43,6 +43,49 @@ video:
   max_duration_minutes: 40
   target_duration_minutes: 8  # デフォルト目標
 
+# ============================================
+# メディア品質検証
+# ============================================
+media_quality:
+  enabled: true
+  report_dir: "data/qa_reports"
+  gating:
+    enforce: true
+    skip_modes:
+      - test
+    fail_on_missing_inputs: true
+  audio:
+    enabled: true
+    peak_dbfs_max: -1.0
+    rms_dbfs_min: -24.0
+    rms_dbfs_max: -10.0
+    max_silence_seconds: 1.5
+  video:
+    enabled: true
+    expected_resolution:
+      width: 1920
+      height: 1080
+    min_fps: 24.0
+    max_fps: 61.0
+    min_bitrate_kbps: 3500
+  subtitles:
+    enabled: true
+    min_line_coverage: 0.9
+    max_timing_gap_seconds: 1.5
+
+# ============================================
+# 動画レビューAI設定
+# ============================================
+video_review:
+  enabled: true
+  screenshot_interval_seconds: 60
+  max_screenshots: 15
+  output_dir: "output/video_reviews"
+  model: gemini-2.5-pro
+  temperature: 0.4
+  max_output_tokens: 2048
+  store_feedback: true
+
 subtitle:
   font_size: 48
   color: "&H00FFFF00"  # 黄色 (ASS形式)
