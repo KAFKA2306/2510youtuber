@@ -82,7 +82,7 @@ class AgentFactory:
         return agents
 
 
-def create_wow_agents() -> Dict[str, Agent]:
+def create_wow_agents(gemini_model: str) -> Dict[str, Agent]:
     """WOW Script Creation Crewの7エージェントを生成
 
     Returns:
@@ -104,7 +104,7 @@ def create_wow_agents() -> Dict[str, Agent]:
     agents = {}
     for agent_name in required_agents:
         try:
-            agents[agent_name] = factory.create_agent(agent_name)
+            agents[agent_name] = factory.create_agent(agent_name, model=gemini_model)
         except Exception as e:
             logger.error(f"Failed to create required agent '{agent_name}': {e}")
             raise RuntimeError(f"Cannot create WOW agents without '{agent_name}'")

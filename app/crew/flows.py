@@ -27,8 +27,8 @@ os.environ.pop('GOOGLE_CLOUD_PROJECT', None)
 os.environ.pop('GCLOUD_PROJECT', None)
 os.environ.pop('GCP_PROJECT', None)
 
-# Set Gemini API key for LiteLLM - this forces Google AI Studio
-os.environ['GEMINI_API_KEY'] = settings.gemini_api_key
+# LiteLLMはAPIキーを直接設定するのではなく、GeminiClientがrotation_managerから取得するように変更したため、この行は不要
+# os.environ['GEMINI_API_KEY'] = settings.gemini_api_key
 
 # Configure LiteLLM settings
 litellm.drop_params = True  # Drop unknown parameters
@@ -41,13 +41,12 @@ litellm.vertex_location = None  # Force no Vertex location
 original_completion = litellm.completion
 
 def patched_completion(model=None, messages=None, **kwargs):
-    """Intercept all LiteLLM completion calls and force gemini/ prefix"""
-    if model and "gemini" in model.lower() and not model.startswith("gemini/"):
-        # Force gemini/ prefix to use Google AI Studio provider
-        clean_model = model.replace("vertex_ai/", "").replace("vertex_ai_beta/", "")
-        clean_model = clean_model.replace("models/", "")
-        forced_model = f"gemini/{clean_model}"
-        logger.warning(f"LiteLLM completion intercepted: {model} -> {forced_model}")
+    """Intercept all LiteLLM completion calls and force gemini/ prefix and model name"""
+    if model and "gemini" in model.lower():
+        # モデル名をgemini-2.5-flash-liteに強制
+        forced_model = "gemini/gemini-2.5-flash-lite"
+        if model != forced_model:
+            logger.warning(f"LiteLLM completion intercepted: {model} -> {forced_model} (forced)")
         model = forced_model
 
     # Remove any Vertex AI credentials from kwargs
@@ -82,8 +81,8 @@ class WOWScriptFlow:
         """
         logger.info("Initializing WOW Script Creation Crew...")
 
-        # エージェント生成
-        self.agents = create_wow_agents()
+        # エージェント生成 (モデル名を明示的に指定)
+        self.agents = create_wow_agents(gemini_model="gemini-2.5-flash-lite")
 
         # タスク生成
         self.tasks = create_wow_tasks(self.agents, news_items)
@@ -149,23 +148,16 @@ class WOWScriptFlow:
             json_match = re.search(r'```json\n(.*?)\n```', crew_output_str, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
+                # JSONをパース
+                parsed_data = json.loads(json_str)
             else:
-                # フォールバック: 最初と最後の{}を探す
-                start = crew_output_str.find('{')
-                end = crew_output_str.rfind('}') + 1
-                if start != -1 and end != 0:
-                    json_str = crew_output_str[start:end]
-                else:
-                    # JSONが見つからない場合は生のテキストを使用
-                    logger.warning("No JSON found in CrewAI output, using raw text")
-                    return {
-                        'success': True,
-                        'final_script': crew_output_str,
-                        'crew_output': crew_result,
-                    }
-
-            # JSONをパース
-            parsed_data = json.loads(json_str)
+                # JSONが見つからない場合は生のテキストを使用
+                logger.warning("No JSON found in CrewAI output, using raw text")
+                return {
+                    'success': True,
+                    'final_script': crew_output_str,
+                    'crew_output': crew_result,
+                }
 
             # final_scriptフィールドを抽出
             final_script = parsed_data.get('final_script', crew_output_str)
