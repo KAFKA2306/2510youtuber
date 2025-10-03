@@ -12,7 +12,10 @@ tests/
 ├── unit/                    # ユニットテスト（高速・外部依存なし）
 │   ├── test_models.py       # データモデル
 │   ├── test_config.py       # 設定ファイル
-│   └── test_script_parser.py # スクリプト解析
+│   ├── test_script_parser.py # スクリプト解析
+│   ├── test_feedback_loop.py # フィードバックループシステム
+│   ├── test_tts.py          # TTS関連
+│   └── test_crew_flows.py   # CrewAI Flows
 │
 ├── integration/             # 統合テスト（モック使用）
 │   └── test_crewai_agents.py # CrewAI エージェント・タスク

@@ -43,7 +43,7 @@ class JapaneseQualityChecker:
         try:
             if settings.api_keys.get("gemini"):
                 genai.configure(api_key=settings.api_keys["gemini"])
-                self.client = genai.GenerativeModel("models/gemini-2.5-flash")
+                self.client = genai.GenerativeModel("models/gemini-2.0-flash-exp")
                 logger.info("Japanese quality checker initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize quality checker: {e}")

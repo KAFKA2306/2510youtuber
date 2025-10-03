@@ -19,6 +19,9 @@ uv run python3 test_crewai_flow.py
 # Verify API keys and environment
 uv run python -m app.verify
 
+# Generate analytics report (feedback loop)
+python scripts/analytics_report.py
+
 # Lint code
 uv run ruff check .
 
@@ -64,6 +67,7 @@ The main workflow in `app/main.py` executes these steps sequentially:
 8. **Video Rendering** (`video.py`) - FFmpeg compositing with subtitles
 9. **Metadata Generation** (`metadata.py`) - Title, description, tags
 10. **YouTube Upload** (`youtube.py`) - Automated upload with OAuth
+11. **Feedback Logging** (`metadata_storage.py`) - Log execution to JSONL + Google Sheets (3 tabs)
 
 ### CrewAI Agent Pipeline (7 Agents)
 Located in `app/crew/`:
@@ -288,11 +292,61 @@ Always check `ffmpeg -version` shows version 4.4+ for subtitle rendering support
 - **Docstrings**: Use for public APIs, modules should have module-level docstrings
 - **Logging**: Use Python logging, not print statements
 
+## Feedback Loop System
+
+**NEW**: Automated continuous improvement system that tracks execution metrics and provides insights.
+
+### Quick Start
+
+```bash
+# Run workflow (auto-logs to JSONL + Sheets)
+uv run python3 -m app.main daily
+
+# View analytics
+python scripts/analytics_report.py           # Weekly report
+python scripts/analytics_report.py --hooks   # Hook performance
+python scripts/analytics_report.py --topics  # Topic distribution
+```
+
+### Data Flow
+
+```
+Workflow → WorkflowResult → JSONL Log + Google Sheets (3 tabs)
+                                  ↓
+                            Analytics Engine
+                                  ↓
+                       Insights & Recommendations
+```
+
+### Storage
+
+- **JSONL**: `output/execution_log.jsonl` - Complete execution data for analytics
+- **Google Sheets**: 3 tabs (performance_dashboard, quality_metrics, production_insights)
+- **Legacy CSV**: `data/metadata_history.csv` - Still maintained for backward compatibility
+
+### Tracked Metrics
+
+- **Quality**: WOW score, Japanese purity, retention prediction, surprise points, emotion peaks
+- **Strategy**: Hook type (衝撃的事実/疑問提起/意外な数字), topic classification
+- **Performance**: Execution time, API costs breakdown, step durations
+- **Feedback**: YouTube views, CTR, retention, top comments (updated via cron)
+
+### Key Files
+
+- `app/models/workflow.py` - Extended `WorkflowResult` + `YouTubeFeedback` models
+- `app/metadata_storage.py` - Integrated logging with Sheets formatting
+- `app/analytics.py` - `FeedbackAnalyzer` for pattern detection
+- `scripts/analytics_report.py` - CLI reporting tool
+- `docs/FEEDBACK_LOOP.md` - Complete documentation
+
+**Design Principle**: Minimal integration, zero breaking changes. Extends existing `WorkflowResult` and `MetadataStorage` rather than creating new infrastructure.
+
 ## References
 
 - **Setup guide**: `docs/setup.md`
 - **API management**: `docs/API_MANAGEMENT.md`
 - **CrewAI details**: `docs/README_CREWAI.md`
+- **Feedback loop**: `docs/FEEDBACK_LOOP.md` ← **NEW**
 - **Test documentation**: `tests/README.md`
 - **Main config**: `config.yaml`
 - **Pytest config**: `pytest.ini`

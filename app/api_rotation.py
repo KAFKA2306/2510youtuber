@@ -339,32 +339,73 @@ def get_rotation_manager() -> APIKeyRotationManager:
     return _rotation_manager
 
 
-def initialize_from_config():
-    """設定ファイルからキーを初期化"""
+def initialize_api_infrastructure() -> APIKeyRotationManager:
+    """API infrastructure全体を初期化（アプリケーション起動時に1回のみ呼ぶ）
+
+    この関数がGemini/Perplexity APIの全ての初期化を担当：
+    - Vertex AI環境変数の削除（Google AI Studio強制）
+    - 全プロバイダーのAPIキー収集・登録
+    - Quota設定
+    - LiteLLM設定（必要に応じて）
+
+    Returns:
+        初期化済みのAPIKeyRotationManager
+    """
     from app.config.settings import settings
 
     manager = get_rotation_manager()
 
-    # Gemini keys
-    gemini_key_names = ["GEMINI_API_KEY"] + [f"GEMINI_API_KEY_{i}" for i in range(2, 6)]
-    gemini_keys_with_names = [(name, os.getenv(name)) for name in gemini_key_names if os.getenv(name)]
+    # CRITICAL: Vertex AI無効化（crew/flows.pyから移動）
+    # Google AI Studio (Generative AI SDK) を強制するため
+    os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+    os.environ.pop("VERTEX_PROJECT", None)
+    os.environ.pop("VERTEX_LOCATION", None)
+    os.environ.pop("GOOGLE_CLOUD_PROJECT", None)
+    os.environ.pop("GCLOUD_PROJECT", None)
+    os.environ.pop("GCP_PROJECT", None)
+    logger.info("Vertex AI environment variables removed, forcing Google AI Studio")
+
+    # Gemini keys (GEMINI_API_KEY + GEMINI_API_KEY_2~9)
+    gemini_keys_with_names = []
+    for i in range(1, 10):
+        key_name = f"GEMINI_API_KEY_{i}" if i > 1 else "GEMINI_API_KEY"
+        key_value = os.getenv(key_name)
+        if key_value:
+            gemini_keys_with_names.append((key_name, key_value))
 
     if gemini_keys_with_names:
         manager.register_keys("gemini", gemini_keys_with_names)
+        logger.info(f"Registered {len(gemini_keys_with_names)} Gemini API keys")
+    else:
+        logger.warning("No Gemini API keys found in environment")
 
     # Gemini daily quota limit
     if settings.gemini_daily_quota_limit > 0:
         manager.set_gemini_daily_quota_limit(settings.gemini_daily_quota_limit)
 
-    # Perplexity keys
-    perplexity_key_names = ["PERPLEXITY_API_KEY"] + [f"PERPLEXITY_API_KEY_{i}" for i in range(2, 10)]
-    perplexity_keys_with_names = [(name, os.getenv(name)) for name in perplexity_key_names if os.getenv(name)]
+    # Perplexity keys (PERPLEXITY_API_KEY + PERPLEXITY_API_KEY_2~9)
+    perplexity_keys_with_names = []
+    for i in range(1, 10):
+        key_name = f"PERPLEXITY_API_KEY_{i}" if i > 1 else "PERPLEXITY_API_KEY"
+        key_value = os.getenv(key_name)
+        if key_value:
+            perplexity_keys_with_names.append((key_name, key_value))
 
     if perplexity_keys_with_names:
         manager.register_keys("perplexity", perplexity_keys_with_names)
+        logger.info(f"Registered {len(perplexity_keys_with_names)} Perplexity API keys")
 
-    logger.info("API key rotation initialized from config")
+    logger.info("✅ API infrastructure initialized successfully")
     return manager
+
+
+def initialize_from_config():
+    """設定ファイルからキーを初期化（非推奨：initialize_api_infrastructure()を使用）
+
+    後方互換性のために残しているが、新規コードではinitialize_api_infrastructure()を使用すること
+    """
+    logger.warning("initialize_from_config() is deprecated, use initialize_api_infrastructure() instead")
+    return initialize_api_infrastructure()
 
 
 if __name__ == "__main__":

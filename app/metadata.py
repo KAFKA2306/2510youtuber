@@ -28,26 +28,14 @@ class MetadataGenerator:
         self._setup_client()
 
     def _setup_client(self):
-        """Gemini APIクライアントを初期化（ローテーション対応）"""
+        """Gemini APIクライアントを初期化
+
+        Note: キー登録は main.py の initialize_api_infrastructure() で実行済み
+        """
         try:
-            rotation_manager = get_rotation_manager()
-
-            gemini_keys_with_names = []
-            for i in range(1, 6):
-                key_name = f"GEMINI_API_KEY_{i}" if i > 1 else "GEMINI_API_KEY"
-                key_value = os.getenv(key_name)
-                if key_value:
-                    gemini_keys_with_names.append((key_name, key_value))
-
-            if gemini_keys_with_names:
-                rotation_manager.register_keys("gemini", gemini_keys_with_names)
-                logger.info(f"Registered {len(gemini_keys_with_names)} Gemini API keys for metadata generation")
-            else:
-                raise ValueError("No Gemini API keys configured for metadata generation")
-
-            # 初期クライアントは不要（_call_gemini_for_metadataで動的に設定）
+            # Rotation managerは既に初期化されていることを前提
             self.client = None
-            logger.info("Metadata generator initialized with Gemini key rotation")
+            logger.info("Metadata generator ready (using shared rotation manager)")
 
         except Exception as e:
             logger.error(f"Failed to initialize metadata generator: {e}")
@@ -166,7 +154,7 @@ class MetadataGenerator:
             """単一APIキーでの呼び出し"""
             try:
                 genai.configure(api_key=api_key)
-                client = genai.GenerativeModel("models/gemini-2.5-flash-lite") # モデル名を統一
+                client = genai.GenerativeModel("models/gemini-2.0-flash-exp") # 統一モデル名
 
                 generation_config = genai.GenerationConfig(
                     temperature=0.7,

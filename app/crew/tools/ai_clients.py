@@ -57,7 +57,7 @@ class GeminiClient(AIClient):
 
     def __init__(
         self,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-2.0-flash-exp",
         temperature: float = 0.7,
         max_tokens: int = 4096,
         timeout_seconds: int = 120
@@ -73,31 +73,13 @@ class GeminiClient(AIClient):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout_seconds = timeout_seconds
+
+        # Rotation managerは main.py で初期化済み
+        # キー登録は不要（initialize_api_infrastructure()で実行済み）
         self.rotation_manager = get_rotation_manager()
+        self.client = None
 
-        # Gemini APIキーを登録（GEMINI_API_KEY_2から5を使用）
-        gemini_keys_to_register = []
-
-        # AppSettingsからGEMINI_API_KEY_1を取得
-        if settings.api_keys.get("gemini"):
-            gemini_keys_to_register.append(("GEMINI_API_KEY_1", settings.api_keys["gemini"]))
-
-        # 環境変数からGEMINI_API_KEY_2から5を取得
-        for i in range(2, 6):
-            key_name = f"GEMINI_API_KEY_{i}"
-            key_value = os.getenv(key_name)
-            if key_value:
-                gemini_keys_to_register.append((key_name, key_value))
-
-        if gemini_keys_to_register:
-            self.rotation_manager.register_keys("gemini", gemini_keys_to_register)
-            logger.info(f"Registered {len(gemini_keys_to_register)} Gemini API keys for CrewAI rotation")
-        else:
-            raise ValueError("No Gemini API keys (GEMINI_API_KEY_1 to 5) configured for CrewAI")
-
-        self.client = None # 実際のAPI呼び出し時にキーを取得するため、ここでは初期化しない
-
-        logger.info(f"GeminiClient initialized for CrewAI: model={model}, temp={temperature}")
+        logger.info(f"GeminiClient initialized: model={model}, temp={temperature}")
 
     def generate(
         self,
@@ -167,8 +149,8 @@ class GeminiClient(AIClient):
                 max_attempts=max_retries
             )
         except Exception as e:
-            logger.error(f"All Gemini API attempts failed for CrewAI: {e}")
-            raise Exception("Gemini API failed with all keys for CrewAI")
+            logger.error(f"All Gemini API attempts failed: {e}")
+            raise Exception("Gemini API failed with all keys")
 
     def generate_structured(self, prompt: str, schema: Optional[Dict] = None) -> Dict[str, Any]:
         """構造化データ生成（JSON出力）
@@ -534,7 +516,7 @@ try:
     class GeminiDirectLLM(BaseLLM):
         """Direct Gemini SDK LLM - bypasses ALL LiteLLM/Vertex AI routing"""
 
-        model_name: str = "gemini-2.0-flash-exp" # デフォルトモデル名を修正
+        model_name: str = "gemini-2.0-flash-exp"
         temperature: float = 0.7
         api_key: str = ""
         _genai_client: Any = None
@@ -573,7 +555,6 @@ try:
         # モデル名の正規化 - Google AI Studio API compatible names
         model_mapping = {
             "gemini-2.0-flash-exp": "gemini-2.0-flash-exp",
-            "gemini-2.5-flash": "gemini-2.5-flash", # 最新のモデル名に修正
             "gemini-pro": "gemini-1.5-pro-latest",
             "gemini-1.5-pro": "gemini-1.5-pro-latest",
             "gemini-1.5-flash": "gemini-1.5-flash-latest",

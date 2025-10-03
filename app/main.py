@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from .align_subtitles import align_script_with_stt, export_srt
 
 # 各モジュールをインポート
+from .api_rotation import initialize_api_infrastructure
 from .config import cfg
 from .discord import discord_notifier
 from .drive import upload_video_package
@@ -32,6 +33,14 @@ from .video import generate_video
 from .youtube import upload_video as youtube_upload
 
 logger = logging.getLogger(__name__)
+
+# Initialize API infrastructure once at module import
+# This ensures all Gemini/Perplexity API keys are registered before any workflow runs
+try:
+    initialize_api_infrastructure()
+    logger.info("API infrastructure initialized at startup")
+except Exception as e:
+    logger.warning(f"Failed to initialize API infrastructure: {e}")
 
 
 class YouTubeWorkflow:

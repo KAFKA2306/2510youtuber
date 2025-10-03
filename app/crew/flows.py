@@ -19,19 +19,7 @@ logger = logging.getLogger(__name__)
 # Configure LiteLLM to work with Google AI Studio (not Vertex AI)
 import litellm
 
-# CRITICAL: Force Google AI Studio by completely disabling Vertex AI detection
-# This MUST happen before any LiteLLM imports or calls
-os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
-os.environ.pop("VERTEX_PROJECT", None)
-os.environ.pop("VERTEX_LOCATION", None)
-os.environ.pop("GOOGLE_CLOUD_PROJECT", None)
-os.environ.pop("GCLOUD_PROJECT", None)
-os.environ.pop("GCP_PROJECT", None)
-
-# Set initial GEMINI_API_KEY for LiteLLM
-# LiteLLM will use this key, but we'll implement rotation on 429 errors
-if settings.gemini_api_key:
-    os.environ["GEMINI_API_KEY"] = settings.gemini_api_key
+from app.api_rotation import get_rotation_manager
 
 # Configure LiteLLM settings
 litellm.drop_params = True  # Drop unknown parameters
@@ -39,30 +27,16 @@ litellm.suppress_debug_info = False  # Keep debug for now
 litellm.vertex_project = None  # Force no Vertex project
 litellm.vertex_location = None  # Force no Vertex location
 
-# CRITICAL: Patch the model_cost calculation to prevent Vertex AI routing
-# LiteLLM uses get_llm_provider internally which can still route to Vertex
+# Patch LiteLLM completion to use shared rotation manager
 original_completion = litellm.completion
 
-# Key rotation state
-_current_key_index = 0
-_gemini_keys = [settings.gemini_api_key] if settings.gemini_api_key else []
-# Add rotation keys
-for i in range(2, 10):
-    key = os.getenv(f"GEMINI_API_KEY_{i}")
-    if key:
-        _gemini_keys.append(key)
-
-logger.info(f"Initialized {len(_gemini_keys)} Gemini API keys for rotation")
-
 def patched_completion(model=None, messages=None, **kwargs):
-    """Intercept all LiteLLM completion calls and force gemini/ prefix and model name with key rotation"""
-    global _current_key_index
-
+    """Intercept LiteLLM completion calls to use shared rotation manager"""
     if model and "gemini" in model.lower():
-        # モデル名をgemini-2.5-flash-liteに強制
-        forced_model = "gemini/gemini-2.5-flash-lite"
+        # 統一モデル名に変換
+        forced_model = "gemini/gemini-2.0-flash-exp"
         if model != forced_model:
-            logger.debug(f"LiteLLM completion intercepted: {model} -> {forced_model} (forced)")
+            logger.debug(f"LiteLLM completion intercepted: {model} -> {forced_model}")
         model = forced_model
 
     # Remove any Vertex AI credentials from kwargs
@@ -70,38 +44,24 @@ def patched_completion(model=None, messages=None, **kwargs):
     kwargs.pop("vertex_project", None)
     kwargs.pop("vertex_location", None)
 
-    # Try with current key, rotate on 429
-    max_attempts = min(len(_gemini_keys), 5)
-    last_error = None
+    # Use shared rotation manager
+    rotation_manager = get_rotation_manager()
 
-    for attempt in range(max_attempts):
-        try:
-            # Set current API key
-            if _gemini_keys:
-                current_key = _gemini_keys[_current_key_index % len(_gemini_keys)]
-                os.environ["GEMINI_API_KEY"] = current_key
+    def litellm_call(api_key: str):
+        """Single API call with given key"""
+        os.environ["GEMINI_API_KEY"] = api_key
+        return original_completion(model=model, messages=messages, **kwargs)
 
-            result = original_completion(model=model, messages=messages, **kwargs)
-            return result
-
-        except Exception as e:
-            error_str = str(e).lower()
-            is_rate_limit = any(keyword in error_str for keyword in ["429", "rate limit", "quota", "resource_exhausted"])
-
-            if is_rate_limit and attempt < max_attempts - 1:
-                _current_key_index = (_current_key_index + 1) % len(_gemini_keys)
-                logger.warning(f"Gemini rate limit hit, rotating to key {_current_key_index + 1}/{len(_gemini_keys)}")
-                last_error = e
-                continue
-            else:
-                raise e
-
-    if last_error:
-        raise last_error
+    # Execute with rotation
+    return rotation_manager.execute_with_rotation(
+        provider="gemini",
+        api_call=litellm_call,
+        max_attempts=3
+    )
 
 litellm.completion = patched_completion
 
-logger.info("Configured LiteLLM: Vertex AI blocked, Google AI Studio forced")
+logger.info("Configured LiteLLM: Using shared rotation manager, Vertex AI blocked")
 
 
 class WOWScriptFlow:
@@ -124,8 +84,8 @@ class WOWScriptFlow:
         """
         logger.info("Initializing WOW Script Creation Crew...")
 
-        # エージェント生成 (モデル名を明示的に指定)
-        self.agents = create_wow_agents(gemini_model="gemini-2.5-flash-lite")
+        # エージェント生成 (統一モデル名を指定)
+        self.agents = create_wow_agents(gemini_model="gemini-2.0-flash-exp")
 
         # タスク生成
         self.tasks = create_wow_tasks(self.agents, news_items)
