@@ -5,6 +5,7 @@
 """
 
 import logging
+import os # 追加
 import random
 import time
 from dataclasses import dataclass, field
@@ -94,22 +95,21 @@ class APIKeyRotationManager:
         self.gemini_daily_quota_limit = limit
         logger.info(f"Gemini daily quota limit set to {limit}")
 
-    def register_keys(self, provider: str, keys: List[str]):
+    def register_keys(self, provider: str, keys_with_names: List[tuple[str, str]]):
         """APIキーを登録
 
         Args:
             provider: プロバイダー名 ("gemini", "perplexity", etc.)
-            keys: APIキーのリスト
+            keys_with_names: (key_name, key_value) のタプルのリスト
         """
-        if not keys:
+        if not keys_with_names:
             logger.warning(f"No keys provided for {provider}")
             return
 
         self.key_pools[provider] = []
-        for key_value in keys:
+        for key_name, key_value in keys_with_names:
             if key_value:
-                # key_nameはinitialize_from_configで設定されるため、ここではNone
-                self.key_pools[provider].append(APIKey(key=key_value, provider=provider))
+                self.key_pools[provider].append(APIKey(key=key_value, provider=provider, key_name=key_name))
         
         self.current_indices[provider] = 0
         logger.info(f"Registered {len(self.key_pools[provider])} keys for {provider}")
@@ -308,13 +308,7 @@ def initialize_from_config():
     gemini_keys_with_names = [(name, os.getenv(name)) for name in gemini_key_names if os.getenv(name)]
     
     if gemini_keys_with_names:
-        # APIKeyオブジェクトを生成し、key_nameを設定
-        manager.key_pools["gemini"] = [
-            APIKey(key=key_value, provider="gemini", key_name=key_name)
-            for key_name, key_value in gemini_keys_with_names
-        ]
-        manager.current_indices["gemini"] = 0
-        logger.info(f"Registered {len(manager.key_pools['gemini'])} keys for gemini")
+        manager.register_keys("gemini", gemini_keys_with_names)
     
     # Gemini daily quota limit
     if cfg.gemini_daily_quota_limit > 0:
@@ -325,12 +319,7 @@ def initialize_from_config():
     perplexity_keys_with_names = [(name, os.getenv(name)) for name in perplexity_key_names if os.getenv(name)]
 
     if perplexity_keys_with_names:
-        manager.key_pools["perplexity"] = [
-            APIKey(key=key_value, provider="perplexity", key_name=key_name)
-            for key_name, key_value in perplexity_keys_with_names
-        ]
-        manager.current_indices["perplexity"] = 0
-        logger.info(f"Registered {len(manager.key_pools['perplexity'])} keys for perplexity")
+        manager.register_keys("perplexity", perplexity_keys_with_names)
 
     logger.info("API key rotation initialized from config")
     return manager
