@@ -14,6 +14,7 @@ from .steps import (
     TranscribeAudioStep,
     UploadToDriveStep,
     UploadToYouTubeStep,
+    ReviewVideoStep,
 )
 
 __all__ = [
@@ -32,4 +33,5 @@ __all__ = [
     "GenerateThumbnailStep",
     "UploadToDriveStep",
     "UploadToYouTubeStep",
+    "ReviewVideoStep",
 ]

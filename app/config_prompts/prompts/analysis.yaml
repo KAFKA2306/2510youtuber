@@ -17,6 +17,11 @@ tasks:
       {{ continuity_prompt }}
       {% endif %}
 
+      {% if agent_improvement_notes %}
+      【今回の改善フォーカス】
+      {{ agent_improvement_notes }}
+      {% endif %}
+
       【抽出すべき要素】
       1. **意外性（Surprise）**: 表面的な報道では語られない驚きの事実
          - 例: 「実は〇〇の真の狙いは△△だった」
@@ -89,6 +94,11 @@ tasks:
       {{ continuity_prompt }}
       {% endif %}
 
+      {% if agent_improvement_notes %}
+      【今回の改善フォーカス】
+      {{ agent_improvement_notes }}
+      {% endif %}
+
       【設計パターン】
       1. **パラドックス型**
          - 例: 「なぜ株価上昇なのに専門家は警告するのか?」
@@ -152,6 +162,11 @@ tasks:
       {% if continuity_prompt %}
       【前回の視聴者反応】
       {{ continuity_prompt }}
+      {% endif %}
+
+      {% if agent_improvement_notes %}
+      【今回の改善フォーカス】
+      {{ agent_improvement_notes }}
       {% endif %}
 
       【ストーリーアーク構造】（ヒーローズ・ジャーニー応用）

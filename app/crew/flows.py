@@ -11,6 +11,7 @@ from crewai import Crew, Process
 
 from app.config import cfg as settings
 
+from .agent_review import AgentReviewCycle
 from .agents import create_wow_agents
 from .tasks import create_wow_tasks
 
@@ -73,6 +74,7 @@ class WOWScriptFlow:
         self.max_quality_iterations = getattr(settings, "max_quality_iterations", 2)
         self.agents = None
         self.tasks = None
+        self.review_cycle = AgentReviewCycle()
 
     def initialize(self, news_items: List[Dict[str, Any]]):
         """エージェントとタスクを初期化
@@ -85,8 +87,10 @@ class WOWScriptFlow:
         # エージェント生成 (統一モデル名を指定)
         self.agents = create_wow_agents(gemini_model="gemini-2.5-pro")
 
+        improvement_notes = self.review_cycle.prepare_improvement_notes()
+
         # タスク生成
-        self.tasks = create_wow_tasks(self.agents, news_items)
+        self.tasks = create_wow_tasks(self.agents, news_items, improvement_notes=improvement_notes)
 
         logger.info("✅ WOW Script Creation Crew initialized")
 
@@ -116,10 +120,17 @@ class WOWScriptFlow:
             # 実行
             result = crew.kickoff()
 
+            review_results = self.review_cycle.run(self.tasks)
+
             logger.info("✅ WOW Script Creation Crew completed successfully")
 
             # 結果をパース
             final_result = self._parse_crew_result(result)
+
+            if review_results:
+                final_result["agent_reviews"] = {
+                    key: review.model_dump(mode="json") for key, review in review_results.items()
+                }
 
             return final_result
 

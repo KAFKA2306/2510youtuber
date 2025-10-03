@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .api_rotation import initialize_api_infrastructure
+from .config import cfg
 from .discord import discord_notifier
 from .metadata_storage import metadata_storage
 from .models.workflow import WorkflowResult
@@ -29,6 +30,7 @@ from .workflow import (
     TranscribeAudioStep,
     UploadToDriveStep,
     UploadToYouTubeStep,
+    ReviewVideoStep,
     WorkflowContext,
     WorkflowStep,
 )
@@ -50,6 +52,20 @@ class YouTubeWorkflow:
     このクラスはオーケストレーションのみを担当します。
     """
 
+    RETRY_CLEANUP_MAP = {
+        "script_generation": {"script_content", "script_path"},
+        "visual_design_generation": {"visual_design", "visual_design_dict"},
+        "metadata_generation": {"metadata"},
+        "thumbnail_generation": {"thumbnail_path"},
+        "audio_synthesis": {"audio_path"},
+        "audio_transcription": {"stt_words"},
+        "subtitle_alignment": {"subtitle_path", "aligned_subtitles"},
+        "video_generation": {"video_path", "archived_audio_path", "archived_subtitle_path"},
+        "media_quality_assurance": {"qa_report", "qa_report_path", "qa_passed", "qa_retry_request"},
+        "drive_upload": {"drive_result"},
+        "youtube_upload": {"youtube_result", "video_id", "video_url"},
+    }
+
     def __init__(self):
         self.run_id = None
         self.mode = "daily"
@@ -70,6 +86,7 @@ class YouTubeWorkflow:
             QualityAssuranceStep(),      # Step 8.5: 自動QAゲート
             UploadToDriveStep(),         # Step 9: Drive アップロード
             UploadToYouTubeStep(),       # Step 10: YouTube アップロード
+            ReviewVideoStep(),           # Step 11: AIレビューで改善ログ生成
         ]
 
     async def execute_full_workflow(self, mode: str = "daily") -> Dict[str, Any]:
@@ -90,37 +107,86 @@ class YouTubeWorkflow:
 
             await self._notify_workflow_start(mode)
 
-            # Execute all steps sequentially
-            step_results = []
-            for step in self.steps:
-                logger.info(f"Executing: {step.step_name}")
-                result = await step.execute(self.context)
-                step_results.append(result)
+            qa_gating = getattr(getattr(cfg, "media_quality", None), "gating", None)
+            max_attempts = 1 + max(0, getattr(qa_gating, "retry_attempts", 0))
+            start_index = 0
+            step_results: List[Optional[Any]] = [None] * len(self.steps)
 
-                # Track generated files
-                if result.files_generated:
-                    self.context.add_files(result.files_generated)
+            attempt = 0
+            while attempt < max_attempts:
+                attempt += 1
+                logger.info(f"🚀 Workflow attempt {attempt}/{max_attempts}")
 
-                # Stop on failure
-                if not result.success:
-                    return await self._handle_workflow_failure(step.step_name, result)
+                retry_triggered = False
 
-            # Update metadata storage with video URL if available
-            video_url = self.context.get("video_url")
-            if video_url:
-                try:
-                    metadata_storage.update_video_stats(run_id=self.run_id, video_url=video_url)
-                    logger.info("Updated metadata storage with video URL")
-                except Exception as e:
-                    logger.warning(f"Failed to update video URL in storage: {e}")
+                for index in range(start_index, len(self.steps)):
+                    step = self.steps[index]
+                    logger.info(f"Executing: {step.step_name}")
+                    result = await step.execute(self.context)
+                    step_results[index] = result
 
-            execution_time = (datetime.now() - start_time).total_seconds()
-            result = self._compile_final_result(step_results, execution_time)
+                    if result.files_generated:
+                        self.context.add_files(result.files_generated)
 
-            await self._notify_workflow_success(result)
-            self._update_run_status("completed", result)
+                    if not result.success:
+                        if isinstance(step, QualityAssuranceStep):
+                            retry_request = self.context.get("qa_retry_request")
+                            if retry_request and attempt < max_attempts:
+                                retry_step_name = retry_request.get("start_step")
+                                retry_index = self._resolve_step_index(retry_step_name)
+                                if retry_index is None:
+                                    logger.error(
+                                        "QA retry requested an unknown step '%s'",
+                                        retry_step_name,
+                                    )
+                                    return await self._handle_workflow_failure(step.step_name, result)
 
-            return result
+                                reason = retry_request.get("reason")
+                                if reason:
+                                    logger.warning(reason)
+
+                                logger.warning(
+                                    "Retrying workflow from step '%s' (attempt %s/%s)",
+                                    self.steps[retry_index].step_name,
+                                    attempt + 1,
+                                    max_attempts,
+                                )
+
+                                self._prepare_context_for_retry(retry_index)
+                                self._clear_step_results(step_results, retry_index)
+                                start_index = retry_index
+                                retry_triggered = True
+                                break
+
+                        logger.error(f"Step {step.step_name} failed on attempt {attempt}")
+                        return await self._handle_workflow_failure(step.step_name, result)
+
+                if retry_triggered:
+                    continue
+
+                final_results = [res for res in step_results if res is not None]
+
+                video_url = self.context.get("video_url")
+                if video_url:
+                    try:
+                        metadata_storage.update_video_stats(run_id=self.run_id, video_url=video_url)
+                        logger.info("Updated metadata storage with video URL")
+                    except Exception as e:
+                        logger.warning(f"Failed to update video URL in storage: {e}")
+
+                execution_time = (datetime.now() - start_time).total_seconds()
+                result = self._compile_final_result(final_results, execution_time)
+
+                await self._notify_workflow_success(result)
+                self._update_run_status("completed", result)
+
+                return result
+
+            logger.error("Workflow failed after exhausting QA retries")
+            failure_index = max(start_index, 0)
+            failure_step = self.steps[failure_index].step_name if failure_index < len(self.steps) else "unknown"
+            failure_result = step_results[failure_index] if failure_index < len(step_results) else None
+            return await self._handle_workflow_failure(failure_step, failure_result)
 
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
@@ -136,6 +202,33 @@ class YouTubeWorkflow:
             return error_result
         finally:
             self._cleanup_temp_files()
+
+    def _resolve_step_index(self, step_name: Optional[str]) -> Optional[int]:
+        """Given a step name, return its index within the workflow."""
+        if not step_name:
+            return None
+        for idx, step in enumerate(self.steps):
+            if step.step_name == step_name:
+                return idx
+        return None
+
+    def _prepare_context_for_retry(self, start_index: int) -> None:
+        """Remove context state produced by steps at or after start_index."""
+        if not self.context:
+            return
+
+        keys_to_remove = set()
+        for step in self.steps[start_index:]:
+            keys_to_remove.update(self.RETRY_CLEANUP_MAP.get(step.step_name, set()))
+
+        for key in keys_to_remove:
+            if key in self.context.state:
+                self.context.state.pop(key, None)
+
+    def _clear_step_results(self, step_results: List[Optional[Any]], start_index: int) -> None:
+        """Clear cached StepResult objects for retry region."""
+        for idx in range(start_index, len(step_results)):
+            step_results[idx] = None
 
     def _initialize_run(self, mode: str) -> str:
         """ワークフロー実行IDを初期化"""
@@ -180,6 +273,19 @@ class YouTubeWorkflow:
         metadata = self.context.get("metadata", {})
         title = metadata.get("title") if metadata else None
 
+        video_review_data = self.context.get("video_review") if self.context else None
+        video_review_summary = None
+        video_review_actions: List[str] = []
+        if isinstance(video_review_data, dict):
+            feedback_block = video_review_data.get("feedback") or {}
+            if isinstance(feedback_block, dict):
+                video_review_summary = feedback_block.get("summary")
+                actions = feedback_block.get("next_video_actions") or []
+                if isinstance(actions, list):
+                    video_review_actions = [str(action) for action in actions if action]
+                elif actions:
+                    video_review_actions = [str(actions)]
+
         # Create WorkflowResult with rich data
         workflow_result = WorkflowResult(
             success=True,
@@ -203,6 +309,8 @@ class YouTubeWorkflow:
             failed_steps=sum(1 for s in step_results if not s.success),
             total_steps=len(self.steps),
             generated_files=self.context.generated_files if self.context else [],
+            video_review_summary=video_review_summary,
+            video_review_actions=video_review_actions,
         )
 
         # Log to feedback system
@@ -231,6 +339,7 @@ class YouTubeWorkflow:
         result["video_id"] = video_id
         result["video_url"] = video_url
         result["drive_folder"] = self.context.get("folder_id") if self.context else None
+        result["video_review"] = video_review_data
 
         return result
 

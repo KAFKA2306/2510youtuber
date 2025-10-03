@@ -19,6 +19,11 @@ tasks:
       {{ continuity_prompt }}
       {% endif %}
 
+      {% if agent_improvement_notes %}
+      【今回の改善フォーカス】
+      {{ agent_improvement_notes }}
+      {% endif %}
+
       【2025年YouTube最適化ルール】
 
       ## 最初の8秒ルール（超重要）
@@ -148,6 +153,11 @@ tasks:
       {% if continuity_prompt %}
       【継続視聴を促すリマインダー】
       {{ continuity_prompt }}
+      {% endif %}
+
+      {% if agent_improvement_notes %}
+      【今回の改善フォーカス】
+      {{ agent_improvement_notes }}
       {% endif %}
 
       【追加するエンゲージメント要素】

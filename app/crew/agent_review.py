@@ -97,33 +97,11 @@ class AgentReviewStorage:
         agent_bucket = self._data.get(agent_key)
         if not agent_bucket:
             return None
-        history: Iterable[dict] = agent_bucket.get("history", [])  # type: ignore[assignment]
-        focus_lines: List[str] = []
-
-        for entry in reversed(list(history)):
-            action_items = entry.get("action_items", [])
-            if isinstance(action_items, list):
-                for item in action_items:
-                    text = str(item).strip()
-                    if text and text not in focus_lines:
-                        focus_lines.append(f"改善: {text}")
-                        if len(focus_lines) >= max_items:
-                            break
-            if len(focus_lines) >= max_items:
-                break
+        history: List[dict] = list(agent_bucket.get("history", []))  # type: ignore[assignment]
+        focus_lines = self._collect_focus_from_history(history, max_items)
 
         if len(focus_lines) < max_items:
-            for entry in reversed(list(history)):
-                strengths = entry.get("strengths", [])
-                if isinstance(strengths, list):
-                    for strength in strengths:
-                        text = str(strength).strip()
-                        note = f"強みを維持: {text}" if text else ""
-                        if note and note not in focus_lines:
-                            focus_lines.insert(0, note)
-                            break
-                if focus_lines:
-                    break
+            self._prepend_strength_focus(history, focus_lines)
 
         if not focus_lines:
             return None
@@ -142,6 +120,22 @@ class AgentReviewStorage:
                         if len(focus_lines) >= max_items:
                             return focus_lines
         return focus_lines
+
+    @staticmethod
+    def _prepend_strength_focus(history: Iterable[dict], focus_lines: List[str]) -> None:
+        for entry in reversed(list(history)):
+            strengths = entry.get("strengths", [])
+            if not isinstance(strengths, list):
+                continue
+            for strength in strengths:
+                text = str(strength).strip()
+                if not text:
+                    continue
+                note = f"強みを維持: {text}"
+                if note in focus_lines:
+                    continue
+                focus_lines.insert(0, note)
+                return
 
 
 class AgentReviewCycle:
@@ -278,50 +272,51 @@ class AgentReviewCycle:
         description = getattr(task, "description", "")
         expected_output = getattr(task, "expected_output", "")
 
-        return f"""
-あなたはCrewAIシステムのメタレビュアーです。各エージェントのタスク出力を評価し、
-エージェントが目標に貢献したか、どこを改善すべきかを明確にしてください。
-
-# Agent Profile
-- Agent Key: {agent_key}
-- Role: {role}
-- Goal: {goal}
-- Backstory: {backstory}
-
-# Task Metadata
-- Task Name: {task_name}
-- Task Description: """{description}"""
-- Expected Output: """{expected_output}"""
-
-# Agent Output
-"""{task_output}"""
-
-# Previous Focus Items
-{focus_block}
-
-# Evaluation Rubrics
-{rubric_block}
-
-# Evaluation Requirements
-- Score the usefulness of the agent's output on a 0-10 scale (10 = outstanding impact).
-- Identify concrete strengths.
-- Identify the most critical issues or gaps.
-- Provide 1-3 clear action items that would improve the next iteration.
-- Note whether the agent addressed the previous focus items.
-
-Respond ONLY with valid JSON using the following schema:
-{{
-  "score": float between 0 and 10,
-  "verdict": "short headline level summary",
-  "strengths": ["bullet"],
-  "issues": ["bullet"],
-  "action_items": ["bullet"],
-  "compliance": {{
-      "previous_focus_addressed": "yes" | "partial" | "no",
-      "notes": "short note"
-  }}
-}}
-"""
+        prompt_lines = [
+            "あなたはCrewAIシステムのメタレビュアーです。各エージェントのタスク出力を評価し、",
+            "エージェントが目標に貢献したか、どこを改善すべきかを明確にしてください。",
+            "",
+            "# Agent Profile",
+            f"- Agent Key: {agent_key}",
+            f"- Role: {role}",
+            f"- Goal: {goal}",
+            f"- Backstory: {backstory}",
+            "",
+            "# Task Metadata",
+            f"- Task Name: {task_name}",
+            f'- Task Description: """{description}"""',
+            f'- Expected Output: """{expected_output}"""',
+            "",
+            "# Agent Output",
+            f'"""{task_output}"""',
+            "",
+            "# Previous Focus Items",
+            focus_block,
+            "",
+            "# Evaluation Rubrics",
+            rubric_block,
+            "",
+            "# Evaluation Requirements",
+            "- Score the usefulness of the agent's output on a 0-10 scale (10 = outstanding impact).",
+            "- Identify concrete strengths.",
+            "- Identify the most critical issues or gaps.",
+            "- Provide 1-3 clear action items that would improve the next iteration.",
+            "- Note whether the agent addressed the previous focus items.",
+            "",
+            "Respond ONLY with valid JSON using the following schema:",
+            "{",
+            '  "score": float between 0 and 10,',
+            '  "verdict": "short headline level summary",',
+            '  "strengths": ["bullet"],',
+            '  "issues": ["bullet"],',
+            '  "action_items": ["bullet"],',
+            '  "compliance": {',
+            '      "previous_focus_addressed": "yes" | "partial" | "no",',
+            '      "notes": "short note"',
+            "  }",
+            "}",
+        ]
+        return "\n".join(prompt_lines)
 
     @staticmethod
     def _normalize_response(payload: Dict[str, object]) -> Dict[str, object]:

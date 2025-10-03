@@ -82,6 +82,8 @@ class MediaQAGatingConfig(BaseModel):
     enforce: bool = True
     skip_modes: List[str] = Field(default_factory=lambda: ["test"])
     fail_on_missing_inputs: bool = True
+    retry_attempts: int = 1
+    retry_start_step: str = "script_generation"
 
 
 class AudioQAConfig(BaseModel):

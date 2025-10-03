@@ -146,11 +146,6 @@ class FeedbackAnalyzer:
 analyzer = FeedbackAnalyzer()
 
 
-def generate_report() -> str:
-    """簡易レポート生成関数."""
-    return analyzer.generate_weekly_report()
-
-
 if __name__ == "__main__":
     # Test analytics
     print("📊 Feedback Analytics\n")

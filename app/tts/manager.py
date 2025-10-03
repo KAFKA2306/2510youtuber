@@ -98,13 +98,12 @@ class TTSManager:
     def _split_by_speaker(self, text: str) -> List[Dict[str, str]]:
         """話者別にテキストを分割
 
-        話者形式でない場合は、テキスト全体をナレーターとして扱う
+        認識可能な話者ラベルが含まれない場合は空リストを返す。
         """
         lines = text.split("\n")
-        speaker_lines = []
+        speaker_lines: List[Dict[str, str]] = []
         current_speaker = None
-        current_content = []
-        unmatched_content = []
+        current_content: List[str] = []
 
         for line in lines:
             line = line.strip()
@@ -120,17 +119,15 @@ class TTSManager:
                 if current_speaker is not None:
                     current_content.append(line)
                 else:
-                    unmatched_content.append(line)
+                    logger.debug("Line without speaker before any speaker declaration: %s", line)
 
         if current_speaker and current_content:
             speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
 
-        # フォールバック: 話者形式の行が1つもない場合、全テキストをナレーターとして扱う
-        if not speaker_lines and (unmatched_content or text.strip()):
-            logger.warning("No speaker format detected, treating entire text as narrator")
-            content = " ".join(unmatched_content) if unmatched_content else text.strip()
-            if content:
-                speaker_lines.append({"speaker": "ナレーター", "content": content})
+        if not speaker_lines:
+            if text.strip():
+                logger.warning("No recognizable speaker format detected; returning empty result")
+            return []
 
         return speaker_lines
 

@@ -15,6 +15,7 @@ from app.metadata import generate_youtube_metadata
 from app.search_news import collect_news
 from app.services.file_archival import FileArchivalManager
 from app.services.media import MediaQAPipeline
+from app.services.video_review import get_video_review_service
 from app.services.visual_design import create_unified_design
 from app.sheets import load_prompts as load_prompts_from_sheets
 from app.sheets import sheets_manager
@@ -122,6 +123,7 @@ class GenerateScriptStep(WorkflowStep):
 
             # Store in context
             context.set("script_content", script_content)
+            context.set("script_path", script_path)
 
             logger.info(f"Generated script: {len(script_content)} characters")
             return self._success(
@@ -481,6 +483,7 @@ class QualityAssuranceStep(WorkflowStep):
         qa_config = getattr(cfg, "media_quality", None)
         if not qa_config or not qa_config.enabled:
             context.set("qa_passed", True)
+            context.set("qa_retry_request", None)
             return self._success(
                 data={
                     "qa_passed": True,
@@ -490,6 +493,10 @@ class QualityAssuranceStep(WorkflowStep):
             )
 
         pipeline = MediaQAPipeline(qa_config)
+
+        attempt_count = context.get("qa_attempt", 0) + 1
+        context.set("qa_attempt", attempt_count)
+        context.set("qa_retry_request", None)
 
         report = pipeline.run(
             run_id=context.run_id,
@@ -521,8 +528,18 @@ class QualityAssuranceStep(WorkflowStep):
             failed_names = ", ".join(check.name for check in failures) or "unknown"
             message = f"QA gate blocked publication due to: {failed_names}"
             logger.error(message)
+            if qa_config.gating.retry_attempts > 0:
+                context.set(
+                    "qa_retry_request",
+                    {
+                        "start_step": qa_config.gating.retry_start_step,
+                        "reason": message,
+                        "attempt": attempt_count,
+                    },
+                )
             return self._failure(message)
 
+        context.set("qa_retry_request", None)
         return self._success(
             data={
                 "qa_passed": report.passed,
@@ -761,3 +778,81 @@ class UploadToYouTubeStep(WorkflowStep):
         except Exception as e:
             logger.warning(f"Step 10 warning: {e}")
             return self._success(data={"youtube_result": {"error": str(e)}, "error": str(e)})
+
+
+class ReviewVideoStep(WorkflowStep):
+    """Step 11: Generate AI feedback from rendered video and screenshots."""
+
+    @property
+    def step_name(self) -> str:
+        return "video_review"
+
+    async def execute(self, context: WorkflowContext) -> StepResult:
+        logger.info(f"Step 11: Starting {self.step_name}...")
+
+        review_config = getattr(cfg, "video_review", None)
+        if not review_config or not getattr(review_config, "enabled", False):
+            return self._success(
+                data={
+                    "review_enabled": False,
+                    "skipped": True,
+                }
+            )
+
+        video_path = context.get("video_path")
+        if not video_path or not os.path.exists(video_path):
+            logger.warning("Video review skipped: video file missing")
+            return self._success(
+                data={
+                    "review_enabled": True,
+                    "skipped": True,
+                    "reason": "missing_video",
+                }
+            )
+
+        metadata = context.get("metadata") or {}
+        meta_payload = {}
+        title = metadata.get("title")
+        if title:
+            meta_payload["title"] = str(title)
+        duration_hint = metadata.get("duration") or metadata.get("estimated_watch_time")
+        if duration_hint:
+            meta_payload["duration"] = str(duration_hint)
+
+        video_id = context.get("video_id") or context.run_id
+
+        review_service = get_video_review_service()
+
+        try:
+            review_result = review_service.review_video(
+                video_path=video_path,
+                video_id=video_id,
+                metadata=meta_payload or None,
+            )
+        except Exception as exc:
+            logger.warning(f"Video review failed: {exc}")
+            return self._success(
+                data={
+                    "review_enabled": True,
+                    "skipped": True,
+                    "error": str(exc),
+                }
+            )
+
+        review_dict = review_result.to_dict()
+        context.set("video_review", review_dict)
+        if review_result.feedback:
+            context.set("video_review_summary", review_result.feedback.summary)
+
+        screenshot_paths = [shot.path for shot in review_result.screenshots if shot.path]
+        context.set("video_review_screenshots", screenshot_paths)
+
+        return self._success(
+            data={
+                "review_enabled": True,
+                "skipped": False,
+                "review_summary": review_result.feedback.summary if review_result.feedback else None,
+                "screenshots_captured": len(screenshot_paths),
+            },
+            files=screenshot_paths,
+        )

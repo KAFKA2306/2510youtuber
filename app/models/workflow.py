@@ -193,6 +193,10 @@ class WorkflowResult(BaseModel):
     # ファイル
     generated_files: List[str] = Field(default_factory=list, description="生成されたファイル")
 
+    # AIレビュー結果
+    video_review_summary: Optional[str] = Field(default=None, description="AIレビューの要約")
+    video_review_actions: List[str] = Field(default_factory=list, description="AIレビューで提案された次のアクション")
+
     # エラー情報
     error: Optional[str] = Field(default=None, description="エラーメッセージ")
     failed_step: Optional[str] = Field(default=None, description="失敗したステップ")

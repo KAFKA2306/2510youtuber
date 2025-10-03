@@ -54,6 +54,8 @@ media_quality:
     skip_modes:
       - test
     fail_on_missing_inputs: true
+    retry_attempts: 1
+    retry_start_step: script_generation
   audio:
     enabled: true
     peak_dbfs_max: -1.0

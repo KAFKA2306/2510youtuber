@@ -62,3 +62,5 @@ async def test_quality_assurance_step_blocks_on_failure(monkeypatch):
 
     assert result.success is False
     assert context.get("qa_passed") is False
+    retry_request = context.get("qa_retry_request")
+    assert retry_request["start_step"] == "script_generation"
