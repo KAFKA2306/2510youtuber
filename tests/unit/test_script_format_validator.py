@@ -60,3 +60,23 @@ def test_validator_flags_missing_colon():
 
     assert "武宏: まずは市場の動きを整理しましょう。" in result.normalized_script
     assert any("Missing colon" in warning.message for warning in result.warnings)
+
+
+def test_validator_handles_honorifics_and_aliases():
+    script = "\n".join(
+        [
+            "武宏さん: 今日は米国市場の動向を整理します。",
+            "つむぎ（リポーター）: まず注目ポイントを教えてください。",
+            "司会: ここで一度まとめに入りましょう。",
+        ]
+    )
+
+    result = ensure_dialogue_structure(script, allowed_speakers=ALLOWED, min_dialogue_lines=3)
+
+    lines = result.normalized_script.splitlines()
+    assert lines[0] == "武宏: 今日は米国市場の動向を整理します。"
+    assert lines[1] == "つむぎ: まず注目ポイントを教えてください。"
+    assert lines[2] == "ナレーター: ここで一度まとめに入りましょう。"
+    assert result.speaker_counts["武宏"] == 1
+    assert result.speaker_counts["つむぎ"] == 1
+    assert result.speaker_counts["ナレーター"] == 1

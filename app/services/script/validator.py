@@ -3,15 +3,26 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.services.script.speakers import get_speaker_registry
+from app.services.script.speakers import SpeakerRegistry, get_speaker_registry
 
 _DIALOGUE_PREFIX_PATTERN = re.compile(r"[：:\-―ー\s　]*")
 _QUOTE_TRIM_PATTERN = re.compile(r"^[「『]\s*|\s*[」』]$")
 _WHITESPACE_RE = re.compile(r"\s+")
+
+_HONORIFIC_SUFFIXES = (
+    "さん",
+    "氏",
+    "くん",
+    "ちゃん",
+    "殿",
+    "様",
+    "先輩",
+    "先生",
+)
 
 
 @dataclass
@@ -125,7 +136,9 @@ def ensure_dialogue_structure(
     Raises:
         ScriptFormatError: If the script cannot be normalized into a valid dialogue form.
     """
-    speakers = _resolve_speakers(allowed_speakers)
+    registry = get_speaker_registry()
+    speakers = _resolve_speakers(allowed_speakers, registry)
+    alias_lookup = _build_alias_lookup(speakers, allowed_speakers, registry)
     normalized_lines: List[str] = []
     warnings: List[ScriptValidationIssue] = []
     error_candidates: List[ScriptValidationIssue] = []
@@ -143,7 +156,7 @@ def ensure_dialogue_structure(
 
         nonempty_line_count += 1
 
-        normalized, speaker, line_warnings = _normalize_dialogue_line(stripped, speakers)
+        normalized, speaker, line_warnings = _normalize_dialogue_line(stripped, alias_lookup)
         if speaker:
             dialogue_line_count += 1
             speaker_counts[speaker] += 1
@@ -209,28 +222,108 @@ def ensure_dialogue_structure(
     return result
 
 
-def _resolve_speakers(allowed_speakers: Optional[Sequence[str]]) -> List[str]:
+def _resolve_speakers(
+    allowed_speakers: Optional[Sequence[str]], registry: SpeakerRegistry
+) -> List[str]:
     if allowed_speakers:
         resolved = [speaker.strip() for speaker in allowed_speakers if speaker and speaker.strip()]
     else:
-        registry = get_speaker_registry()
         resolved = sorted(registry.canonical_names) if registry.canonical_names else []
     if not resolved:
         raise ValueError("Allowed speakers list cannot be empty")
     return resolved
 
 
-def _normalize_dialogue_line(line: str, speakers: Sequence[str]) -> tuple[str, Optional[str], List[str]]:
+def _normalize_dialogue_line(
+    line: str, alias_lookup: Sequence[Tuple[str, str]]
+) -> tuple[str, Optional[str], List[str]]:
     """Attempt to normalize a single line into `Speaker: content` format."""
-    for speaker in speakers:
-        if not line.startswith(speaker):
+    for alias, canonical in alias_lookup:
+        if not line.startswith(alias):
             continue
-        remainder = line[len(speaker) :]
+        remainder = line[len(alias) :]
+        remainder = _strip_speaker_modifiers(remainder)
         normalized_content, warnings = _normalize_dialogue_content(remainder)
         if not normalized_content:
-            return f"{speaker}:".rstrip(), speaker, ["Speaker line is missing dialogue content"]
-        return f"{speaker}: {normalized_content}", speaker, warnings
+            return f"{canonical}:".rstrip(), canonical, ["Speaker line is missing dialogue content"]
+        return f"{canonical}: {normalized_content}", canonical, warnings
     return line, None, []
+
+
+def _build_alias_lookup(
+    canonical_speakers: Sequence[str],
+    allowed_speakers: Optional[Sequence[str]],
+    registry: SpeakerRegistry,
+) -> List[Tuple[str, str]]:
+    """Construct a lookup table of alias → canonical speaker labels."""
+
+    target_canonicals = {registry.canonicalize(name) or name for name in canonical_speakers}
+
+    if allowed_speakers:
+        for raw in allowed_speakers:
+            if not raw:
+                continue
+            canonical = registry.canonicalize(raw) or raw.strip()
+            if canonical:
+                target_canonicals.add(canonical)
+
+    alias_map: Dict[str, str] = {}
+    for alias, canonical in registry.alias_map.items():
+        if canonical in target_canonicals:
+            alias_map[alias] = canonical
+
+    for canonical in target_canonicals:
+        alias_map.setdefault(canonical, canonical)
+
+    expanded: Dict[str, str] = {}
+    for alias, canonical in alias_map.items():
+        for variant in _expand_alias_variants(alias):
+            expanded.setdefault(variant, canonical)
+
+    # Match longer aliases first (e.g., 「武宏さん」 before 「武宏」)
+    return sorted(expanded.items(), key=lambda item: len(item[0]), reverse=True)
+
+
+def _expand_alias_variants(alias: str) -> Iterable[str]:
+    """Yield canonical alias plus common honorific variants."""
+
+    base = alias.strip()
+    if not base:
+        return []
+
+    variants = {base}
+    for suffix in _HONORIFIC_SUFFIXES:
+        variants.add(f"{base}{suffix}")
+    return variants
+
+
+def _strip_speaker_modifiers(remainder: str) -> str:
+    """Remove honorifics or parenthetical notes that precede dialogue content."""
+
+    trimmed = remainder
+    while True:
+        trimmed = trimmed.lstrip()
+        if not trimmed:
+            return trimmed
+
+        if trimmed[0] in {"(", "（"}:
+            closing = ")" if trimmed[0] == "(" else "）"
+            end_idx = trimmed.find(closing)
+            if end_idx != -1:
+                trimmed = trimmed[end_idx + 1 :]
+                continue
+            # Unbalanced parenthesis; stop stripping to avoid data loss
+            return trimmed
+
+        matched_suffix = False
+        for suffix in _HONORIFIC_SUFFIXES:
+            if trimmed.startswith(suffix):
+                trimmed = trimmed[len(suffix) :]
+                matched_suffix = True
+                break
+
+        if not matched_suffix:
+            return trimmed
 
 
 def _normalize_dialogue_content(remainder: str) -> tuple[str, List[str]]:
