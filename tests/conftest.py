@@ -6,10 +6,39 @@
 import os
 import sys
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, List
 
 import pytest
 from dotenv import load_dotenv
+
+
+class _LiteLLMStub:
+    """Minimal stub so tests don't require the litellm dependency."""
+
+    @staticmethod
+    def completion(*_args, **_kwargs):  # pragma: no cover - guardrail
+        raise RuntimeError("litellm is not installed; stub completion invoked")
+
+
+if "litellm" not in sys.modules:
+    sys.modules["litellm"] = _LiteLLMStub()
+
+if "crewai" not in sys.modules:
+    crewai_module = ModuleType("crewai")
+    llms_module = ModuleType("crewai.llms")
+    base_llm_module = ModuleType("crewai.llms.base_llm")
+
+    class _BaseLLMStub:  # pragma: no cover - guardrail
+        pass
+
+    base_llm_module.BaseLLM = _BaseLLMStub
+    llms_module.base_llm = base_llm_module
+    crewai_module.llms = llms_module
+
+    sys.modules["crewai"] = crewai_module
+    sys.modules["crewai.llms"] = llms_module
+    sys.modules["crewai.llms.base_llm"] = base_llm_module
 
 # ===== プロジェクト設定 =====
 

@@ -3,7 +3,6 @@
 Each step encapsulates a single responsibility from the original YouTubeWorkflow class.
 """
 
-import json
 import logging
 import os
 from datetime import datetime
@@ -17,6 +16,7 @@ from app.search_news import collect_news
 from app.services.file_archival import FileArchivalManager
 from app.services.media import MediaQAPipeline
 from app.services.script import ScriptFormatError, ensure_dialogue_structure
+from app.services.script.validator import Script
 from app.services.video_review import get_video_review_service
 from app.services.visual_design import create_unified_design
 from app.sheets import load_prompts as load_prompts_from_sheets
@@ -24,7 +24,6 @@ from app.sheets import sheets_manager
 from app.stt import transcribe_long_audio
 from app.thumbnail import generate_thumbnail
 from app.tts import synthesize_script
-from app.services.script.validator import Script
 from app.utils import FileUtils
 from app.video import generate_video
 from app.youtube import upload_video as youtube_upload

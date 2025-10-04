@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.config.settings import settings
 from app.services.script.speakers import get_speaker_registry
 
 _DIALOGUE_PREFIX_PATTERN = re.compile(r"[：:\-―ー\s　]*")
