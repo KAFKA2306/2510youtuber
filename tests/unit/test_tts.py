@@ -116,7 +116,7 @@ def test_voice_config_for_all_speakers(tts_manager):
     """全話者のvoice_config取得テスト"""
     speakers = ["武宏", "つむぎ", "ナレーター"]
     expected_voicevox_ids = [11, 8, 3]
-    
+
     for speaker, expected_id in zip(speakers, expected_voicevox_ids):
         voice_config = tts_manager._get_voice_config(speaker)
         assert voice_config["name"] == speaker
@@ -128,7 +128,7 @@ def test_legacy_speaker_voice_config_mapping(tts_manager):
     # 田中 → 武宏
     config_tanaka = tts_manager._get_voice_config("田中")
     assert config_tanaka["voicevox_speaker"] == 11
-    
+
     # 鈴木 → つむぎ
     config_suzuki = tts_manager._get_voice_config("鈴木")
     assert config_suzuki["voicevox_speaker"] == 8

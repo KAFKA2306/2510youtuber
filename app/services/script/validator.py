@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
-import re
 
 from app.config.settings import settings
 
@@ -109,9 +109,7 @@ def ensure_dialogue_structure(
             dialogue_line_count += 1
             speaker_counts[speaker] += 1
             if line_warnings:
-                warnings.extend(
-                    ScriptValidationIssue(idx, message, stripped, "warning") for message in line_warnings
-                )
+                warnings.extend(ScriptValidationIssue(idx, message, stripped, "warning") for message in line_warnings)
             normalized_lines.append(normalized)
         else:
             normalized_lines.append(original_line)

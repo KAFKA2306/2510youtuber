@@ -167,8 +167,8 @@ class OpenAIProvider(TTSProvider):
         self.client = client
         # 話者名からOpenAI voiceへのマッピング
         self.speaker_voice_map = {
-            "武宏": "onyx",      # Deep male voice
-            "つむぎ": "nova",     # Female voice
+            "武宏": "onyx",  # Deep male voice
+            "つむぎ": "nova",  # Female voice
             "ナレーター": "alloy",  # Neutral voice
             # 旧話者名の互換性
             "田中": "onyx",
@@ -186,11 +186,7 @@ class OpenAIProvider(TTSProvider):
 
         logger.debug(f"OpenAI synthesis: speaker={speaker_name}, voice={openai_voice}")
 
-        response = self.client.audio.speech.create(
-            model="tts-1",
-            voice=openai_voice,
-            input=text
-        )
+        response = self.client.audio.speech.create(model="tts-1", voice=openai_voice, input=text)
 
         with open(output_path, "wb") as f:
             f.write(response.content)
@@ -263,9 +259,9 @@ class Pyttsx3Provider(TTSProvider):
         self.engine = None
         # 話者ごとの音声パラメータ
         self.speaker_params = {
-            "武宏": {"rate": 140, "volume": 0.9},      # 落ち着いた男性
-            "つむぎ": {"rate": 160, "volume": 0.95},   # 活発な女性
-            "ナレーター": {"rate": 150, "volume": 0.9}, # 標準的なナレーション
+            "武宏": {"rate": 140, "volume": 0.9},  # 落ち着いた男性
+            "つむぎ": {"rate": 160, "volume": 0.95},  # 活発な女性
+            "ナレーター": {"rate": 150, "volume": 0.9},  # 標準的なナレーション
             # 旧話者名の互換性
             "田中": {"rate": 140, "volume": 0.9},
             "鈴木": {"rate": 160, "volume": 0.95},

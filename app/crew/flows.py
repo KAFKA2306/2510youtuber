@@ -182,8 +182,16 @@ class WOWScriptFlow:
             logger.info(f"Successfully parsed CrewAI JSON output, script length: {len(final_script)}")
             logger.info(f"First 800 chars of parsed script: {final_script[:800]}")
 
-            # Verify each line of the script has speaker format (田中:, 鈴木:, ナレーター:)
-            speaker_pattern = re.compile(r"^(田中|鈴木|ナレーター|司会)\s*([:：])\s*([^:：].*)")
+            # Verify each line of the script has speaker format (武宏:, つむぎ:, ナレーター:)
+            # 設定から話者名を動的に取得
+            from app.config.settings import settings
+
+            speaker_names = [s.name for s in settings.speakers]
+            # 後方互換性のため旧話者名もサポート
+            legacy_speakers = ["田中", "鈴木", "司会"]
+            all_speakers = speaker_names + legacy_speakers
+            speaker_pattern_str = "|".join(re.escape(name) for name in all_speakers)
+            speaker_pattern = re.compile(rf"^({speaker_pattern_str})\s*([:：])\s*([^:：].*)")
             script_lines = final_script.strip().split("\n")
 
             speaker_format_valid = True
