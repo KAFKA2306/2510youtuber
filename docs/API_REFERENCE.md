@@ -40,45 +40,25 @@ ElevenLabs → VOICEVOX Nemo → OpenAI TTS → gTTS → Coqui TTS → pyttsx3
 | **YouTube API** | 10,000ユニット/日 | JST 17時 | 1,600/本 | 1日最大6本 |
 | **Pexels API** | 200回/時 | 時間単位 | 5-10回 | 24hキャッシュ |
 
-### **Gemini 2.5 Models Rate Limits (2025年最新)**
+### **Gemini 2.5 Flash Preview (09-2025) Rate Limits**
 
-#### **利用可能モデル**
+全エージェント・補助ツールは `gemini-2.5-flash-preview-09-2025` に統一しました。過去のPro系モデルやLite系モデルは運用から外しているため、以下のレート制限のみを追跡すれば十分です。
 
-| モデル名 | Model ID | 用途 | 状態 |
-|---------|---------|------|------|
-| **Gemini 2.5 Pro** | `gemini-2.5-pro` | 高性能汎用（台本生成推奨） | Stable |
-| **Gemini 2.5 Pro TTS** | `gemini-2.5-pro-preview-tts` | TTS機能付き | Preview |
-| **Gemini 2.5 Flash** | `gemini-2.5-flash` | 高速汎用 | Stable |
-| **Gemini 2.5 Flash** | `gemini-2.5-flash-preview-09-2025` | 高速汎用（最新プレビュー） | Preview |
-| **Gemini 2.5 Flash Image** | `gemini-2.5-flash-image` | 画像処理特化 | Stable |
-| **Gemini 2.5 Flash-Lite** | `gemini-2.5-flash-lite` | 軽量高速（低コスト） | Stable |
-| **Gemini 2.5 Flash-Lite** | `gemini-2.5-flash-lite-preview-09-2025` | 軽量高速（最新プレビュー） | Preview |
+#### **Free Tier**
 
-#### **Free Tier Rate Limits**
+| Tier | RPM（分あたりリクエスト） | TPM（分あたりトークン） | RPD（日あたりリクエスト） |
+|------|----------------------|-------------------|---------------------|
+| Free | 10 | 250,000 | 250 |
 
-| モデル | RPM（分あたりリクエスト） | TPM（分あたりトークン） | RPD（日あたりリクエスト） |
-|--------|----------------------|-------------------|---------------------|
-| **Gemini 2.5 Pro** | 5 | 250,000 | 100 |
-| **Gemini 2.5 Flash** | 10 | 250,000 | 250 |
-| **Gemini 2.5 Flash Preview** | 10 | 250,000 | 250 |
-| **Gemini 2.5 Flash-Lite** | 15 | 250,000 | 1,000 |
-| **Gemini 2.5 Flash-Lite Preview** | 15 | 250,000 | 1,000 |
+#### **Tier 1**
 
-#### **Tier 1 Rate Limits**
-
-| モデル | RPM | TPM | RPD |
-|--------|-----|-----|-----|
-| **Gemini 2.5 Pro** | 150 | 2,000,000 | 10,000 |
-| **Gemini 2.5 Flash** | 1,000 | 1,000,000 | 10,000 |
-| **Gemini 2.5 Flash Preview** | 1,000 | 1,000,000 | 10,000 |
-| **Gemini 2.5 Flash-Lite** | 4,000 | 4,000,000 | Unlimited |
-| **Gemini 2.5 Flash-Lite Preview** | 4,000 | 4,000,000 | Unlimited |
+| Tier | RPM | TPM | RPD |
+|------|-----|-----|-----|
+| Tier 1 | 1,000 | 1,000,000 | 10,000 |
 
 **注意事項:**
 - レート制限はプロジェクト単位で適用（APIキー単位ではない）
-- Free TierのGemini 2.5 Proは1日100リクエスト（従来の50から増加）
 - 本プロジェクトでは1動画生成に15-20リクエスト使用
-- Flash-Liteは高速かつ制限が緩い（RPD 1,000）ため、開発環境に最適
 - Tier 1への移行で大幅な制限緩和が可能（~$10/月）
 
 ## **推奨アクション（優先度順）**

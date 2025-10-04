@@ -4,7 +4,7 @@
 """
 
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 from crewai import Agent
 
@@ -36,13 +36,20 @@ class AgentFactory:
         try:
             # agents.yamlからエージェント設定を取得
             agent_config = self.prompt_manager.get_agent_config(agent_name)
+            overrides = dict(override_params)
+            override_model = overrides.pop("model", None)
+            override_temperature = overrides.pop("temperature", None)
 
             # CrewAI用にLangChain LLMを使用
             from app.crew.tools.ai_clients import get_crewai_gemini_llm
 
+            base_temperature = agent_config.get("temperature", 0.7)
+            llm_temperature = override_temperature if override_temperature is not None else base_temperature
+            llm_model = override_model or agent_config.get("model") or settings.gemini_models.get("crew_agents")
+
             llm = get_crewai_gemini_llm(
-                model=agent_config.get("model", "gemini-2.5-pro"),
-                temperature=agent_config.get("temperature", 0.7),
+                model=llm_model,
+                temperature=llm_temperature,
             )
 
             # エージェント作成
@@ -52,7 +59,7 @@ class AgentFactory:
                 backstory=agent_config.get("backstory", ""),
                 verbose=getattr(settings, "crew_verbose", False),
                 llm=llm,
-                **override_params,
+                **overrides,
             )
 
             logger.info(f"Created agent: {agent_name}")
@@ -82,13 +89,14 @@ class AgentFactory:
         return agents
 
 
-def create_wow_agents(gemini_model: str) -> Dict[str, Agent]:
+def create_wow_agents(gemini_model: Optional[str] = None) -> Dict[str, Agent]:
     """WOW Script Creation Crewの7エージェントを生成
 
     Returns:
         エージェント名 → Agentインスタンスの辞書
     """
     factory = AgentFactory()
+    resolved_model = gemini_model or settings.gemini_models.get("crew_agents")
 
     # 必須の7エージェント
     required_agents = [
@@ -104,7 +112,7 @@ def create_wow_agents(gemini_model: str) -> Dict[str, Agent]:
     agents = {}
     for agent_name in required_agents:
         try:
-            agents[agent_name] = factory.create_agent(agent_name, model=gemini_model)
+            agents[agent_name] = factory.create_agent(agent_name, model=resolved_model)
         except Exception as e:
             logger.error(f"Failed to create required agent '{agent_name}': {e}")
             raise RuntimeError(f"Cannot create WOW agents without '{agent_name}'")
