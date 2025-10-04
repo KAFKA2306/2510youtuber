@@ -8,6 +8,7 @@ improving automatically.
 from __future__ import annotations
 
 import json
+import re
 import logging
 import os
 from datetime import datetime
@@ -18,8 +19,10 @@ from pydantic import BaseModel, Field
 from app.config.settings import settings
 from app.crew.tools.ai_clients import GeminiClient
 from app.prompt_cache import get_prompt_manager
+from app.logging_config import WorkflowLogger
 
 logger = logging.getLogger(__name__)
+workflow_logger = WorkflowLogger(__name__)
 
 
 class AgentReviewResult(BaseModel):
@@ -234,9 +237,25 @@ class AgentReviewCycle:
     ) -> Optional[AgentReviewResult]:
         if not self._client:
             return None
+        
+        workflow_logger.agent_start(agent_key, task_name)
+        workflow_logger.agent_start(agent_key, task_name)
+
         prompt = self._build_prompt(agent_key, task_name, task, task_output, agent_config)
-        response = self._client.generate_structured(prompt)
+        response_text = self._client.generate_structured(prompt)
+        
+        workflow_logger.logger.debug(f"Parsing output from {agent_key} ({len(response_text)} chars)")
+        workflow_logger.logger.debug(f"Parsing output from {agent_key} ({len(response_text)} chars)")
+        response = parse_json_from_gemini(response_text, agent_key)
+        
         processed = self._normalize_response(response)
+        
+        workflow_logger.agent_end(agent_key, len(response_text))
+        
+        processed = self._normalize_response(response)
+        
+        workflow_logger.agent_end(agent_key, len(response_text))
+
         return AgentReviewResult(
             agent_key=agent_key,
             agent_role=str(agent_config.get("role", getattr(task.agent, "role", agent_key))),
@@ -247,7 +266,7 @@ class AgentReviewCycle:
             issues=processed.get("issues", []),
             action_items=processed.get("action_items", []),
             compliance=processed.get("compliance", {}),
-            raw_feedback=json.dumps(response, ensure_ascii=False),
+            raw_feedback=response_text,
         )
 
     def _build_prompt(
@@ -321,6 +340,39 @@ class AgentReviewCycle:
             "}",
         ]
         return "\n".join(prompt_lines)
+
+def parse_json_from_gemini(response_text: str, agent_key: str) -> dict:
+    """
+    Geminiレスポンスから柔軟にパース
+    script_writer と japanese_purity_polisher はRAW出力を許可
+    """
+    # RAW出力を許可するエージェント
+    RAW_OUTPUT_AGENTS = ["script_writer", "japanese_purity_polisher"]
+    
+    # RAW出力許可エージェントの場合、JSONパース失敗を許容
+    if agent_key in RAW_OUTPUT_AGENTS:
+        # プレーンテキストとして返す
+        text = response_text.strip()
+        if not text.startswith('{') and not text.startswith('['):
+            logger.info(f"{agent_key}: RAW text output detected")
+            return {"raw_output": text, "success": True}
+    
+    # JSON パース試行
+    try:
+        # コードブロック除去
+        cleaned = re.sub(r'```json\s*', '', response_text)
+        cleaned = re.sub(r'```', '', cleaned)
+        
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        if agent_key in RAW_OUTPUT_AGENTS:
+            # RAW出力として許容
+            return {"raw_output": response_text, "success": True}
+        else:
+            # 他のエージェントはエラー
+            logger.error(f"Failed to parse JSON from {agent_key}: {e}")
+            raise
+
 
     @staticmethod
     def _normalize_response(payload: Dict[str, object]) -> Dict[str, object]:

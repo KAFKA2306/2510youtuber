@@ -184,6 +184,8 @@ def create_wow_tasks(
         task_id="task4_script_writing",
         task_config={"agent_key": "script_writer"},
         expected_output="高品質な動画スクリプト",
+        output_json=None,  # 追加: JSON強制を無効化
+        output_pydantic=None,  # 追加: Pydantic検証を無効化
     )
 
     # Task 5: Engagement Optimization

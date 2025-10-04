@@ -6,10 +6,23 @@ WorkflowStepパターンにより、各ステップが独立してテスト可�
 
 import asyncio
 import logging
+import os
 import re
 import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+import time
+
+from app.logging_config import setup_logging, WorkflowLogger
+
+# 環境変数からログレベル取得（デフォルトはINFO）
+log_level_str = os.getenv("LOG_LEVEL", "INFO")
+log_level = getattr(logging, log_level_str.upper(), logging.INFO)
+
+# ロギングセットアップ
+setup_logging(log_level=log_level)
+logger = WorkflowLogger(__name__)
 
 from .api_rotation import initialize_api_infrastructure
 from .config import cfg
@@ -540,22 +553,28 @@ if __name__ == "__main__":
 
     async def main():
         mode = sys.argv[1] if len(sys.argv) > 1 else "test"
-        print(f"Starting YouTube workflow in {mode} mode...")
+        logger.step_start("YouTube Workflow", details=f"{mode} mode")
+
         try:
+            start_time = time.time()
             result = await _get_workflow().execute_full_workflow(mode)
+            duration = time.time() - start_time
+
             if result.get("success"):
-                print("✅ Workflow completed successfully!")
-                print(f"Execution time: {result.get('execution_time', 0):.1f}s")
-                print(f"Video URL: {result.get('video_url', 'N/A')}")
-                print(f"Files generated: {len(result.get('generated_files', []))}")
+                logger.step_end("YouTube Workflow", duration=duration, status="SUCCESS")
+                logger.logger.info(f"Video URL: {result.get('video_url', 'N/A')}")
+                logger.logger.info(f"Files generated: {len(result.get('generated_files', []))}")
             else:
-                print(f"❌ Workflow failed: {result.get('error', 'Unknown error')}")
+                logger.step_end("YouTube Workflow", duration=duration, status="FAILED")
+                logger.logger.error(f"Workflow failed: {result.get('error', 'Unknown error')}")
                 sys.exit(1)
         except KeyboardInterrupt:
-            print("\n⚠️ Workflow interrupted by user")
+            logger.step_end("YouTube Workflow", status="FAILED")
+            logger.logger.warning("\n⚠️ Workflow interrupted by user")
             sys.exit(130)
         except Exception as e:
-            print(f"❌ Unexpected error: {e}")
+            logger.step_end("YouTube Workflow", status="FAILED")
+            logger.logger.error(f"❌ Unexpected error: {e}", exc_info=True)
             sys.exit(1)
 
     asyncio.run(main())

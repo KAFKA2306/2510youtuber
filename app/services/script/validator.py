@@ -70,7 +70,7 @@ def ensure_dialogue_structure(
     script: str,
     allowed_speakers: Optional[Sequence[str]] = None,
     min_dialogue_ratio: float = 0.5,
-    min_dialogue_lines: int = 3,
+    min_dialogue_lines: int = 10,
 ) -> ScriptValidationResult:
     """Normalize and validate the Crew-generated dialogue script.
 
