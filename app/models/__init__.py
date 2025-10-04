@@ -5,7 +5,7 @@
 
 from .news import NewsCollection, NewsItem
 from .qa import CheckStatus, MediaCheckResult, QualityGateReport
-from app.services.script.validator import QualityScore, Script, ScriptSegment, WOWMetrics
+from app.services.script.validator import Script, DialogueEntry, QualityScore, ScriptSegment, WOWMetrics
 from .video_review import ScreenshotEvidence, VideoReviewFeedback, VideoReviewResult
 from .workflow import StepResult, WorkflowResult, WorkflowState
 
@@ -15,6 +15,7 @@ __all__ = [
     "NewsCollection",
     # Script models
     "Script",
+    "DialogueEntry",
     "ScriptSegment",
     "QualityScore",
     "WOWMetrics",

@@ -1,95 +1,48 @@
 import logging
-import sys
-from pathlib import Path
+import os
+import requests
 from datetime import datetime
+from pathlib import Path
 
-class ColoredFormatter(logging.Formatter):
-    """色付きログフォーマッター"""
-    
-    COLORS = {
-        'DEBUG': '\033[36m',      # シアン
-        'INFO': '\033[32m',       # 緑
-        'WARNING': '\033[33m',    # 黄色
-        'ERROR': '\033[31m',      # 赤
-        'CRITICAL': '\033[35m',   # マゼンタ
-        'RESET': '\033[0m'
-    }
-    
-    def format(self, record):
-        color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
-        reset = self.COLORS['RESET']
-        
-        # タイムスタンプを短縮 (record.asctimeを使用)
-        if not hasattr(record, "asctime"):
-            record.asctime = self.formatTime(record, self.datefmt)
-        timestamp = record.asctime.split(' ')[1] # Extract HH:MM:SS from asctime
-        
-        # モジュール名を短縮
-        module = record.name.split('.')[-1][:15]
-        
-        # レベルを固定幅に
-        level = f"{record.levelname:8}"
-        
-        # メッセージ
-        message = record.getMessage()
-        
-        return f"{color}[{timestamp}] {level} {module:15} | {message}{reset}"
+DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL")
 
-def setup_logging(log_level=logging.INFO, log_dir="logs"):
-    """
-    詳細ログシステムのセットアップ
-    
-    Args:
-        log_level: ログレベル (DEBUG, INFO, WARNING, ERROR)
-        log_dir: ログファイル保存ディレクトリ
-    """
-    # ログディレクトリ作成
-    log_path = Path(log_dir)
-    log_path.mkdir(exist_ok=True)
-    
-    # ルートロガー取得
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-    
-    # 既存のハンドラーをクリア
-    root_logger.handlers.clear()
-    
-    # コンソールハンドラー（色付き）
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(log_level)
-    console_handler.setFormatter(ColoredFormatter())
-    root_logger.addHandler(console_handler)
-    
-    # ファイルハンドラー（詳細）
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    file_handler = logging.FileHandler(
-        log_path / f"workflow_{timestamp}.log",
-        encoding='utf-8'
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(
-        logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-    )
-    root_logger.addHandler(file_handler)
-    
-    # エラー専用ログ
-    error_handler = logging.FileHandler(
-        log_path / "errors.log",
-        encoding='utf-8'
-    )
-    error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(
-        logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(name)-20s | %(pathname)s:%(lineno)d\n%(message)s\n',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-    )
-    root_logger.addHandler(error_handler)
-    
-    return root_logger
+# Define common log format and date format
+LOG_FORMAT = "[%(asctime)s] %(levelname)-8s %(name)s | %(message)s"
+DATE_FORMAT = "%H:%M:%S"
+
+class DiscordHandler(logging.Handler):
+    """スマホ向けに短縮化したDiscord通知ハンドラ"""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            if not DISCORD_WEBHOOK:
+                return
+
+            run_id = getattr(record, "run_id", "") or "-"
+            short_id = run_id[:4] if run_id else "----"
+            msg = ""
+
+            if record.levelno >= logging.ERROR:
+                step = getattr(record, "step", "")
+                error_msg = record.getMessage().split("\n")[0][:80]
+                msg = f"❌ Error {short_id} {step}\n{error_msg}"
+
+            elif record.levelno == logging.WARNING:
+                summary = record.getMessage().split("\n")[0][:60]
+                msg = f"⚠️ Warning {short_id} {summary}"
+
+            elif record.levelno == logging.INFO and "Success" in record.getMessage():
+                # 例: logger.info("Success run_id url 7m32s")
+                parts = record.getMessage().split()
+                if len(parts) >= 4:
+                    msg = f"✅ Success {parts[1][:4]} ({parts[-1]}) {parts[2]}"
+
+            if msg:
+                requests.post(DISCORD_WEBHOOK, json={"content": msg}, timeout=5)
+
+        except Exception:
+            self.handleError(record)
+
 
 class WorkflowLogger:
     """ワークフロー専用のログヘルパー"""
@@ -147,3 +100,54 @@ class WorkflowLogger:
         percentage = (current / total * 100) if total > 0 else 0
         bar = "█" * int(percentage / 5) + "░" * (20 - int(percentage / 5))
         self.logger.info(f"⏳ Progress [{bar}] {percentage:.1f}% ({current}/{total}) {item}")
+
+def setup_logging(log_level=logging.INFO, log_dir="logs"):
+    """
+    詳細ログシステムのセットアップ
+    
+    Args:
+        log_level: ログレベル (DEBUG, INFO, WARNING, ERROR)
+        log_dir: ログファイル保存ディレクトリ
+    """
+    # ログディレクトリ作成
+    log_path = Path(log_dir)
+    log_path.mkdir(exist_ok=True)
+    
+    # ルートロガー取得
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    # 既存のハンドラーをクリア
+    root_logger.handlers.clear()
+    
+    # コンソールハンドラー
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(log_level)
+    console_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+    root_logger.addHandler(console_handler)
+    
+    # ファイルハンドラー（詳細）
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    file_handler = logging.FileHandler(
+        log_path / f"workflow_{timestamp}.log",
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+    root_logger.addHandler(file_handler)
+    
+    # エラー専用ログ
+    error_handler = logging.FileHandler(
+        log_path / "errors.log",
+        encoding='utf-8'
+    )
+    error_handler.setLevel(logging.ERROR)
+    error_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FORMAT))
+    root_logger.addHandler(error_handler)
+
+    # Discordハンドラーを追加
+    discord_handler = DiscordHandler()
+    discord_handler.setLevel(logging.WARNING) # WARNING以上のログをDiscordに送る
+    root_logger.addHandler(discord_handler)
+    
+    return root_logger

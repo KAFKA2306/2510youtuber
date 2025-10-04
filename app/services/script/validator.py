@@ -1,5 +1,3 @@
-"""Utilities to validate and normalize dialogue scripts for TTS."""
-
 from __future__ import annotations
 
 import re
@@ -67,16 +65,17 @@ class ScriptFormatError(RuntimeError):
         super().__init__(summary)
 
 
+# --- Dialogue + Script ---
 class DialogueEntry(BaseModel):
     speaker: str = Field(..., description="話者名 (例: 武宏, つむぎ)")
-    line: str = Field(..., description="話者のセリフ")
+    line: str = Field(..., description="発話テキスト")
 
 class Script(BaseModel):
     title: str = Field(..., description="スクリプトのタイトル")
-    dialogues: List[DialogueEntry] = Field(..., description="対話のリスト")
+    dialogues: List[DialogueEntry] = Field(..., description="対話リスト", min_items=2)
 
-    @model_validator(mode='after')
-    def check_distinct_speakers(self) -> 'Script':
+    @model_validator(mode="after")
+    def check_distinct_speakers(self) -> "Script":
         speakers = {entry.speaker for entry in self.dialogues}
         if len(speakers) < 2:
             raise ValueError("スクリプトには2人以上の異なる話者が必要です。")
@@ -85,7 +84,7 @@ class Script(BaseModel):
     def to_text(self) -> str:
         return "\n".join(f"{e.speaker}: {e.line}" for e in self.dialogues)
 
-
+# --- Quality/Segment/WOW ---
 class QualityScore(BaseModel):
     wow_score: float = Field(..., description="WOWスコア")
     japanese_purity_score: float = Field(..., description="日本語純度スコア")

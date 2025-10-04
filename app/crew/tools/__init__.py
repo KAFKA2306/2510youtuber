@@ -8,8 +8,6 @@ from .ai_clients import (
     AIClientFactory,
     GeminiClient,
     PerplexityClient,
-    get_gemini_client,
-    get_perplexity_client,
 )
 
 __all__ = [
@@ -17,6 +15,4 @@ __all__ = [
     "GeminiClient",
     "PerplexityClient",
     "AIClientFactory",
-    "get_gemini_client",
-    "get_perplexity_client",
 ]
