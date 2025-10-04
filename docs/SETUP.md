@@ -149,11 +149,14 @@ GEMINI_API_KEY_5=AIza-key5
    - Google Drive API
    - YouTube Data API v3
 3. 「認証情報」→「サービスアカウント」作成
-4. JSON認証ファイルをダウンロード → `secret/service-account-key.json`に配置
+4. JSON認証ファイルをダウンロード → `secret/service-account.json` に配置
+   - 既定の配置先はリポジトリルートからの相対パスです（`app/config/paths.py` の `ProjectPaths` が読み込みます）
 5. `.env`に設定:
    ```bash
-   GOOGLE_APPLICATION_CREDENTIALS=secret/service-account-key.json
+   GOOGLE_APPLICATION_CREDENTIALS=secret/service-account.json
    ```
+
+> **NOTE:** すべての相対パスは `app/config/paths.py` の `ProjectPaths` でリポジトリルートから解決されます。cronやsystemdなどバックグラウンド実行でも、`.env` や出力ディレクトリを正しく読むためにプロジェクトディレクトリへ `cd` してから起動してください。
 
 #### **C. YouTube Data API設定（重要）**
 **⚠️ 注意:** YouTube動画アップロードにはOAuth 2.0クライアントIDが必要です（サービスアカウントでは不可）
@@ -385,7 +388,7 @@ PEXELS_API_KEY=YOUR_PEXELS_API_KEY
 PIXABAY_API_KEY=YOUR_PIXABAY_API_KEY
 # ===== Google Cloud Services =====
 # サービスアカウント認証（Sheets, Drive, Vertex AI）
-GOOGLE_APPLICATION_CREDENTIALS=secret/service-account-key.json
+GOOGLE_APPLICATION_CREDENTIALS=secret/service-account.json
 # Google Sheets（実行履歴・プロンプト管理）
 GOOGLE_SHEET_ID=1ABC_your_sheet_id
 # Google Drive（動画バックアップ）
@@ -553,9 +556,10 @@ crontab -e
 ```
 **毎日9時に実行する設定を追加:**
 ```cron
-# 毎日9:00 AMに実行
-0 9 * * * /home/kafka/projects/youtuber/run_daily.sh >> /home/kafka/projects/youtuber/logs/cron.log 2>&1
+# 毎日9:00 AMに実行（リポジトリ直下でコマンドを実行）
+0 9 * * * cd /path/to/youtuber && ./run_daily.sh >> /path/to/youtuber/logs/cron.log 2>&1
 ```
+> `/path/to/youtuber` はクローン先に置き換えてください。`ProjectPaths` がパス解決を行うため、cronでは必ずリポジトリを `cd` してから実行します。
 **Crontabを確認:**
 ```bash
 crontab -l
@@ -720,7 +724,7 @@ sudo systemctl daemon-reload
 ```bash
 # Crontabを編集して該当行を削除またはコメントアウト
 crontab -e
-# 行頭に # を追加: # 0 9 * * * /home/kafka/projects/youtuber/run_daily.sh
+# 行頭に # を追加: # 0 9 * * * cd /path/to/youtuber && ./run_daily.sh
 ```
 
 ***
@@ -843,7 +847,7 @@ youtuber-automation/
 │       └── flows.py             # CrewAI実行フロー
 │
 ├── secret/
-│   ├── service-account-key.json       # Google Cloud認証
+│   ├── service-account.json           # Google Cloud認証
 │   └── youtube_oauth_client.json      # YouTube OAuth
 │
 ├── scripts/

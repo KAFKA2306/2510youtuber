@@ -7,8 +7,10 @@ from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel
 
+from app.config.paths import ProjectPaths
+
 # .envファイルを読み込む
-load_dotenv()
+load_dotenv(ProjectPaths.DOTENV_FILE)
 
 
 class PromptManager:
@@ -126,8 +128,8 @@ class AppSettings(BaseModel):
     @classmethod
     def load(cls) -> "AppSettings":
         """環境変数 + YAMLから設定を読み込み"""
-        config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config.yaml")
-        with open(config_path, "r") as f:
+        config_path = ProjectPaths.CONFIG_YAML
+        with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
         api_keys = {
@@ -165,14 +167,23 @@ class AppSettings(BaseModel):
         # Google Credentials JSON
         google_creds_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         if google_creds_env:
-            if os.path.exists(google_creds_env):
-                with open(google_creds_env, "r") as f:
-                    config["google_credentials_json"] = json.load(f)
-            else:
+            google_creds_env = google_creds_env.strip()
+            if google_creds_env.startswith("{"):
                 try:
                     config["google_credentials_json"] = json.loads(google_creds_env)
                 except json.JSONDecodeError:
                     pass  # Invalid JSON, will be handled by Pydantic if field is not Optional
+            else:
+                resolved = ProjectPaths.resolve_relative(google_creds_env)
+                if resolved.exists():
+                    with open(resolved, "r", encoding="utf-8") as f:
+                        config["google_credentials_json"] = json.load(f)
+
+        if "google_credentials_json" not in config or not config["google_credentials_json"]:
+            default_creds = ProjectPaths.resolve_google_credentials(None)
+            if default_creds and default_creds.exists():
+                with open(default_creds, "r", encoding="utf-8") as f:
+                    config["google_credentials_json"] = json.load(f)
 
         # PromptManagerのインスタンスを生成
         config["prompt_manager"] = PromptManager(config.get("prompts", {}))

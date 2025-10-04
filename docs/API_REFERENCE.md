@@ -79,7 +79,7 @@ ElevenLabs → VOICEVOX Nemo → OpenAI TTS → gTTS → Coqui TTS → pyttsx3
    - 現状3-4本/日が限界 → 50本/日対応可能
 
 4. **`GOOGLE_APPLICATION_CREDENTIALS`設定**
-   - Service Accountキー配置
+   - Service Accountキーを `secret/service-account.json` に配置（`ProjectPaths` が自動検出）
    - Sheets自動記録の有効化
 
 ### **中期対応（P2: 1ヶ月以内）**

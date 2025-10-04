@@ -79,6 +79,7 @@ youtuber/
 │   ├── main.py                   # メインエントリーポイント
 │   ├── config/                   # 設定管理
 │   │   ├── settings.py           # Pydantic設定（config.yaml読み込み）
+│   │   ├── paths.py              # ProjectPaths（パス解決の単一情報源）
 │   │   └── prompts/              # CrewAIプロンプト（YAML）
 │   ├── crew/                     # CrewAI関連
 │   │   ├── agents.py             # エージェント定義
@@ -143,6 +144,7 @@ youtuber/
 |---------|------|
 | `app/main.py` | ワークフロー実行のエントリーポイント |
 | `app/config/settings.py` | 統一設定管理（Pydantic） |
+| `app/config/paths.py` | パス解決ユーティリティ（ProjectPaths） |
 | `app/crew/flows.py` | CrewAI エージェントパイプライン |
 | `app/workflow/steps.py` | 10ステップの実装 |
 | `app/api_rotation.py` | APIレート制限対策 |
@@ -516,26 +518,31 @@ quality_thresholds:
 GEMINI_API_KEY=AIza...
 GEMINI_API_KEY_2=AIza...
 PEXELS_API_KEY=...
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+GOOGLE_APPLICATION_CREDENTIALS=secret/service-account.json
 ```
 
 **Pydantic読み込み**:
 ```python
 # app/config/settings.py
-from pydantic_settings import BaseSettings
 import yaml
+from pydantic_settings import BaseSettings
+
+from app.config.paths import ProjectPaths
 
 class Settings(BaseSettings):
     # ... フィールド定義
 
     @classmethod
-    def from_yaml(cls, path: str = "config.yaml"):
-        with open(path) as f:
+    def load(cls) -> "Settings":
+        with open(ProjectPaths.CONFIG_YAML, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
+        # ... 追加処理（環境変数マージなど）
         return cls(**data)
 
-settings = Settings.from_yaml()
+settings = Settings.load()
 ```
+
+> **NOTE:** `ProjectPaths` が `.env`、`config.yaml`、`output/` などのルートディレクトリを集約管理します。パスを追加する際は `app/config/paths.py` に定義してから利用することで移植性を維持できます。
 
 ---
 

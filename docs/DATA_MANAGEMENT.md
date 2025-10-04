@@ -81,7 +81,7 @@ CSV Backup  Dashboard View
 4. **JSON** を選択
 5. ダウンロードされたJSONファイルを保存
 
-   例: `service-account-credentials.json`
+   例: `secret/service-account.json`
 
 ### 手順2: Google Sheets API 有効化
 
@@ -120,18 +120,20 @@ CSV Backup  Dashboard View
 
 ```bash
 # Google Sheets認証
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-credentials.json
+GOOGLE_APPLICATION_CREDENTIALS=secret/service-account.json
 GOOGLE_SHEET_ID=1P-L4Pt06iwySy0EMx7HdqGT2x0kLMGLvx-P-H8CzqoE
 ```
 
 **注意**:
-- ファイルパスは絶対パスを推奨
-- JSONファイルは `secret/` ディレクトリに配置を推奨
+- `app/config/paths.py` の `ProjectPaths` がリポジトリルートから相対パスを解決します
+- JSONファイルは `secret/` ディレクトリに配置（`.gitignore` 済み）
 
-**例**:
+**例**（絶対パス指定が必要な場合）:
 ```bash
-GOOGLE_APPLICATION_CREDENTIALS=/home/kafka/projects/youtuber/secret/service-account.json
+GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/youtuber/secret/service-account.json
 ```
+
+> **TIP:** 自動化ジョブから実行する場合は `cd /path/to/youtuber` を行ってからスクリプトを呼び出し、相対パスが `ProjectPaths` と一致するようにしてください。
 
 #### 方法B: JSON文字列を直接設定
 

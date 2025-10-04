@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 import ffmpeg
 from pydub import AudioSegment
 
+from app.config.paths import ProjectPaths
 from app.config.settings import settings
 from app.services.file_archival import FileArchivalManager
 from app.utils import FileUtils
@@ -269,7 +270,7 @@ class VideoGenerator:
 
             # ロボットアイコンを追加（テーマ設定に応じた位置）
             if theme.robot_icon_enabled:
-                robot_icon_path = "/home/kafka/projects/youtuber/assets/icon/ChatGPT Image 2025年10月2日 19_53_38.png"
+                robot_icon_path = str(ProjectPaths.DEFAULT_ROBOT_ICON)
                 if os.path.exists(robot_icon_path):
                     try:
                         robot_img = Image.open(robot_icon_path).convert("RGBA")

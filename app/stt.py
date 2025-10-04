@@ -7,6 +7,8 @@ from typing import Any, Dict, List
 from elevenlabs.client import ElevenLabs
 from pydub import AudioSegment
 
+from app.config.paths import ProjectPaths
+
 from .config import cfg
 from .stt_fallback import stt_fallback_manager
 
@@ -55,7 +57,9 @@ class STTManager:
             audio = audio.set_frame_rate(16000)
             audio = audio.set_channels(1)
             audio = audio.normalize()
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+            temp_dir = ProjectPaths.temp_path()
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=str(temp_dir)) as temp_file:
                 temp_path = temp_file.name
             audio.export(temp_path, format="wav")
             logger.debug(f"Preprocessed audio saved to: {temp_path}")
@@ -137,10 +141,11 @@ class STTManager:
             for start_ms in range(0, duration_ms, max_duration_ms):
                 end_ms = min(start_ms + max_duration_ms, duration_ms)
                 chunk = audio[start_ms:end_ms]
-                chunk_filename = f"temp/audio_chunk_{chunk_count}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
-                os.makedirs("temp", exist_ok=True)
-                chunk.export(chunk_filename, format="wav")
-                chunks.append(chunk_filename)
+                chunk_filename = ProjectPaths.temp_path(
+                    f"audio_chunk_{chunk_count}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+                )
+                chunk.export(str(chunk_filename), format="wav")
+                chunks.append(str(chunk_filename))
                 chunk_count += 1
             logger.info(f"Split audio into {len(chunks)} chunks")
             return chunks

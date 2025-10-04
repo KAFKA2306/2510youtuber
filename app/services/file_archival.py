@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List
 
+from app.config.paths import ProjectPaths
+
 if TYPE_CHECKING:
     from app.workflow.base import WorkflowContext
 
@@ -30,20 +32,23 @@ class FileArchivalManager:
             └── subtitles.srt
     """
 
-    def __init__(self, base_output_dir: str = "output", retention_days: int = 0):
+    def __init__(self, base_output_dir: str | Path | None = None, retention_days: int = 0):
         """Initialize file archival manager.
 
         Args:
             base_output_dir: Base directory for archived files (default: "output")
             retention_days: Days to retain files (0 = keep forever)
         """
-        self.base_output_dir = base_output_dir
+        if base_output_dir is None:
+            self.base_output_dir = ProjectPaths.OUTPUT_DIR
+        else:
+            self.base_output_dir = ProjectPaths.resolve_relative(str(base_output_dir))
         self.retention_days = retention_days
         self._ensure_base_directory()
 
     def _ensure_base_directory(self):
         """Ensure base output directory exists."""
-        Path(self.base_output_dir).mkdir(parents=True, exist_ok=True)
+        self.base_output_dir.mkdir(parents=True, exist_ok=True)
 
     def sanitize_title(self, title: str) -> str:
         """Sanitize title for safe filesystem usage.
@@ -90,10 +95,10 @@ class FileArchivalManager:
             Absolute path to created directory
         """
         dir_name = self._get_directory_name(run_id, timestamp, title)
-        output_dir = os.path.join(self.base_output_dir, dir_name)
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        output_dir = self.base_output_dir / dir_name
+        output_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created output directory: {output_dir}")
-        return output_dir
+        return str(output_dir)
 
     def get_video_output_path(self, run_id: str, timestamp: str, title: str) -> str:
         """Get output path for video file.
@@ -107,22 +112,22 @@ class FileArchivalManager:
             Absolute path for video file
         """
         dir_name = self._get_directory_name(run_id, timestamp, title)
-        return os.path.join(self.base_output_dir, dir_name, "video.mp4")
+        return str(self.base_output_dir / dir_name / "video.mp4")
 
     def get_audio_output_path(self, run_id: str, timestamp: str, title: str) -> str:
         """Get output path for audio file."""
         dir_name = self._get_directory_name(run_id, timestamp, title)
-        return os.path.join(self.base_output_dir, dir_name, "audio.wav")
+        return str(self.base_output_dir / dir_name / "audio.wav")
 
     def get_thumbnail_output_path(self, run_id: str, timestamp: str, title: str) -> str:
         """Get output path for thumbnail file."""
         dir_name = self._get_directory_name(run_id, timestamp, title)
-        return os.path.join(self.base_output_dir, dir_name, "thumbnail.png")
+        return str(self.base_output_dir / dir_name / "thumbnail.png")
 
     def get_script_output_path(self, run_id: str, timestamp: str, title: str) -> str:
         """Get output path for script file."""
         dir_name = self._get_directory_name(run_id, timestamp, title)
-        return os.path.join(self.base_output_dir, dir_name, "script.txt")
+        return str(self.base_output_dir / dir_name / "script.txt")
 
     def archive_workflow_files(self, run_id: str, timestamp: str, title: str, files: Dict[str, str]) -> Dict[str, str]:
         """Archive workflow files to organized directory.
@@ -137,7 +142,7 @@ class FileArchivalManager:
         Returns:
             Dict mapping file type to archived path
         """
-        output_dir = self.create_output_directory(run_id, timestamp, title)
+        output_dir = Path(self.create_output_directory(run_id, timestamp, title))
         archived = {}
 
         for file_type, source_path in files.items():
@@ -160,11 +165,11 @@ class FileArchivalManager:
                 # Keep original extension
                 target_name = f"{file_type}{Path(source_path).suffix}"
 
-            target_path = os.path.join(output_dir, target_name)
+            target_path = output_dir / target_name
 
             # Copy file to archive (preserve original)
             shutil.copy2(source_path, target_path)
-            archived[file_type] = target_path
+            archived[file_type] = str(target_path)
             logger.info(f"Archived {file_type}: {target_path}")
 
         return archived
@@ -204,7 +209,7 @@ class FileArchivalManager:
             [{"run_id": "...", "timestamp": "...", "directory": "..."}, ...]
         """
         archived = []
-        base_path = Path(self.base_output_dir)
+        base_path = self.base_output_dir
 
         if not base_path.exists():
             return archived

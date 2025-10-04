@@ -64,10 +64,10 @@ uv run python3 -m app.main daily
 
 ```bash
 # secret/.env に以下を追加:
-GEMINI_API_KEY=AIza...              # CrewAI（必須）
-PEXELS_API_KEY=...                  # Stock Footage（推奨）
-GOOGLE_APPLICATION_CREDENTIALS=...  # Google Sheets（オプション）
-GOOGLE_SHEET_ID=...                 # フィードバックループ
+GEMINI_API_KEY=AIza...                       # CrewAI（必須）
+PEXELS_API_KEY=...                           # Stock Footage（推奨）
+GOOGLE_APPLICATION_CREDENTIALS=secret/service-account.json  # Google Sheets（任意）
+GOOGLE_SHEET_ID=...                          # フィードバックループ
 
 # config.yaml で Stock Footage有効化
 stock_footage:
@@ -184,7 +184,7 @@ PEXELS_API_KEY=...
 
 # オプション
 ELEVENLABS_API_KEY=...
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+GOOGLE_APPLICATION_CREDENTIALS=secret/service-account.json
 GOOGLE_SHEET_ID=...
 ```
 

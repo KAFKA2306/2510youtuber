@@ -8,6 +8,9 @@ import os
 import re
 import tempfile
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from app.config.paths import ProjectPaths
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +19,11 @@ class FileUtils:
     """ファイル操作ユーティリティ"""
 
     @staticmethod
-    def ensure_directory(path: str) -> str:
+    def ensure_directory(path: str | Path) -> str:
         """ディレクトリが存在することを保証"""
-        os.makedirs(path, exist_ok=True)
-        return path
+        resolved = ProjectPaths.resolve_relative(str(path))
+        resolved.mkdir(parents=True, exist_ok=True)
+        return str(resolved)
 
     @staticmethod
     def safe_filename(filename: str, max_length: int = 100) -> str:
@@ -35,8 +39,9 @@ class FileUtils:
     @staticmethod
     def get_temp_file(prefix: str = "temp_", suffix: str = ".tmp") -> str:
         """一時ファイルパスを生成"""
-        FileUtils.ensure_directory("temp")
-        temp_file = tempfile.NamedTemporaryFile(suffix=suffix, prefix=prefix, dir="temp", delete=False)
+        temp_dir = ProjectPaths.TEMP_DIR
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_file = tempfile.NamedTemporaryFile(suffix=suffix, prefix=prefix, dir=str(temp_dir), delete=False)
         temp_path = temp_file.name
         temp_file.close()
         return temp_path

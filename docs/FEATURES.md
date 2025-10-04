@@ -231,10 +231,12 @@ python scripts/analytics_report.py --start 2025-01-01 --end 2025-01-31
 **Google Sheets認証**:
 ```bash
 # サービスアカウントJSON（推奨）
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+export GOOGLE_APPLICATION_CREDENTIALS=secret/service-account.json
 
 # Sheet ID
 export GOOGLE_SHEET_ID=1P-L4Pt06iwySy0EMx7HdqGT2x0kLMGLvx-P-H8CzqoE
+
+> **HINT:** 環境変数に相対パスを設定する場合は、コマンド実行前にプロジェクトルートへ移動してください。`ProjectPaths` がリポジトリ基準でパスを解決します。
 ```
 
 詳細: [GOOGLE_SHEETS_SETUP.md](GOOGLE_SHEETS_SETUP.md)

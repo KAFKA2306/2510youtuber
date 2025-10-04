@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+from app.config.paths import ProjectPaths
+
 try:
     from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
@@ -35,7 +37,7 @@ class ThumbnailGenerator:
         self.output_size = (1280, 720)  # YouTube推奨サイズ
         self.font_paths = self._get_available_fonts()
         self.color_schemes = self._load_color_schemes()
-        self.default_icon = "/home/kafka/projects/youtuber/assets/icon/ChatGPT Image 2025年10月2日 19_53_38.png"
+        self.default_icon = str(ProjectPaths.DEFAULT_ROBOT_ICON)
 
         self.has_pil = HAS_PIL
         if self.has_pil:

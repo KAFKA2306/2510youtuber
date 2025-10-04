@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 from app.background_theme import BackgroundTheme, get_theme_manager
+from app.config.paths import ProjectPaths
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class UnifiedVisualDesign:
 
     # ブランディング
     robot_icon_enabled: bool = True
-    robot_icon_path: str = "/home/kafka/projects/youtuber/assets/icon/ChatGPT Image 2025年10月2日 19_53_38.png"
+    robot_icon_path: str = str(ProjectPaths.DEFAULT_ROBOT_ICON)
 
     @classmethod
     def create_from_news(

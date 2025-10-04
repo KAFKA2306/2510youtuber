@@ -16,6 +16,8 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+from app.config.paths import ProjectPaths
+
 from .config import cfg
 
 logger = logging.getLogger(__name__)
@@ -41,9 +43,12 @@ class DriveManager:
                 credentials = Credentials.from_service_account_info(
                     self.credentials, scopes=["https://www.googleapis.com/auth/drive"]
                 )
-            elif isinstance(self.credentials, str) and os.path.exists(self.credentials):
+            elif isinstance(self.credentials, (str, Path)):
+                cred_path = ProjectPaths.resolve_relative(str(self.credentials))
+                if not cred_path.exists():
+                    raise ValueError(f"Google credentials file not found: {cred_path}")
                 credentials = Credentials.from_service_account_file(
-                    self.credentials, scopes=["https://www.googleapis.com/auth/drive"]
+                    str(cred_path), scopes=["https://www.googleapis.com/auth/drive"]
                 )
             else:
                 raise ValueError(f"Invalid credentials format or path: {self.credentials}")
@@ -83,11 +88,12 @@ class DriveManager:
     ) -> Dict[str, Any]:
         """ファイルをGoogle Driveにアップロード（ストレージクォータエラー時はローカル保存のみ）"""
         try:
-            if not os.path.exists(file_path):
+            file_path_obj = ProjectPaths.resolve_relative(file_path)
+            if not file_path_obj.exists():
                 raise FileNotFoundError(f"File not found: {file_path}")
 
-            file_size = os.path.getsize(file_path)
-            file_name = custom_name or os.path.basename(file_path)
+            file_size = file_path_obj.stat().st_size
+            file_name = custom_name or file_path_obj.name
 
             logger.info(f"Uploading file: {file_name} ({file_size} bytes)")
 
@@ -98,10 +104,10 @@ class DriveManager:
             if target_folder_id:
                 file_metadata["parents"] = [target_folder_id]
 
-            mime_type = self._get_mime_type(file_path)
+            mime_type = self._get_mime_type(str(file_path_obj))
 
             media = MediaFileUpload(
-                file_path, mimetype=mime_type, resumable=True if file_size > 5 * 1024 * 1024 else False
+                str(file_path_obj), mimetype=mime_type, resumable=True if file_size > 5 * 1024 * 1024 else False
             )
 
             file_result = (
@@ -284,7 +290,11 @@ class DriveManager:
 
     def _create_metadata_file(self, metadata: Dict[str, Any], folder_id: str) -> str:
         try:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
+            temp_dir = ProjectPaths.temp_path()
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".json", delete=False, encoding="utf-8", dir=str(temp_dir)
+            ) as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=2)
                 temp_path = f.name
             logger.debug(f"Created metadata file: {temp_path}")
@@ -320,12 +330,12 @@ class DriveManager:
             safe_title = "".join(c for c in title if c.isalnum() or c in (" ", "-", "_")).strip()
             folder_name = f"{timestamp}_{safe_title[:30]}"
 
-            base_dir = cfg.local_output_dir
-            local_dir = os.path.join(base_dir, folder_name)
+            base_dir = ProjectPaths.resolve_relative(cfg.local_output_dir)
+            local_dir = base_dir / folder_name
 
-            os.makedirs(local_dir, exist_ok=True)
+            local_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"Created local backup folder: {local_dir}")
-            return local_dir
+            return str(local_dir)
         except Exception as e:
             logger.error(f"Failed to create local backup folder: {e}")
             return None
@@ -335,8 +345,14 @@ class DriveManager:
         try:
             import shutil
 
-            dest_path = os.path.join(dest_dir, dest_filename)
-            shutil.copy2(source_path, dest_path)
+            source = ProjectPaths.resolve_relative(source_path)
+            if not source.exists():
+                logger.warning(f"Source file for local backup not found: {source}")
+                return
+
+            dest_path = Path(dest_dir) / dest_filename
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(source), dest_path)
             logger.info(f"Saved local copy: {dest_path}")
         except Exception as e:
             logger.warning(f"Failed to save local copy: {e}")

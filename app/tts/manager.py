@@ -14,6 +14,7 @@ from elevenlabs import VoiceSettings
 from elevenlabs.client import AsyncElevenLabs
 from pydub import AudioSegment
 
+from app.config.paths import ProjectPaths
 from app.config.settings import settings
 
 from .providers import create_tts_chain
@@ -248,7 +249,8 @@ class TTSManager:
 
             audio_paths = []
             for chunk in chunks:
-                output_path = f"temp/tts_chunk_{chunk['id']}.mp3"
+                temp_output = ProjectPaths.temp_path(f"tts_chunk_{chunk['id']}.mp3")
+                output_path = str(temp_output)
 
                 success = await self._synthesize_with_fallback(chunk["text"], output_path, chunk["voice_config"])
                 if success:
@@ -315,8 +317,9 @@ class TTSManager:
         """一時ファイルを削除"""
         for path in temp_paths:
             try:
-                if os.path.exists(path):
-                    os.remove(path)
+                temp_path = ProjectPaths.resolve_relative(path)
+                if temp_path.exists():
+                    temp_path.unlink()
             except Exception as e:
                 logger.warning(f"Failed to cleanup temp file {path}: {e}")
 

@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
+from app.config.paths import ProjectPaths
+
 from .models.workflow import WorkflowResult
 
 logger = logging.getLogger(__name__)
@@ -36,13 +38,13 @@ class MetadataStorage:
 
     def _get_default_jsonl_path(self) -> str:
         """デフォルトJSONLパスを取得."""
-        output_dir = Path(__file__).parent.parent / "output"
+        output_dir = ProjectPaths.OUTPUT_DIR
         output_dir.mkdir(exist_ok=True)
         return str(output_dir / "execution_log.jsonl")
 
     def _get_default_csv_path(self) -> str:
         """デフォルトCSVパスを取得."""
-        data_dir = Path(__file__).parent.parent / "data"
+        data_dir = ProjectPaths.DATA_DIR
         data_dir.mkdir(exist_ok=True)
         return str(data_dir / "metadata_history.csv")
 

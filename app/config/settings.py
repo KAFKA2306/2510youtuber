@@ -6,8 +6,10 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, validator
 
-# .envファイルを読み込む
-load_dotenv()
+from .paths import ProjectPaths
+
+# .envファイルを読み込む（プロジェクトルートを基準）
+load_dotenv(ProjectPaths.DOTENV_FILE)
 
 
 class SpeakerConfig(BaseModel):
@@ -256,11 +258,16 @@ class AppSettings(BaseModel):
             "ultra": {"c:v": "libx264", "preset": "veryslow", "crf": "18", "b:v": "8000k"},
         }
 
+    @property
+    def local_output_dir(self) -> str:
+        """Base directory for local output and backups."""
+        return str(ProjectPaths.OUTPUT_DIR)
+
     @classmethod
     def load(cls) -> "AppSettings":
         """環境変数 + YAMLから設定を読み込み"""
-        config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config.yaml")
-        with open(config_path, "r") as f:
+        config_path = ProjectPaths.CONFIG_YAML
+        with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
         api_keys = {
@@ -378,17 +385,28 @@ class AppSettings(BaseModel):
         # Load Google credentials from file or JSON string
         google_creds_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         if google_creds_env:
-            if os.path.exists(google_creds_env):
-                with open(google_creds_env, "r") as f:
-                    config["google_credentials_json"] = json.load(f)
-            else:
+            google_creds_env = google_creds_env.strip()
+            if google_creds_env.startswith("{"):
                 try:
                     config["google_credentials_json"] = json.loads(google_creds_env)
                 except json.JSONDecodeError:
                     config["google_credentials_json"] = None
+            else:
+                resolved = ProjectPaths.resolve_relative(google_creds_env)
+                if resolved.exists():
+                    with open(resolved, "r", encoding="utf-8") as f:
+                        config["google_credentials_json"] = json.load(f)
+                else:
+                    config["google_credentials_json"] = None
         else:
             # Fallback to api_keys if available
             config["google_credentials_json"] = api_keys.get("google_credentials_json")
+
+        if not config.get("google_credentials_json"):
+            default_creds = ProjectPaths.resolve_google_credentials(None)
+            if default_creds and default_creds.exists():
+                with open(default_creds, "r", encoding="utf-8") as f:
+                    config["google_credentials_json"] = json.load(f)
 
         return cls(**config)
 
