@@ -29,8 +29,8 @@ def test_tts_speaker_extraction(sample_script):
     chunks = tts_manager.split_text_for_tts(sample_script)
     speakers = set(chunk["speaker"] for chunk in chunks)
 
-    assert "田中" in speakers, "田中が抽出されていません"
-    assert "鈴木" in speakers, "鈴木が抽出されていません"
+    assert "武宏" in speakers, "武宏が抽出されていません"
+    assert "つむぎ" in speakers, "つむぎが抽出されていません"
 
 
 @pytest.mark.unit
@@ -49,9 +49,9 @@ def test_tts_chunk_order():
     from app.tts import tts_manager
 
     test_script = """
-田中: 最初の発言
-鈴木: 二番目の発言
-田中: 三番目の発言
+武宏: 最初の発言
+つむぎ: 二番目の発言
+武宏: 三番目の発言
 """
 
     chunks = tts_manager.split_text_for_tts(test_script)

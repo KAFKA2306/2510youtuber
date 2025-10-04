@@ -196,6 +196,8 @@ class TTSManager:
         )
         # VOICEVOX speaker IDを追加
         config_dict["voicevox_speaker"] = config.voicevox_speaker
+        # 話者名を追加（全TTSプロバイダーで使用）
+        config_dict["name"] = config.name
         return config_dict
 
     def _calculate_optimal_concurrency(self, total_chunks: int, estimated_duration_minutes: float) -> int:

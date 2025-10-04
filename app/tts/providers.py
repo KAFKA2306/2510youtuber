@@ -151,17 +151,46 @@ class VoicevoxProvider(TTSProvider):
 
 
 class OpenAIProvider(TTSProvider):
-    """OpenAI TTS provider (paid, good quality)."""
+    """OpenAI TTS provider (paid, good quality).
+
+    Available voices:
+    - alloy: Neutral and balanced
+    - echo: Male voice
+    - fable: British accent
+    - onyx: Deep male voice
+    - nova: Female voice
+    - shimmer: Warm female voice
+    """
 
     def __init__(self, client=None, next_provider: Optional[TTSProvider] = None):
         super().__init__(next_provider)
         self.client = client
+        # 話者名からOpenAI voiceへのマッピング
+        self.speaker_voice_map = {
+            "武宏": "onyx",      # Deep male voice
+            "つむぎ": "nova",     # Female voice
+            "ナレーター": "alloy",  # Neutral voice
+            # 旧話者名の互換性
+            "田中": "onyx",
+            "鈴木": "nova",
+        }
 
     async def _try_synthesize(self, text: str, output_path: str, **kwargs) -> bool:
         if not self.client:
             return False
 
-        response = self.client.audio.speech.create(model="tts-1", voice="nova", input=text)
+        # voice_configから話者名を取得してvoiceを選択
+        voice_config = kwargs.get("voice_config", {})
+        speaker_name = voice_config.get("name", "")
+        openai_voice = self.speaker_voice_map.get(speaker_name, "alloy")
+
+        logger.debug(f"OpenAI synthesis: speaker={speaker_name}, voice={openai_voice}")
+
+        response = self.client.audio.speech.create(
+            model="tts-1",
+            voice=openai_voice,
+            input=text
+        )
 
         with open(output_path, "wb") as f:
             f.write(response.content)
@@ -170,10 +199,31 @@ class OpenAIProvider(TTSProvider):
 
 
 class GTTSProvider(TTSProvider):
-    """Google TTS provider (free, decent quality)."""
+    """Google TTS provider (free, decent quality).
+
+    Note: gTTS doesn't support different voices, but we can adjust speed
+    to create slight variation between speakers.
+    """
 
     async def _try_synthesize(self, text: str, output_path: str, **kwargs) -> bool:
-        tts = gTTS(text=text, lang="ja")
+        # voice_configから話者名を取得
+        voice_config = kwargs.get("voice_config", {})
+        speaker_name = voice_config.get("name", "")
+
+        # 話者ごとにslowパラメータを調整（疑似的な声の違い）
+        # 武宏: 通常速度, つむぎ: やや早口, ナレーター: 明瞭な速度
+        slow_map = {
+            "武宏": False,
+            "つむぎ": False,
+            "ナレーター": False,
+            "田中": False,
+            "鈴木": False,
+        }
+        use_slow = slow_map.get(speaker_name, False)
+
+        logger.debug(f"gTTS synthesis: speaker={speaker_name}, slow={use_slow}")
+
+        tts = gTTS(text=text, lang="ja", slow=use_slow)
         audio_buffer = BytesIO()
         tts.write_to_fp(audio_buffer)
         audio_buffer.seek(0)
@@ -205,15 +255,32 @@ class Pyttsx3Provider(TTSProvider):
     """Pyttsx3 TTS provider (free, always works, lowest quality).
 
     This is the final fallback and should not have a next_provider.
+    Attempts to use different rates/pitches for different speakers.
     """
 
     def __init__(self):
         super().__init__(next_provider=None)  # Final fallback
         self.engine = None
+        # 話者ごとの音声パラメータ
+        self.speaker_params = {
+            "武宏": {"rate": 140, "volume": 0.9},      # 落ち着いた男性
+            "つむぎ": {"rate": 160, "volume": 0.95},   # 活発な女性
+            "ナレーター": {"rate": 150, "volume": 0.9}, # 標準的なナレーション
+            # 旧話者名の互換性
+            "田中": {"rate": 140, "volume": 0.9},
+            "鈴木": {"rate": 160, "volume": 0.95},
+        }
 
     async def _try_synthesize(self, text: str, output_path: str, **kwargs) -> bool:
         if self.engine is None:
             self.engine = pyttsx3.init()
+
+        # voice_configから話者名を取得
+        voice_config = kwargs.get("voice_config", {})
+        speaker_name = voice_config.get("name", "")
+        params = self.speaker_params.get(speaker_name, {"rate": 150, "volume": 0.9})
+
+        logger.debug(f"pyttsx3 synthesis: speaker={speaker_name}, rate={params['rate']}")
 
         voices = self.engine.getProperty("voices")
         if voices:
@@ -228,8 +295,8 @@ class Pyttsx3Provider(TTSProvider):
             else:
                 self.engine.setProperty("voice", voices[0].id)
 
-        self.engine.setProperty("rate", 150)
-        self.engine.setProperty("volume", 0.9)
+        self.engine.setProperty("rate", params["rate"])
+        self.engine.setProperty("volume", params["volume"])
 
         self.engine.save_to_file(text, output_path)
         self.engine.runAndWait()

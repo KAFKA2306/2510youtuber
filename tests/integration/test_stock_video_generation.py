@@ -36,9 +36,9 @@ def test_stock_footage_capability():
     # Test keyword extraction
     print("\n--- Keyword Extraction Test ---")
     sample_script = """
-    田中: 今日は日経平均株価について話しましょう。
-    鈴木: はい、最近の市場動向は非常に興味深いですね。
-    田中: 特にテクノロジー企業の株価が上昇しています。
+    武宏: 今日は日経平均株価について話しましょう。
+    つむぎ: はい、最近の市場動向は非常に興味深いですね。
+    武宏: 特にテクノロジー企業の株価が上昇しています。
     """
 
     sample_news = [

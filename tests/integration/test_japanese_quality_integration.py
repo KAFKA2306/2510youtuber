@@ -25,17 +25,17 @@ def test_english_detection():
     test_cases = [
         {
             "name": "Pure Japanese",
-            "script": "田中: 今日は重要な経済ニュースについて話します。\n鈴木: GDPが3.5%増加しました。",
+            "script": "武宏: 今日は重要な経済ニュースについて話します。\nつむぎ: GDPが3.5%増加しました。",
             "expected_pure": True,
         },
         {
             "name": "Mixed with English",
-            "script": "田中: Today we will discuss important news.\n鈴木: The market is very bullish.",
+            "script": "武宏: Today we will discuss important news.\nつむぎ: The market is very bullish.",
             "expected_pure": False,
         },
         {
             "name": "Allowed abbreviations",
-            "script": "田中: AIとIoT技術が発展しています。\n鈴木: GDPは前年比2.3%の増加です。",
+            "script": "武宏: AIとIoT技術が発展しています。\nつむぎ: GDPは前年比2.3%の増加です。",
             "expected_pure": True,
         },
     ]
@@ -56,11 +56,11 @@ def test_quality_improvement():
     print("\n=== Test 2: Quality Improvement ===")
 
     bad_script = """
-田中: Hello、今日はimportantなeconomic newsについて話します。
+武宏: Hello、今日はimportantなeconomic newsについて話します。
 
-鈴木: The stock marketがsignificantlyに上昇しました。
+つむぎ: The stock marketがsignificantlyに上昇しました。
 
-田中: Let's analyze this situation in detail.
+武宏: Let's analyze this situation in detail.
 """
 
     print("Original script (first 150 chars):")
@@ -131,13 +131,13 @@ def test_end_to_end():
 
     # シミュレートされた原稿生成
     generated_script = """
-田中: Welcome everyone、今日はimportantな経済ニュースについてdiscussします。
+武宏: Welcome everyone、今日はimportantな経済ニュースについてdiscussします。
 
-鈴木: まず、日本のGDPがprevious quarterに比べて2.1%増加したというgood newsがあります。
+つむぎ: まず、日本のGDPがprevious quarterに比べて2.1%増加したというgood newsがあります。
 
-田中: That's interesting。詳しくanalysisしてみましょう。
+武宏: That's interesting。詳しくanalysisしてみましょう。
 
-鈴木: 特にmanufacturing sectorとIT sectorの成長が顕著です。
+つむぎ: 特にmanufacturing sectorとIT sectorの成長が顕著です。
 """
 
     print("1. Original generated script:")

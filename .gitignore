@@ -50,7 +50,6 @@ tmp/
 *.tmp
 *example*
 *copy*
-*md
 *.lock
 *txt
 
@@ -110,16 +109,7 @@ output/
 *.srt
 *.png
 
-
-!docs/setup.md
-!docs/README_CREWAI.md
-!docs/API*.md
-!docs/VOICEVOX_SETUP.md
-!docs/VOICEVOX_NEMO.md
-!*CLAUDE.md*
-!*README.md*
 *Zone.Identifier*
 *csv
-!*AGENTS.md*
 
 *claude-desktop-debian*

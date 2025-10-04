@@ -21,8 +21,8 @@ def wow_script_flow():
 
 def test_parse_crew_result_standard_format(wow_script_flow, caplog_for_warnings):
     """標準的な話者フォーマットを含むスクリプトが警告なしに処理されることをテスト"""
-    script_content = """田中: こんにちは。
-鈴木: こんばんは。
+    script_content = """武宏: こんにちは。
+つむぎ: こんばんは。
 ナレーター: これはナレーションです。"""
     crew_result_json = {
         "final_script": script_content,
@@ -65,7 +65,7 @@ def test_parse_crew_result_missing_speaker_format(wow_script_flow, caplog_for_wa
 
 def test_parse_crew_result_invalid_speaker_format(wow_script_flow, caplog_for_warnings):
     """不正な話者フォーマットを含むスクリプトが警告を発生させることをテスト"""
-    script_content = "田中 こんにちは。\n鈴木:: こんばんは。\nナレーター:これはナレーションです。"
+    script_content = "武宏 こんにちは。\nつむぎ:: こんばんは。\nナレーター:これはナレーションです。"
     crew_result_json = {
         "final_script": script_content,
         "quality_guarantee": {"score": 6.0},
@@ -114,8 +114,8 @@ def test_parse_crew_result_malformed_json(wow_script_flow, caplog_for_warnings):
 
 def test_parse_crew_result_fullwidth_colon_speaker_format(wow_script_flow, caplog_for_warnings):
     """全角コロンを含む話者フォーマットが警告なしに処理されることをテスト"""
-    script_content = """田中： こんにちは。
-鈴木： こんばんは。
+    script_content = """武宏： こんにちは。
+つむぎ： こんばんは。
 ナレーター： これはナレーションです。"""
     crew_result_json = {
         "final_script": script_content,

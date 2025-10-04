@@ -79,11 +79,32 @@ Get the complete list dynamically from the API: `http://localhost:50021/speakers
 - Female variations: 四国めたん ノーマル (ID: 2), セクシー (ID: 4)
 - Neutral backup: 波音リツ (ID: 9)
 
+## TTS Fallback Chain with Speaker Consistency
+
+The system uses a 6-level TTS fallback chain with speaker-specific voice mapping:
+
+| Priority | Provider | Speaker Mapping | Quality |
+|----------|----------|-----------------|---------|
+| 1 | **ElevenLabs** | Uses `voice_id` from config | Highest (paid) |
+| 2 | **VOICEVOX** | 武宏:11, つむぎ:8, ナレーター:3 | High (free) |
+| 3 | **OpenAI TTS** | 武宏:onyx, つむぎ:nova, ナレーター:alloy | Good (paid) |
+| 4 | **gTTS** | Same voice (speed variation only) | Decent (free) |
+| 5 | **Coqui** | No speaker differentiation | Low (free) |
+| 6 | **pyttsx3** | 武宏:140, つむぎ:160, ナレーター:150 (rate) | Lowest (free) |
+
+**Initial setup (no API keys configured):**
+- VOICEVOX provides high-quality speaker differentiation for free
+- Falls back to gTTS/pyttsx3 if VOICEVOX unavailable
+- Each speaker maintains distinct voice characteristics where possible
+
+**Speaker consistency across providers:**
+- 武宏 (male analyst): Deep/calm voice across all providers
+- つむぎ (female reporter): Higher/energetic voice across all providers
+- ナレーター: Neutral voice for intro/outro
+
 ## Verification
 Run the configuration validator before long runs; it will auto-start VOICEVOX if required and
 perform a synthesis smoke test when the server is up.
 ```bash
 uv run python -m app.verify
 ```
-During workflows VOICEVOX sits behind the TTS fallback chain
-(ElevenLabs → VOICEVOX → OpenAI TTS → gTTS → Coqui → pyttsx3).

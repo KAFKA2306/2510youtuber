@@ -210,11 +210,29 @@ quality_thresholds:
   retention_prediction_min: 50.0  # Target viewer retention
 ```
 
-### Adding TTS Providers
-TTS fallback chain is in `app/tts.py`. To add a provider:
-1. Implement a new synthesis method (e.g., `_synthesize_with_newprovider()`)
-2. Add to fallback chain in `synthesize_script()` method
-3. Add configuration keys to `config.yaml` under `tts:` section
+### TTS System and Speaker Consistency
+**Architecture**: 6-level fallback chain with speaker-specific voice mapping (`app/tts/providers.py`)
+
+**Speaker configuration** (`config.yaml`):
+- **武宏** (玄野武宏) - VOICEVOX ID:11, OpenAI:onyx, pyttsx3:rate=140 - Male economic analyst
+- **つむぎ** (春日部つむぎ) - VOICEVOX ID:8, OpenAI:nova, pyttsx3:rate=160 - Female reporter
+- **ナレーター** - VOICEVOX ID:3, OpenAI:alloy, pyttsx3:rate=150 - Neutral narrator
+
+**Fallback chain**:
+1. ElevenLabs (uses `voice_id` from config) - Highest quality, paid
+2. VOICEVOX (speaker-specific IDs) - High quality, free ⭐
+3. OpenAI TTS (voice mapping) - Good quality, paid
+4. gTTS (speed variation only) - Decent quality, free
+5. Coqui (no speaker differentiation) - Low quality, free
+6. pyttsx3 (rate variation) - Lowest quality, free
+
+**Initial setup** (no API keys): VOICEVOX provides high-quality speaker differentiation for free
+
+**Adding a new TTS provider**:
+1. Create provider class in `app/tts/providers.py` inheriting from `TTSProvider`
+2. Implement `_try_synthesize()` with speaker name handling via `voice_config["name"]`
+3. Add to chain in `create_tts_chain()` function
+4. Update `config.yaml` with provider-specific settings
 
 ### Working with FFmpeg
 - All FFmpeg operations use subprocess with timeout protection
@@ -380,10 +398,15 @@ Workflow → WorkflowResult → JSONL Log + Google Sheets (3 tabs)
 
 ## References
 
-- **Setup guide**: `docs/setup.md`
-- **API management**: `docs/API_MANAGEMENT.md`
-- **CrewAI details**: `docs/README_CREWAI.md`
-- **Feedback loop**: `docs/FEEDBACK_LOOP.md` ← **NEW**
-- **Test documentation**: `tests/README.md`
-- **Main config**: `config.yaml`
-- **Pytest config**: `pytest.ini`
+- **Project overview**: `docs/README.md` - クイックスタート・概要
+- **Setup guide**: `docs/SETUP.md` - 環境構築（API keys等）
+- **Architecture**: `docs/ARCHITECTURE.md` - システム構成・ワークフロー
+- **Features**: `docs/FEATURES.md` - 全機能詳細（Stock Footage, Feedback Loop等）
+- **API management**: `docs/API_REFERENCE.md` - APIレート制限・ローテーション
+- **Data management**: `docs/DATA_MANAGEMENT.md` - Google Sheets連携・メタデータ管理
+- **CrewAI details**: `docs/README_CREWAI.md` - エージェント詳細
+- **VOICEVOX**: `docs/VOICEVOX.md` - TTS設定・話者ID
+- **Troubleshooting**: `docs/TROUBLESHOOTING.md` - トラブルシューティング
+- **Test documentation**: `tests/README.md` - テスト構成
+- **Main config**: `config.yaml` - 統合設定ファイル
+- **Pytest config**: `pytest.ini` - テスト設定

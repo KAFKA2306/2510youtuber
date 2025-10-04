@@ -20,9 +20,9 @@ def test_speakers_configuration():
 
     assert len(settings.speakers) > 0, "話者が設定されていません"
 
-    # 田中の設定確認 - tts_voice_configs dict経由でアクセス
-    assert "田中" in settings.tts_voice_configs, "田中の設定が見つかりません"
-    tanaka = settings.tts_voice_configs["田中"]
+    # 武宏の設定確認 - tts_voice_configs dict経由でアクセス
+    assert "武宏" in settings.tts_voice_configs, "武宏の設定が見つかりません"
+    tanaka = settings.tts_voice_configs["武宏"]
     assert hasattr(tanaka, "role")
 
 
