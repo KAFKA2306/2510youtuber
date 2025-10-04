@@ -222,7 +222,8 @@ class ScriptGenerator:
                     max_output_tokens=8192,
                 )
 
-                response = client.generate_content(prompt, generation_config=generation_config, timeout=120)
+                # Gemini API no longer supports 'timeout' parameter in generate_content
+                response = client.generate_content(prompt, generation_config=generation_config)
                 content = response.text
                 logger.debug(f"Generated script length: {len(content)}")
                 return content

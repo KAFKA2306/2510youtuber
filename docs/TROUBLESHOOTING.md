@@ -49,7 +49,25 @@ def call_claude_api(prompt):
 2. キーの形式確認: `sk-ant-api03-` で始まっているか
 3. Anthropic Consoleでキーの有効性を確認
 
-#### 2. Google Gemini TTS エラー
+#### 2. Google Gemini API エラー
+
+**症状**: `GenerativeModel.generate_content() got an unexpected keyword argument 'timeout'`
+
+**原因**: 新しいGoogle Generative AIライブラリでは`timeout`パラメータが`GenerativeModel.generate_content()`でサポートされなくなりました。
+
+**解決方法**: `generate_content()`呼び出しから`timeout`パラメータを削除します。
+
+```python
+# 修正箇所1: app/crew/tools/ai_clients.py (126行目)
+- response = client.generate_content(prompt, generation_config=generation_config, timeout=timeout)
++ response = client.generate_content(prompt, generation_config=generation_config)
+
+# 修正箇所2: app/script_gen.py (225行目)
+- response = client.generate_content(prompt, generation_config=generation_config, timeout=120)
++ response = client.generate_content(prompt, generation_config=generation_config)
+```
+
+#### 3. Google Gemini TTS エラー
 
 **症状**: `google.api_core.exceptions.Forbidden: 403`
 

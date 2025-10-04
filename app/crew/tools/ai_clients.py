@@ -123,7 +123,8 @@ class GeminiClient(AIClient):
                 genai.configure(api_key=api_key_value)
                 client = genai.GenerativeModel(f"models/{self.model_name}")
 
-                response = client.generate_content(prompt, generation_config=generation_config, timeout=timeout)
+                # Gemini API no longer supports 'timeout' parameter in generate_content
+                response = client.generate_content(prompt, generation_config=generation_config)
                 content = response.text
                 logger.debug(f"Generated {len(content)} characters")
                 return content
