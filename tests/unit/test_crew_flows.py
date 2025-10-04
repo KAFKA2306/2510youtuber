@@ -95,8 +95,9 @@ def test_parse_crew_result_no_json_in_output(wow_script_flow, caplog_for_warning
     assert result["success"] is True
     assert result["final_script"] == crew_result_str
     assert "crew_output" in result
-    assert len(caplog_for_warnings.records) == 1  # 1つの警告があることを確認
+    assert len(caplog_for_warnings.records) == 2  # 警告が2件発生する
     assert "No JSON found in CrewAI output, using raw text" in caplog_for_warnings.records[0].message
+    assert "Failed to locate JSON payload in CrewAI output" in caplog_for_warnings.records[1].message
 
 
 def test_parse_crew_result_malformed_json(wow_script_flow, caplog_for_warnings):
@@ -131,3 +132,42 @@ def test_parse_crew_result_fullwidth_colon_speaker_format(wow_script_flow, caplo
     assert result["final_script"] == script_content
     assert result["japanese_purity_score"] == 95
     assert not caplog_for_warnings.records  # 警告がないことを確認
+
+
+def test_parse_crew_result_parses_unwrapped_json(wow_script_flow, caplog_for_warnings):
+    """コードブロックでラップされていないJSONもパースできることを検証"""
+    script_content = """武宏: こんにちは。\nつむぎ: こんばんは。"""
+    crew_result_json = {
+        "final_script": script_content,
+        "quality_guarantee": {"score": 9.1},
+        "japanese_purity_score": 92,
+    }
+    crew_result_str = json.dumps(crew_result_json, ensure_ascii=False)
+
+    result = wow_script_flow._parse_crew_result(crew_result_str)
+
+    assert result["success"] is True
+    assert result["final_script"] == script_content
+    assert result["japanese_purity_score"] == 92
+    assert len(caplog_for_warnings.records) == 0
+
+
+def test_extract_fallback_script_prefers_highest_priority(wow_script_flow):
+    """Fallback script should use the first available dialogue-style draft."""
+
+    class DummyTask:
+        def __init__(self, content: str | None) -> None:
+            self.output = type("Output", (), {"raw": content})
+
+    fallback_script = "武宏: こんにちは。\nつむぎ: こんばんは。\n武宏: 天気がいいね。\nつむぎ: そうですね。"
+    wow_script_flow.tasks = {
+        "task7_japanese": DummyTask(None),
+        "task6_quality": DummyTask(fallback_script),
+        "task5_engagement": DummyTask("Not usable"),
+        "task4_script_writing": DummyTask("別の台本"),
+    }
+
+    script, source = wow_script_flow._extract_fallback_script()
+
+    assert script == fallback_script
+    assert source == "quality_guardian"

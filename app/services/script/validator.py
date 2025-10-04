@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, Field, model_validator
+
 from app.config.settings import settings
 
 _DIALOGUE_PREFIX_PATTERN = re.compile(r"[：:\-―ー\s　]*")
@@ -70,6 +71,7 @@ class DialogueEntry(BaseModel):
     speaker: str = Field(..., description="話者名 (例: 武宏, つむぎ)")
     line: str = Field(..., description="発話テキスト")
 
+
 class Script(BaseModel):
     title: str = Field(..., description="スクリプトのタイトル")
     dialogues: List[DialogueEntry] = Field(..., description="対話リスト", min_items=2)
@@ -84,16 +86,19 @@ class Script(BaseModel):
     def to_text(self) -> str:
         return "\n".join(f"{e.speaker}: {e.line}" for e in self.dialogues)
 
+
 # --- Quality/Segment/WOW ---
 class QualityScore(BaseModel):
     wow_score: float = Field(..., description="WOWスコア")
     japanese_purity_score: float = Field(..., description="日本語純度スコア")
+
 
 class ScriptSegment(BaseModel):
     speaker: str = Field(..., description="話者名")
     content: str = Field(..., description="セグメント内容")
     start_time: Optional[float] = Field(None, description="開始時間 (秒)")
     end_time: Optional[float] = Field(None, description="終了時間 (秒)")
+
 
 class WOWMetrics(BaseModel):
     wow_score: float = Field(..., description="WOWスコア")

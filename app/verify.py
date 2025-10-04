@@ -208,6 +208,38 @@ class SystemVerifier:
             logger.error(f"❌ Synthesis test failed: {e}")
             return False
 
+    def check_llm_capabilities(self) -> bool:
+        """CrewAIで要求されるLLMインタフェースを検証する"""
+
+        logger.info("8. Checking CrewAI LLM capabilities...")
+
+        try:
+            from app.adapters.llm import get_crewai_gemini_llm
+
+            llm = get_crewai_gemini_llm()
+        except Exception as exc:  # pragma: no cover - defensive diagnostics
+            message = f"Failed to instantiate CrewAI Gemini LLM: {exc}"
+            self.errors.append(message)
+            logger.error(f"❌ {message}")
+            return False
+
+        required_attributes = ("supports_stop_words", "supports_function_calling")
+        missing = [name for name in required_attributes if not hasattr(llm, name)]
+
+        if missing:
+            message = f"LLM adapter missing required attributes: {', '.join(missing)}"
+            self.errors.append(message)
+            logger.error(f"❌ {message}")
+            return False
+
+        supports_calling = bool(getattr(llm, "supports_function_calling")())
+        if supports_calling:
+            logger.info("✅ CrewAI Gemini LLM supports tool/function calling")
+        else:
+            logger.info("✅ CrewAI Gemini LLM declares function calling disabled")
+
+        return True
+
     def print_summary(self):
         """検証結果のサマリーを表示"""
         logger.info("\n" + "=" * 60)
@@ -266,6 +298,9 @@ class SystemVerifier:
             self.test_voicevox_synthesis()
         else:
             logger.warning("7. Skipping VOICEVOX synthesis test (server not running)")
+
+        # 8. CrewAI LLM capabilityチェック
+        self.check_llm_capabilities()
 
         # サマリー表示
         self.print_summary()

@@ -1,8 +1,25 @@
+import json
 import os
 
 import pytest
 
 from app.crew.agent_review import AgentReviewCycle, AgentReviewResult, AgentReviewStorage
+
+
+class _StubWorkflowLogger:
+    """Lightweight stub so tests avoid depending on the full logging stack."""
+
+    def __init__(self) -> None:
+        self.logger = self
+
+    def agent_start(self, *_args, **_kwargs) -> None:  # pragma: no cover - test helper
+        return None
+
+    def agent_end(self, *_args, **_kwargs) -> None:  # pragma: no cover - test helper
+        return None
+
+    def debug(self, *_args, **_kwargs) -> None:  # pragma: no cover - test helper
+        return None
 
 
 @pytest.fixture
@@ -64,3 +81,70 @@ def test_agent_review_cycle_uses_storage_focus(monkeypatch, storage_path):
         assert "改善: 保持率コメントを具体化" in notes["quality_guardian"]
     finally:
         os.environ.pop("DISABLE_AGENT_REVIEW", None)
+
+
+def test_agent_review_cycle_normalizes_llm_output(monkeypatch, storage_path):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+    class DummyPromptManager:
+        def load(self, filename):
+            if filename == "agents.yaml":
+                return {
+                    "agents": {
+                        "script_writer": {
+                            "role": "Script Writer",
+                            "goal": "",
+                            "backstory": "",
+                        }
+                    }
+                }
+            if filename == "evaluation_rubrics.yaml":
+                return {"evaluation_rubrics": {}}
+            return {}
+
+    monkeypatch.setattr("app.crew.agent_review.get_prompt_manager", lambda: DummyPromptManager())
+    monkeypatch.setattr("app.crew.agent_review.workflow_logger", _StubWorkflowLogger())
+
+    storage = AgentReviewStorage(str(storage_path))
+    cycle = AgentReviewCycle(storage=storage)
+
+    class StubClient:
+        def generate_structured(self, _prompt):
+            payload = {
+                "score": 7.0,
+                "verdict": "solid",
+                "strengths": ["clear pacing"],
+                "issues": "missing concrete stats",
+                "action_items": [],
+                "compliance": {"previous_focus_addressed": "yes", "notes": ""},
+            }
+            return json.dumps(payload)
+
+    cycle._client = StubClient()  # type: ignore[attr-defined]
+
+    class DummyAgent:
+        role = "Script Writer"
+
+    class DummyTask:
+        agent = DummyAgent()
+        description = ""
+        expected_output = ""
+
+        class Output:
+            raw = "Sample task output"
+
+        output = Output()
+
+    agent_config = cycle._agents_config["script_writer"]
+    result = cycle._evaluate_single(
+        agent_key="script_writer",
+        task_name="task4_script_writing",
+        task=DummyTask(),
+        task_output="Sample task output",
+        agent_config=agent_config,
+    )
+
+    assert isinstance(result, AgentReviewResult)
+    assert result.score == pytest.approx(7.0)
+    assert result.issues == ["missing concrete stats"]
+    assert result.action_items == []

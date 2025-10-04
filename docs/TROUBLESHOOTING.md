@@ -166,8 +166,32 @@ def authenticate_youtube_service():
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
 
-    return build('youtube', 'v3', credentials=creds)
+return build('youtube', 'v3', credentials=creds)
 ```
+
+#### 5. Google Gemini 429（RESOURCE_EXHAUSTED）
+
+**症状**: `litellm.RateLimitError ... quotaMetric: generativelanguage.googleapis.com/generate_content_free_tier_requests`
+
+**原因**: 無料枠（1日 250 リクエスト）が枯渇。ローテーションキーが不足しているか、短時間に実行が集中している。
+
+**解決方法**:
+1. `secret/.env` に複数の `GEMINI_API_KEY_*` を登録し、`app/api_rotation.py` の `register_keys("gemini", [...])` に反映する。
+2. `logs/workflow_*.log` の `RetryInfo.retryDelay` を確認し、その秒数だけ再試行を遅延させる。クールダウン前の即リトライは禁止。
+3. Google AI Studio のクォータタブで利用状況を監視し、必要に応じて有料枠に移行する。
+4. Google Sheets 実行履歴タブに 429 発生時刻が記録されるため、運用チームで共有してスケジュールを調整する。
+
+#### 6. CrewAI が Pydantic Script を返さない
+
+**症状**: `CrewAI did not return a Pydantic Script object.` や `Dialogue script validation failed` が Step 2 で発生する。
+
+**原因**: CrewAI が code fence 付き JSON や `Message(content=...)` 形式で出力し、旧パーサが台本テキストを抽出できなかった。
+
+**解決方法**:
+1. `app/crew/flows.py` の `_extract_script_text_from_string()` が最新版であることを確認し、code fence / `Message(...)` / `dialogues` 配列を正規化できるようにする。
+2. raw テキストを許容するエージェントは `script_writer`, `japanese_purity_polisher` のみ。他エージェントが raw を返す場合は YAML プロンプトを修正し JSON 出力を強制する。
+3. Fallback 順序（`japanese_purity_polisher` → `quality_guardian` → `engagement_optimizer` → `script_writer`）が INFO ログに出力される。適切な台本が採用されているか preview を確認する。
+4. `pytest tests/unit/test_crew_flows.py` を実行して回帰テストを常時緑に保ち、パーサ変更時の破壊を検知する。
 
 ### 環境・依存関係の問題
 

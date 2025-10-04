@@ -3,9 +3,12 @@
 WOW Script Creation Crewの実行フローとオーケストレーション
 """
 
+import ast
+import json
 import logging
 import os
-from typing import Any, Dict, List
+import re
+from typing import Any, Dict, List, Optional
 
 from crewai import Crew, Process
 
@@ -34,8 +37,8 @@ original_completion = litellm.completion
 
 def patched_completion(model=None, messages=None, **kwargs):
     """Intercept LiteLLM completion calls to use shared rotation manager"""
-    if model and "gemini" in model.lower():
-        # 統一モデル名に変換
+    if model and "gemini" in model.lower() and "/" not in model:
+        # 統一モデル名に変換（未プレフィックス時のみ）
         forced_model = f"gemini/{settings.gemini_models.get('crew_agents')}"
         if model != forced_model:
             logger.debug(f"LiteLLM completion intercepted: {model} -> {forced_model}")
@@ -127,6 +130,18 @@ class WOWScriptFlow:
             # 結果をパース
             final_result = self._parse_crew_result(result)
 
+            script_candidate = str(final_result.get("final_script", "")).strip()
+            if not self._looks_like_dialogue(script_candidate):
+                fallback_script, source = self._extract_fallback_script()
+                if fallback_script:
+                    logger.warning(
+                        "Crew output lacked dialogue structure; using %s draft instead",
+                        source,
+                    )
+                    final_result["final_script"] = fallback_script
+                    final_result.setdefault("metadata", {})
+                    final_result["metadata"]["fallback_source"] = source
+
             if review_results:
                 final_result["agent_reviews"] = {
                     key: review.model_dump(mode="json") for key, review in review_results.items()
@@ -147,9 +162,6 @@ class WOWScriptFlow:
         Returns:
             構造化された結果辞書
         """
-        import json
-        import re
-
         # CrewAIの結果は通常文字列として返される
         # 最後のタスク（Japanese Purity Check）の出力を最終台本とする
         crew_output_str = str(crew_result)
@@ -163,13 +175,48 @@ class WOWScriptFlow:
                 # JSONをパース
                 parsed_data = json.loads(json_str)
             else:
-                # JSONが見つからない場合は生のテキストを使用
-                logger.warning("No JSON found in CrewAI output, using raw text")
+                parsed_data = None
+                stripped_output = crew_output_str.strip()
 
-                # JSONマーカーを削除（```json や ``` が残っている場合）
+                if (stripped_output.startswith("'") and stripped_output.endswith("'")) or (
+                    stripped_output.startswith('"') and stripped_output.endswith('"')
+                ):
+                    try:
+                        decoded_output = ast.literal_eval(stripped_output)
+                        if isinstance(decoded_output, str):
+                            stripped_output = decoded_output.strip()
+                    except (ValueError, SyntaxError):
+                        pass
+
+                if stripped_output.startswith("{"):
+                    try:
+                        parsed_data = json.loads(stripped_output)
+                        logger.debug("Parsed CrewAI output as raw JSON block")
+                    except json.JSONDecodeError as exc:
+                        parsed_data = None
+                        logger.debug("Raw JSON parse failed: %s", exc)
+
+                if parsed_data is None and "{" in stripped_output and "}" in stripped_output:
+                    candidate = stripped_output[stripped_output.find("{") : stripped_output.rfind("}") + 1]
+                    try:
+                        parsed_data = json.loads(candidate)
+                        logger.debug("Parsed CrewAI output from embedded JSON snippet")
+                    except json.JSONDecodeError as exc:
+                        parsed_data = None
+                        logger.debug("Embedded JSON parse failed: %s", exc)
+
+                if parsed_data is not None:
+                    crew_output_str = stripped_output
+            if parsed_data is None:
+                logger.warning("No JSON found in CrewAI output, using raw text")
+                logger.warning("Failed to locate JSON payload in CrewAI output; returning raw text")
                 cleaned_output = re.sub(r"```json\s*", "", crew_output_str)
                 cleaned_output = re.sub(r"```\s*", "", cleaned_output)
-
+                snippet = cleaned_output.strip()[:400]
+                logger.info(
+                    "First 400 chars of raw CrewAI output: %r",
+                    snippet,
+                )
                 return {
                     "success": True,
                     "final_script": cleaned_output.strip(),
@@ -223,6 +270,95 @@ class WOWScriptFlow:
                 "final_script": crew_output_str,
                 "crew_output": crew_output_str,
             }
+
+    def _extract_fallback_script(self) -> tuple[Optional[str], str]:
+        fallback_order = [
+            ("task7_japanese", "japanese_purity_polisher"),
+            ("task6_quality", "quality_guardian"),
+            ("task5_engagement", "engagement_optimizer"),
+            ("task4_script_writing", "script_writer"),
+        ]
+
+        for task_key, label in fallback_order:
+            script = self._get_task_output(task_key)
+            if script and self._looks_like_dialogue(script):
+                return script, label
+            if script:
+                logger.info(
+                    "Fallback candidate %s preview=%r",
+                    label,
+                    str(script)[:160],
+                )
+        return None, ""
+
+    def _get_task_output(self, task_key: str) -> Optional[str]:
+        task = (self.tasks or {}).get(task_key)
+        if not task:
+            return None
+        output = getattr(task, "output", None)
+        raw = getattr(output, "raw", None)
+        if raw:
+            text = str(raw).strip()
+            normalized = self._extract_script_text_from_string(text)
+            return normalized or text
+        return None
+
+    @staticmethod
+    def _extract_script_text_from_string(payload: str) -> Optional[str]:
+        if not payload:
+            return None
+
+        text = payload.strip()
+
+        if text.startswith("Message(") and "content=" in text:
+            match = re.search(r"content=(.+?)\)\z", text, re.DOTALL)
+            if match:
+                candidate = match.group(1).strip()
+                try:
+                    decoded = ast.literal_eval(candidate)
+                    if isinstance(decoded, str):
+                        text = decoded.strip()
+                except (ValueError, SyntaxError):
+                    pass
+
+        if text.startswith("```json"):
+            text = re.sub(r"^```json\s*", "", text, flags=re.IGNORECASE)
+            text = re.sub(r"```\s*$", "", text)
+
+        if text.startswith("{"):
+            try:
+                data = json.loads(text)
+                final_script = data.get("final_script") or data.get("script") or data.get("draft")
+                if isinstance(final_script, str):
+                    return final_script.strip()
+                dialogues = data.get("dialogues")
+                if isinstance(dialogues, list):
+                    try:
+                        lines = [
+                            f"{entry['speaker']}: {entry['line']}"
+                            for entry in dialogues
+                            if isinstance(entry, dict) and entry.get("speaker") and entry.get("line")
+                        ]
+                        if lines:
+                            return "\n".join(lines).strip()
+                    except KeyError:
+                        pass
+            except json.JSONDecodeError:
+                return None
+
+        return None
+
+    @staticmethod
+    def _looks_like_dialogue(script_text: str) -> bool:
+        if not script_text:
+            return False
+        lines = [line.strip() for line in script_text.splitlines() if line.strip()]
+        if len(lines) < 4:
+            return False
+        if lines[0].startswith("{") or lines[0].startswith('"'):
+            return False
+        dialogue_lines = [line for line in lines if re.match(r"^[^:：\s]{1,16}[：:]", line)]
+        return len(dialogue_lines) >= 4
 
 
 def create_wow_script_crew(news_items: List[Dict[str, Any]], target_duration_minutes: int = 8) -> Dict[str, Any]:

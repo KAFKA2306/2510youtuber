@@ -3,6 +3,7 @@
 Each step encapsulates a single responsibility from the original YouTubeWorkflow class.
 """
 
+import json
 import logging
 import os
 from datetime import datetime
@@ -179,7 +180,7 @@ class GenerateScriptStep(WorkflowStep):
             Dict with 'script' and 'crew_result' keys
         """
         from app.crew.flows import create_wow_script_crew
-        from app.services.script.validator import Script # Import Script model
+        from app.services.script.validator import Script  # Import Script model
 
         logger.info("🚀 Using CrewAI WOW Script Creation Crew...")
         crew_result = create_wow_script_crew(
@@ -189,12 +190,31 @@ class GenerateScriptStep(WorkflowStep):
         if not crew_result.get("success"):
             raise Exception(f"CrewAI execution failed: {crew_result.get('error', 'Unknown error')}")
 
-        # Assuming final_script is now a Pydantic Script object
-        script_obj: Script = crew_result.get("final_script")
-        if not isinstance(script_obj, Script):
-            raise TypeError("CrewAI did not return a Pydantic Script object.")
+        script_payload = crew_result.get("final_script")
 
-        script_content = script_obj.to_text() # Convert to plain text
+        if isinstance(script_payload, Script):
+            script_content = script_payload.to_text()
+        elif isinstance(script_payload, dict):
+            try:
+                script_content = Script.model_validate(script_payload).to_text()
+                logger.debug("CrewAI returned Script dict; parsed into Pydantic model")
+            except Exception as exc:  # pragma: no cover - defensive log path
+                logger.warning("CrewAI script payload dict could not be parsed into Script model: %s", exc)
+                script_content = json.dumps(script_payload, ensure_ascii=False)
+        elif isinstance(script_payload, str):
+            logger.warning("CrewAI returned raw script text instead of Script model; proceeding with fallback")
+            script_content = script_payload
+        else:
+            raise TypeError("CrewAI returned an unsupported script payload type.")
+
+        if isinstance(script_content, str):
+            from app.crew.flows import WOWScriptFlow
+
+            coerced = WOWScriptFlow._extract_script_text_from_string(script_content)
+            if coerced:
+                script_content = coerced
+
+        logger.info("Script preview (first 200 chars): %r", script_content[:200])
 
         return {
             "script": script_content,
@@ -477,7 +497,7 @@ class GenerateVideoStep(WorkflowStep):
                 "video": video_path,
                 "audio": audio_path,
                 "subtitle": subtitle_path,
-                "script": context.get("script_path"), # Add script_path
+                "script": context.get("script_path"),  # Add script_path
             }
             if thumbnail_path and os.path.exists(thumbnail_path):
                 files_to_archive["thumbnail"] = thumbnail_path

@@ -227,6 +227,11 @@ class AppSettings(BaseModel):
         return keys
 
     @property
+    def llm_model(self) -> str:
+        """Primary Gemini model configured for adapters."""
+        return self.gemini_models.get()
+
+    @property
     def perplexity_api_key(self) -> Optional[str]:
         """Get Perplexity API key"""
         return self.api_keys.get("perplexity")

@@ -48,7 +48,7 @@ YouTube自動生成システムの全体構成とデータフロー
 
 2. **CrewAI エージェントシステム** (`app/crew/`)
    - 7つの専門AIエージェント
-   - LiteLLM経由でGemini APIを使用
+   - LiteLLM経由でGemini APIを使用（`GeminiAdapter`で統一設定を注入）
    - プロンプトの外部化（YAML）
 
 3. **メディア処理サービス** (`app/services/media/`)
@@ -450,6 +450,15 @@ class WorkflowResult:
 | **YouTube Data API** | 動画アップロード | 10,000 units/day | - |
 | **Google Sheets API** | ログ記録 | 300 req/min | - |
 
+### GeminiAdapter（LLMアダプタ層）
+
+- 所在: `app/crew/tools/ai_clients.py`, `app/adapters/llm.py`
+- 役割: Gemini SDK / LiteLLM のインターフェース差分、`timeout` 非対応問題、モデル名の固定化を**単一地点で吸収**する。
+- 実装ポイント:
+  - `settings.llm.model` と `api_rotation` を必ず経由し、コード中のモデル名直書きを禁止。
+  - `generate_json()` が CrewAI/レビューで要求されるスキーマを返す。code fence や `Message(content=...)` でラップされた応答は `_extract_script_text_from_string()` で正規化。
+  - 429 (RESOURCE_EXHAUSTED) は `APIKeyRotationManager.execute_with_rotation()` の再試行に委譲し、失敗時は詳細ログ＋`RetryInfo` を記録する。
+
 ### API Key Rotation
 
 **実装**: `app/api_rotation.py`
@@ -589,6 +598,15 @@ Static Background (theme-based)
   ↓ (rendering error)
 Simple Fallback (solid color)
 ```
+
+### 監視ポイント / 再発防止の要点
+
+| カテゴリ | 再発防止策 | ログ出力 |
+|-----------|------------|-----------|
+| LLM引数ズレ | `GeminiAdapter` が SDK 呼び出しを一元化（`timeout` 等は吸収） | `app/crew/tools/ai_clients.py` DEBUG ログ |
+| CrewAI出力崩れ | `_extract_script_text_from_string` で JSON / dialogues を再構成し、fallback 優先順位で必ず台本を確保 | `app/crew/flows.py` WARN/INFO（raw preview と fallback source）|
+| Pydantic extra forbid | `AppSettings` は `extra="allow"` で起動阻害を回避し、順次サブモデル化して厳格化 | 起動ログ + `test_settings_schema` |
+| Gemini 429 | `APIKeyRotationManager` が `RetryInfo` を記録し、キーをクールダウン | Step2 ERROR ログ + Google Sheets 実行履歴 |
 
 ---
 

@@ -8,8 +8,8 @@ import logging
 from typing import Any, Dict
 
 from app.crew.flows import create_wow_script_crew
-from app.models.workflow import Script
 from app.crew.tools.ai_clients import GeminiClient
+from app.models.workflow import Script
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +44,7 @@ class ScriptGenerator:
         try:
             crew_result = create_wow_script_crew(news_items)
             if not isinstance(crew_result, Script):
-                raise ValueError(
-                    f"CrewAI did not return Script, got {type(crew_result)}"
-                )
+                raise ValueError(f"CrewAI did not return Script, got {type(crew_result)}")
             return crew_result
         except Exception as e:
             logger.error(f"CrewAI script generation failed: {e}")
