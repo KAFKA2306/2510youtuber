@@ -50,7 +50,7 @@ main() {
     log "Starting daily workflow..."
     cd "${SCRIPT_DIR}"
 
-    if python3 -m app.main daily >> "${LOG_FILE}" 2>&1; then
+    if uv run python3 -m app.main daily >> "${LOG_FILE}" 2>&1; then
         log "✅ Daily workflow completed successfully"
         exit 0
     else

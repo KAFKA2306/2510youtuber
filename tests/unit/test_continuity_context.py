@@ -13,12 +13,26 @@ def _write_metadata_csv(path: Path) -> None:
         "video_url,view_count,like_count,comment_count,ctr,avg_view_duration\n"
     )
     first_row = (
-        "2025-10-02T12:00:00,run_a,daily,旧タイトル,説明A,""[""""投資""""]"",News,テキストA,""[""""投資""""]"","
+        "2025-10-02T12:00:00,run_a,daily,旧タイトル,説明A,"
+        "["
+        """投資"""
+        "]"
+        ",News,テキストA,"
+        "["
+        """投資"""
+        "]"
+        ","
         "投資家,12分,2,旧トピック,https://youtu.be/old,1000,50,10,5%,300\n"
     )
     latest_row = (
         "2025-10-03T09:00:00,run_b,daily,最新の動画タイトル,視聴者がリスク対策をもっと知りたいとコメントしました,"
-        "[""""経済""""],News,テキストB,""[""""経済""""]"",投資家,12分,3,最新トピック,"
+        "["
+        """経済"""
+        "],News,テキストB,"
+        "["
+        """経済"""
+        "]"
+        ",投資家,12分,3,最新トピック,"
         "https://youtu.be/latest,2000,120,25,6%,360\n"
     )
     path.write_text(header + first_row + latest_row, encoding="utf-8")

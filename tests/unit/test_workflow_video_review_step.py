@@ -1,4 +1,3 @@
-
 import pytest
 
 from app.config import cfg
@@ -47,9 +46,7 @@ async def test_review_video_step_invokes_service(monkeypatch, tmp_path):
         video_path=str(video_path),
         video_id="yt123",
         model_name="test-model",
-        screenshots=[
-            ScreenshotEvidence(index=0, path=str(screenshot_path), timestamp_seconds=0.0)
-        ],
+        screenshots=[ScreenshotEvidence(index=0, path=str(screenshot_path), timestamp_seconds=0.0)],
         feedback=VideoReviewFeedback(
             summary="終盤のテンポを上げると更に良い",
             positive_highlights=["冒頭のまとめが明瞭"],

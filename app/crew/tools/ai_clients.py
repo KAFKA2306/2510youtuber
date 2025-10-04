@@ -520,8 +520,7 @@ try:
     def get_crewai_gemini_llm(model: str = "gemini-2.5-pro", temperature: float = 0.7, **kwargs):
         """CrewAI用のGemini LLM（Direct SDK - NO LiteLLM/Vertex AI）"""
         # モデル名の正規化 - Google AI Studio API compatible names
-        model_mapping = {
-        }
+        model_mapping = {}
 
         clean_model = model.replace("models/", "") if model.startswith("models/") else model
         final_model = model_mapping.get(clean_model, clean_model)

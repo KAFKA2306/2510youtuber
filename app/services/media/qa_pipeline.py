@@ -57,9 +57,7 @@ class MediaQAPipeline:
 
         report = QualityGateReport(run_id=run_id, mode=mode)
 
-        report.add_check(
-            self._run_audio_checks(audio_path=audio_path)
-        )
+        report.add_check(self._run_audio_checks(audio_path=audio_path))
         report.add_check(
             self._run_subtitle_checks(
                 script_path=script_path,
@@ -67,9 +65,7 @@ class MediaQAPipeline:
                 subtitle_path=subtitle_path,
             )
         )
-        report.add_check(
-            self._run_video_checks(video_path=video_path)
-        )
+        report.add_check(self._run_video_checks(video_path=video_path))
 
         try:
             report.report_path = str(self._persist_report(report))
@@ -148,9 +144,7 @@ class MediaQAPipeline:
                 f"{self.config.audio.rms_dbfs_max:.2f}"
             )
         if longest_silence > self.config.audio.max_silence_seconds:
-            issues.append(
-                f"silence {longest_silence:.2f}s exceeds {self.config.audio.max_silence_seconds:.2f}s"
-            )
+            issues.append(f"silence {longest_silence:.2f}s exceeds {self.config.audio.max_silence_seconds:.2f}s")
 
         status = CheckStatus.PASSED if not issues else CheckStatus.FAILED
         message = "Audio levels within tolerance" if not issues else "; ".join(issues)
@@ -208,15 +202,11 @@ class MediaQAPipeline:
 
         issues = []
         if script_lines and line_ratio < self.config.subtitles.min_line_coverage:
-            issues.append(
-                f"coverage {line_ratio:.2f} below {self.config.subtitles.min_line_coverage:.2f}"
-            )
+            issues.append(f"coverage {line_ratio:.2f} below {self.config.subtitles.min_line_coverage:.2f}")
         if not script_lines:
             issues.append("script unavailable for coverage check")
         if max_gap > self.config.subtitles.max_timing_gap_seconds:
-            issues.append(
-                f"gap {max_gap:.2f}s exceeds {self.config.subtitles.max_timing_gap_seconds:.2f}s"
-            )
+            issues.append(f"gap {max_gap:.2f}s exceeds {self.config.subtitles.max_timing_gap_seconds:.2f}s")
 
         if not issues:
             status = CheckStatus.PASSED
@@ -312,19 +302,18 @@ class MediaQAPipeline:
         duration = float(fmt.get("duration") or 0.0)
 
         issues = []
-        if width != self.config.video.expected_resolution.width or height != self.config.video.expected_resolution.height:
+        if (
+            width != self.config.video.expected_resolution.width
+            or height != self.config.video.expected_resolution.height
+        ):
             issues.append(
                 f"resolution {width}x{height} != {self.config.video.expected_resolution.width}x"
                 f"{self.config.video.expected_resolution.height}"
             )
         if fps < self.config.video.min_fps or fps > self.config.video.max_fps:
-            issues.append(
-                f"fps {fps:.2f} outside {self.config.video.min_fps:.2f}-{self.config.video.max_fps:.2f}"
-            )
+            issues.append(f"fps {fps:.2f} outside {self.config.video.min_fps:.2f}-{self.config.video.max_fps:.2f}")
         if bitrate < self.config.video.min_bitrate_kbps:
-            issues.append(
-                f"bitrate {bitrate:.0f}kbps below {self.config.video.min_bitrate_kbps}kbps"
-            )
+            issues.append(f"bitrate {bitrate:.0f}kbps below {self.config.video.min_bitrate_kbps}kbps")
         if duration <= 0:
             issues.append("duration invalid")
 
@@ -363,9 +352,7 @@ class MediaQAPipeline:
 
     def _load_subtitle_timings(self, subtitle_path: str) -> list[tuple[float, float]]:
         timings = []
-        pattern = re.compile(
-            r"(?P<start>\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(?P<end>\d{2}:\d{2}:\d{2},\d{3})"
-        )
+        pattern = re.compile(r"(?P<start>\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+(?P<end>\d{2}:\d{2}:\d{2},\d{3})")
         try:
             with open(subtitle_path, "r", encoding="utf-8") as handle:
                 for raw_line in handle:

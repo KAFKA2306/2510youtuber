@@ -43,10 +43,7 @@ class QualityGateReport(BaseModel):
 
     @property
     def passed(self) -> bool:
-        return all(
-            check.status != CheckStatus.FAILED or not check.blocking
-            for check in self.checks
-        )
+        return all(check.status != CheckStatus.FAILED or not check.blocking for check in self.checks)
 
     def blocking_failures(self) -> List[MediaCheckResult]:
         return [check for check in self.checks if check.blocking and check.status == CheckStatus.FAILED]

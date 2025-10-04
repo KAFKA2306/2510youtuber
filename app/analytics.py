@@ -109,11 +109,27 @@ class FeedbackAnalyzer:
         recent = executions[:7]  # Last 7
 
         if not recent:
-            return "No execution data available."
+            return """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 週次パフォーマンスレポート
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        avg_wow = sum(ex.wow_score for ex in recent if ex.wow_score) / len([ex for ex in recent if ex.wow_score])
+⚠️  実行データがありません
+
+まずワークフローを実行してください:
+  uv run python3 -m app.main daily
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+        wow_scores = [ex.wow_score for ex in recent if ex.wow_score]
+        avg_wow = sum(wow_scores) / len(wow_scores) if wow_scores else 0.0
         success_rate = self.calculate_success_rate()
         hook_performance = self.analyze_hook_performance()
+
+        # Check if we have quality metrics
+        has_metrics = any(ex.wow_score is not None for ex in recent)
+        metrics_note = "" if has_metrics else "\n⚠️  品質メトリクスが未記録（CrewAI未使用またはデータ抽出エラー）\n"
 
         report = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -123,8 +139,7 @@ class FeedbackAnalyzer:
 📈 全体統計
   • 実行回数: {len(recent)} 回
   • 成功率: {success_rate:.1f}%
-  • 平均WOWスコア: {avg_wow:.2f}/10.0
-
+  • 平均WOWスコア: {avg_wow:.2f}/10.0{metrics_note}
 🎯 フック戦略パフォーマンス
 """
 

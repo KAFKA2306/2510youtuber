@@ -241,44 +241,10 @@ PIXABAY_API_KEY=YOUR_PIXABAY_KEY
 5. 音声+字幕を合成して最終動画を出力
 
 ### **4.6. VOICEVOX Nemo（無料TTSバックアップ）**
-**推奨:** ElevenLabs制限時の無料バックアップとして設定
-VOICEVOX Nemoは完全無料のオープンソース日本語音声合成エンジンです。Dockerで実行します。
-**クイックスタート:**
-```bash
-# VOICEVOX Nemo専用管理スクリプトを使用
-# 起動
-./scripts/voicevox_manager.sh start
-# 停止
-./scripts/voicevox_manager.sh stop
-# ステータス確認
-./scripts/voicevox_manager.sh status
-# 再起動
-./scripts/voicevox_manager.sh restart
-# ログ表示
-./scripts/voicevox_manager.sh logs
-# 音声合成テスト
-./scripts/voicevox_manager.sh test
-
-**安定化ポイント:**
-- デフォルトで `voicevox/voicevox_engine:cpu-ubuntu20.04-0.24.1` を使用し、Dockerリスタートポリシー `unless-stopped` を付与
-- 起動時にヘルスチェック(`/health`)とポート競合検査を行い、失敗時は安全に停止/削除
-- `VOICEVOX_IMAGE`, `VOICEVOX_CONTAINER_NAME`, `VOICEVOX_PORT`, `VOICEVOX_SPEAKER`, `VOICEVOX_CPU_LIMIT`, `VOICEVOX_MEMORY_LIMIT` などの環境変数で挙動を上書き可能
-- 画像取得は最大3回リトライし、詳細ログは `logs/voicevox_nemo.log` に出力
-```
-**設定（`config.yaml`）:**
-```yaml
-tts:
-  voicevox:
-    enabled: true
-    port: 50121
-    speaker: 1  # 話者ID（1: 四国めたん）
-```
-**特徴:**
-- ✅ 完全無料・オープンソース
-- ✅ 日本語音声合成に最適
-- ✅ ElevenLabs失敗時に自動フォールバック
-- ✅ 専用管理スクリプトで安定稼働
-- ✅ ログ管理・ヘルスチェック機能付き
+- ElevenLabs制限時の無料フォールバックとして推奨
+- `scripts/voicevox_manager.sh` が起動・停止・ログ・テストを一括管理
+- フォールバック順: ElevenLabs → VOICEVOX → OpenAI TTS → gTTS → Coqui → pyttsx3
+- 設定例・環境変数・ヘルスチェック詳細は `docs/VOICEVOX_NEMO.md` を参照
 
 #### **Docker Engine インストール（WSL2環境）**
 **前提条件:**

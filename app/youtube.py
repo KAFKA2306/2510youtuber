@@ -372,9 +372,7 @@ class YouTubeManager:
             # 字幕ファイルをアップロード
             media = MediaFileUpload(subtitle_path, mimetype="application/octet-stream", resumable=True)
 
-            request = self.service.captions().insert(
-                part="snippet", body=caption_body, media_body=media, sync=False
-            )
+            request = self.service.captions().insert(part="snippet", body=caption_body, media_body=media, sync=False)
 
             response = request.execute()
 

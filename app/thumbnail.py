@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 
 try:
     from PIL import Image, ImageDraw, ImageEnhance, ImageFont
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -151,7 +152,6 @@ class ThumbnailGenerator:
             if not self.has_pil:
                 return self._generate_fallback_thumbnail(title, output_path)
 
-
             # 出力パスを決定
             if not output_path:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -183,8 +183,6 @@ class ThumbnailGenerator:
             return self._generate_fallback_thumbnail(title, output_path)
 
     def _add_background_effects(self, image, style: str, mode: str):
-
-
         draw = ImageDraw.Draw(image)
         colors = self.color_schemes[style]
         width, height = self.output_size
@@ -565,7 +563,6 @@ class ThumbnailGenerator:
 
                 logger.warning(f"Generated text fallback thumbnail: {output_path}")
                 return output_path
-
 
             # シンプルな画像を生成
             image = Image.new("RGB", self.output_size, (25, 35, 45))

@@ -28,7 +28,11 @@ class ProThumbnailGenerator:
         self.font_paths = self._get_available_fonts() if self.has_pil else {}
 
     def _check_pil(self) -> bool:
-        if importlib.util.find_spec("PIL.Image") and importlib.util.find_spec("PIL.ImageDraw") and importlib.util.find_spec("PIL.ImageFont"):
+        if (
+            importlib.util.find_spec("PIL.Image")
+            and importlib.util.find_spec("PIL.ImageDraw")
+            and importlib.util.find_spec("PIL.ImageFont")
+        ):
             return True
         else:
             logger.warning("PIL not available, thumbnail generation will be limited")

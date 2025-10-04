@@ -1,6 +1,6 @@
-# CrewAI WOW Script Creation - Quick Start Guide v2.0
+# CrewAI WOW Script Creation - Quick Start Guide v2.1
 
-**最終更新**: 2025年10月3日 | **ステータス**: Phase 3完了・本番運用可能
+**最終更新**: 2025年10月4日 | **ステータス**: Phase 4完了・品質メトリクス記録機能追加
 
 ***
 
@@ -10,6 +10,7 @@
 - **高品質台本生成**: 7つの専門AIエージェントが協力して視聴維持率50%+を目指す台本を作成
 - **完全自動動画生成**: 音声合成→動画編集→YouTubeアップロードまで完全自動化
 - **品質保証**: 日本語純度95%+、WOWスコア8.0+を自動チェック
+- **フィードバックループ**: 品質メトリクスを自動記録・分析し、継続的改善をサポート
 
 ***
 
@@ -38,6 +39,9 @@ uv run python3 test_crewai_flow.py
 ```bash
 # 完全ワークフロー実行
 uv run python3 -m app.main daily
+
+# 実行後、品質分析レポートを確認
+python scripts/analytics_report.py
 ```
 
 ***
@@ -56,9 +60,36 @@ CrewAIは以下の専門チームで台本を生成します：
 
 ***
 
-## 📊 Phase 3完了: 品質改善の成果
+## 📊 Phase 4完了: 品質メトリクス記録機能
 
-### 改善された指標
+### 新機能: フィードバックループシステム
+
+**自動記録される品質メトリクス**:
+- ✅ **WOWスコア** (0-10点) - CrewAI Agent 6が評価
+- ✅ **驚きポイント数** - 視聴者の驚き要素カウント
+- ✅ **感情ピーク数** - 感情的な高揚ポイント
+- ✅ **視覚指示数** - B-roll映像指示の充実度
+- ✅ **日本語純度** (%) - 日本語テキストの割合
+- ✅ **リテンション予測** (%) - 視聴維持率予測値
+
+**記録先**:
+- `output/execution_log.jsonl` - 詳細分析用JSONL
+- Google Sheets - 3タブ構成（ダッシュボード/品質/プロダクション）
+- `data/metadata_history.csv` - 後方互換性維持
+
+**分析レポート**:
+```bash
+# 週次レポート（最新7実行）
+python scripts/analytics_report.py
+
+# フック戦略別パフォーマンス
+python scripts/analytics_report.py --hooks
+
+# トピック分布
+python scripts/analytics_report.py --topics
+```
+
+### Phase 3の改善内容（継続中）
 
 | 指標 | Phase 2 | Phase 3 | 改善率 |
 |------|---------|---------|--------|
@@ -67,21 +98,21 @@ CrewAIは以下の専門チームで台本を生成します：
 | 動画生成成功率 | 50% | **95%+** | +90% |
 | フォールバック動作 | 失敗 | **正常** | 100% |
 
-### 修正された主な問題
+### Phase 4で修正された問題
 
-**1. CrewAI出力のクリーン化**
-- 問題: Agent 6-7が内部思考プロセス（"json", "wow_score", "Task"等）を出力に含めていた
-- 修正: `quality_check.yaml`に明示的な出力制限指示を追加
-- 結果: 日本語純度が95%+に向上
+**1. 品質メトリクスが記録されなかった問題**
+- 問題: CrewAIが生成した`quality_data`がWorkflowResultに渡されていなかった
+- 修正: `app/workflow/steps.py`で`crew_result`全体を保存、`app/main.py`で抽出メソッド実装
+- 結果: WOWスコア等が正しくJSONL + Google Sheetsに記録される
 
-**2. FFmpeg動画生成の安定化**
-- 問題: パラメータ重複（`crf`, `preset`等）でメイン/フォールバック両方が失敗
-- 修正: 全動画生成パスで`_get_quality_settings()`のみ使用
-- 結果: 成功率が95%+に向上
+**2. Analytics レポートのエラー**
+- 問題: 品質メトリクスが空の場合にdivision by zeroエラー
+- 修正: `app/analytics.py`で安全な計算、親切なエラーメッセージ追加
+- 結果: メトリクスがない場合も正常動作し、理由を説明
 
-**3. 話者形式の保証**
-- 修正: Agent 7に「田中: セリフ」形式の厳守指示を追加
-- 結果: 音声合成が正常動作
+**3. データフロー改善**
+- `GenerateScriptStep` → CrewAI → `quality_data` → `WorkflowResult` → JSONL/Sheets
+- 全ての品質指標が自動的に記録され、後から分析可能
 
 ***
 
@@ -127,7 +158,40 @@ agents:
 
 ## 🚨 トラブルシューティング
 
-### Phase 3関連の問題
+### Phase 4関連の問題
+
+#### 問題1: 品質メトリクスが記録されない
+
+**症状**:
+```bash
+python scripts/analytics_report.py
+# 出力: 平均WOWスコア: 0.00/10.0
+# 警告: 品質メトリクスが未記録（CrewAI未使用またはデータ抽出エラー）
+```
+
+**原因**:
+- CrewAIが無効化されている（`USE_CREWAI_SCRIPT_GENERATION=false`）
+- または古いバージョンで実行された動画
+
+**解決**:
+```bash
+# .envでCrewAIを有効化
+USE_CREWAI_SCRIPT_GENERATION=true
+
+# 新規実行
+uv run python3 -m app.main daily
+
+# 確認
+python scripts/analytics_report.py
+```
+
+#### 問題2: Analytics レポートのクラッシュ
+
+**症状**: `ZeroDivisionError: division by zero`
+
+**解決**: 最新版にアップデート済み（2025年10月4日以降は発生しない）
+
+### Phase 3関連の問題（解決済み）
 
 #### 問題1: 字幕に英語が混入する
 
@@ -142,14 +206,7 @@ grep -A 3 "最終出力は、以下のJSON形式のみを出力" \
   app/config/prompts/quality_check.yaml
 ```
 
-**期待される内容**:
-```yaml
-【重要】最終出力は、以下のJSON形式のみを出力してください。
-説明文、分析、コメント等は一切含めないでください。
-あなたの思考プロセスや分析は含めず、JSONのみを出力してください。
-```
-
-**修正**: 最新版にアップデート（`git pull origin main`）
+**修正**: 最新版にアップデート（Phase 3で解決済み）
 
 #### 問題2: 動画生成が失敗する
 
@@ -158,14 +215,7 @@ grep -A 3 "最終出力は、以下のJSON形式のみを出力" \
 Fallback video generation error: 'crf' or 'preset'
 ```
 
-**確認方法**:
-```bash
-grep -B 2 -A 2 "\*\*self._get_quality_settings()" app/video.py
-```
-
-**期待**: 3箇所全てで`**self._get_quality_settings()`のみ使用され、明示的な`crf=`や`vcodec=`がない
-
-**修正**: `app/video.py`を最新版に更新
+**修正**: 最新版にアップデート（Phase 3で解決済み）
 
 ### 一般的な問題
 
@@ -280,7 +330,7 @@ app/
 
 ***
 
-## ✅ システム検証結果（2025年10月3日）
+## ✅ システム検証結果（2025年10月4日）
 
 ### 実装済み機能
 - ✅ Gemini 5キー自動ローテーション
@@ -288,6 +338,14 @@ app/
 - ✅ ニュース収集3段階フォールバック
 - ✅ Google Sheetsローカルキャッシュ（TTL 24h）
 - ✅ レート制限自動検知・待機・復帰
+- ✅ **品質メトリクス自動記録** (Phase 4新機能)
+- ✅ **Analytics レポート生成** (Phase 4新機能)
+- ✅ **フィードバックループ** (Phase 4新機能)
+
+### テスト結果
+- ✅ 全86ユニットテスト通過
+- ✅ Analytics レポート正常動作
+- ✅ 品質メトリクス抽出機能動作確認
 
 ***
 
@@ -296,7 +354,17 @@ app/
 ### 即座実行可能
 1. ✅ `test_crewai_flow.py`でテスト実行
 2. ✅ 生成された台本を確認（`output/test_crewai_script.txt`）
-3. ✅ 満足したら本番実行（`uv run python3 -m app.main`）
+3. ✅ 満足したら本番実行（`uv run python3 -m app.main daily`）
+4. ✅ **NEW**: Analytics レポートで品質を確認（`python scripts/analytics_report.py`）
 
 ### 推奨設定（優先度順）
-1. **P0**: VOICEVOX Nemoサーバー起動（完全無料） — `docs/VOICEVOX_NEMO.md` 参照
+1. **P0**: VOICEVOX Nemoサーバー起動（完全無料）
+   - 手順・設定・テスト: `docs/VOICEVOX_NEMO.md`
+2. **P1**: 複数回実行してフィードバックループを活用
+   - 5-10本の動画を生成後、`analytics_report.py`でパターン分析
+   - 高WOWスコアの動画の特徴を把握し、プロンプト改善に活用
+
+### 参考ドキュメント
+- **フィードバックループ詳細**: `docs/FEEDBACK_LOOP.md`
+- **セットアップガイド**: `docs/setup.md`
+- **API管理**: `docs/API_MANAGEMENT.md`

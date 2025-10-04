@@ -50,7 +50,7 @@ ElevenLabs → VOICEVOX Nemo → OpenAI TTS → gTTS → Coqui TTS → pyttsx3
 2. **VOICEVOX Nemoサーバー起動**（完全無料）
    - 理由: ElevenLabsのバックアップとして高品質な日本語TTS
    - 効果: 完全無料で無制限利用
-   - 詳細: `docs/VOICEVOX_NEMO.md` を参照（起動/テスト/設定手順）
+   - 手順・設定・テスト: `docs/VOICEVOX_NEMO.md`
 
 ### **短期対応（P1: 1週間以内）**
 3. **Gemini API Tier 1移行**: ~$10/月

@@ -55,13 +55,13 @@ class FileArchivalManager:
             Sanitized title safe for filesystem paths
         """
         # Remove brackets and special punctuation
-        sanitized = re.sub(r'[【】\[\]<>:"/\\|?*]', '', title)
+        sanitized = re.sub(r'[【】\[\]<>:"/\\|?*]', "", title)
         # Replace remaining problematic chars with underscore
-        sanitized = re.sub(r'[^\w\s-]', '_', sanitized)
+        sanitized = re.sub(r"[^\w\s-]", "_", sanitized)
         # Replace multiple spaces/underscores with single underscore
-        sanitized = re.sub(r'[\s_]+', '_', sanitized)
+        sanitized = re.sub(r"[\s_]+", "_", sanitized)
         # Trim and limit length
-        sanitized = sanitized.strip('_')[:50]
+        sanitized = sanitized.strip("_")[:50]
         return sanitized
 
     def _get_directory_name(self, run_id: str, timestamp: str, title: str) -> str:
@@ -124,13 +124,7 @@ class FileArchivalManager:
         dir_name = self._get_directory_name(run_id, timestamp, title)
         return os.path.join(self.base_output_dir, dir_name, "script.txt")
 
-    def archive_workflow_files(
-        self,
-        run_id: str,
-        timestamp: str,
-        title: str,
-        files: Dict[str, str]
-    ) -> Dict[str, str]:
+    def archive_workflow_files(self, run_id: str, timestamp: str, title: str, files: Dict[str, str]) -> Dict[str, str]:
         """Archive workflow files to organized directory.
 
         Args:
@@ -194,11 +188,7 @@ class FileArchivalManager:
         metadata = context.get("metadata", {})
         title = metadata.get("title", "Untitled")
 
-        output_dir = self.create_output_directory(
-            run_id=context.run_id,
-            timestamp=timestamp,
-            title=title
-        )
+        output_dir = self.create_output_directory(run_id=context.run_id, timestamp=timestamp, title=title)
 
         # Store in context for reuse
         context.set("output_directory", output_dir)
@@ -224,19 +214,21 @@ class FileArchivalManager:
                 continue
 
             # Parse directory name: {timestamp}_{run_id}_{title}
-            parts = item.name.split('_', 2)
+            parts = item.name.split("_", 2)
             if len(parts) >= 2:
                 # Handle timestamp format: YYYYMMDD_HHMMSS
                 timestamp_parts = parts[0:2]
-                timestamp = '_'.join(timestamp_parts) if len(timestamp_parts) == 2 else parts[0]
+                timestamp = "_".join(timestamp_parts) if len(timestamp_parts) == 2 else parts[0]
                 run_id = parts[1] if len(parts) > 1 else "unknown"
 
-                archived.append({
-                    "run_id": run_id,
-                    "timestamp": timestamp,
-                    "directory": str(item.absolute()),
-                    "name": item.name,
-                })
+                archived.append(
+                    {
+                        "run_id": run_id,
+                        "timestamp": timestamp,
+                        "directory": str(item.absolute()),
+                        "name": item.name,
+                    }
+                )
 
         # Sort by timestamp descending (most recent first)
         archived.sort(key=lambda x: x["timestamp"], reverse=True)

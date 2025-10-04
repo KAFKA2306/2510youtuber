@@ -3,6 +3,8 @@ import os
 import sys
 from typing import Dict, List
 
+import pytest
+
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__))))
 
@@ -51,6 +53,11 @@ def get_failed_upload_videos(output_dir: str) -> List[Dict[str, str]]:
     return failed_videos
 
 
+pytestmark = [pytest.mark.integration, pytest.mark.youtube]
+
+
+@pytest.mark.asyncio
+@pytest.mark.requires_api_key
 async def test_youtube_uploads():
     """
     outputディレクトリ内のアップロード失敗動画を再アップロードするテストを実行します。

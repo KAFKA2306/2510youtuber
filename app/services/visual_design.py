@@ -49,10 +49,7 @@ class UnifiedVisualDesign:
 
     @classmethod
     def create_from_news(
-        cls,
-        news_items: List[Dict],
-        script_content: str,
-        mode: str = "daily"
+        cls, news_items: List[Dict], script_content: str, mode: str = "daily"
     ) -> "UnifiedVisualDesign":
         """ニュース内容から最適なデザインを生成
 
@@ -117,12 +114,38 @@ class UnifiedVisualDesign:
         """
         # ポジティブ・ネガティブキーワード
         positive_keywords = [
-            "上昇", "成長", "好調", "増加", "利益", "改善", "回復", "拡大",
-            "上方修正", "最高", "記録", "達成", "成功", "躍進", "好転"
+            "上昇",
+            "成長",
+            "好調",
+            "増加",
+            "利益",
+            "改善",
+            "回復",
+            "拡大",
+            "上方修正",
+            "最高",
+            "記録",
+            "達成",
+            "成功",
+            "躍進",
+            "好転",
         ]
         negative_keywords = [
-            "下落", "減少", "不調", "懸念", "リスク", "低迷", "悪化", "縮小",
-            "下方修正", "最低", "損失", "失敗", "後退", "悪化", "警戒"
+            "下落",
+            "減少",
+            "不調",
+            "懸念",
+            "リスク",
+            "低迷",
+            "悪化",
+            "縮小",
+            "下方修正",
+            "最低",
+            "損失",
+            "失敗",
+            "後退",
+            "悪化",
+            "警戒",
         ]
 
         # ニュースタイトルと台本を結合して分析
@@ -176,11 +199,7 @@ class UnifiedVisualDesign:
         }
 
 
-def create_unified_design(
-    news_items: List[Dict],
-    script_content: str,
-    mode: str = "daily"
-) -> UnifiedVisualDesign:
+def create_unified_design(news_items: List[Dict], script_content: str, mode: str = "daily") -> UnifiedVisualDesign:
     """統一ビジュアルデザインを生成（簡易関数）
 
     Args:

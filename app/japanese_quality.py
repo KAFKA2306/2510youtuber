@@ -40,12 +40,48 @@ class JapaneseQualityChecker:
 
         # 経済ニュースで許容される英語アクロニム
         self.allowed_economic_acronyms = {
-            'Fed', 'QE', 'GDP', 'CPI', 'PPI', 'ECB', 'BOJ', 'IMF', 'OECD',
-            'WTO', 'OPEC', 'G7', 'G20', 'BRICS', 'ASEAN',
-            'ETF', 'REIT', 'ESG', 'IPO', 'M&A', 'CEO', 'CFO', 'CTO',
-            'AI', 'IT', 'DX', 'IoT', 'API', 'SaaS', 'FinTech',
-            'VC', 'PE', 'ROE', 'ROI', 'PER', 'PBR', 'EPS',
-            'FOMC', 'RBNZ', 'SNB', 'BOE', 'RBA',
+            "Fed",
+            "QE",
+            "GDP",
+            "CPI",
+            "PPI",
+            "ECB",
+            "BOJ",
+            "IMF",
+            "OECD",
+            "WTO",
+            "OPEC",
+            "G7",
+            "G20",
+            "BRICS",
+            "ASEAN",
+            "ETF",
+            "REIT",
+            "ESG",
+            "IPO",
+            "M&A",
+            "CEO",
+            "CFO",
+            "CTO",
+            "AI",
+            "IT",
+            "DX",
+            "IoT",
+            "API",
+            "SaaS",
+            "FinTech",
+            "VC",
+            "PE",
+            "ROE",
+            "ROI",
+            "PER",
+            "PBR",
+            "EPS",
+            "FOMC",
+            "RBNZ",
+            "SNB",
+            "BOE",
+            "RBA",
         }
 
     def _setup_client(self):
@@ -248,7 +284,7 @@ class JapaneseQualityChecker:
         # 経済用語アクロニムも除去 (前後が英字でない場合のみ)
         for acronym in self.allowed_economic_acronyms:
             # 前後が英字でない場合のみ置換（日本語や記号に囲まれている場合）
-            pattern = rf'(?<![a-zA-Z]){re.escape(acronym)}(?![a-zA-Z])'
+            pattern = rf"(?<![a-zA-Z]){re.escape(acronym)}(?![a-zA-Z])"
             temp_text = re.sub(pattern, "", temp_text, flags=re.IGNORECASE)
 
         # 英字が残っているかチェック

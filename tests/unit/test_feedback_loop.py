@@ -476,7 +476,7 @@ class TestFeedbackAnalyzer:
         analyzer = FeedbackAnalyzer(jsonl_path=str(jsonl_path))
 
         report = analyzer.generate_weekly_report()
-        assert "No execution data available" in report
+        assert "実行データがありません" in report
 
     def test_generate_weekly_report_with_data(self, tmp_path):
         """Test weekly report generation."""

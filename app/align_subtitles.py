@@ -32,8 +32,9 @@ class SubtitleAligner:
         self.min_similarity_threshold = 60  # 類似度閾値
         self.max_subtitle_length = 25  # 字幕の最大文字数 (1920px幅対応: 1720px表示領域 ÷ 61px/文字)
         self.enable_two_line_mode = True  # 2行字幕モード (25文字 × 2行 = 50文字分の情報量)
-        self.min_display_duration = 1.0  # 最小表示時間（秒）
+        self.min_display_duration = 2.5  # 最小表示時間（秒）- 読みやすさのために延長
         self.max_display_duration = 8.0  # 最大表示時間（秒）
+        self.min_gap_between_subtitles = 0.3  # 字幕間の最小ギャップ（秒）- 視認性向上
 
     def align_script_with_stt(self, script_text: str, stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """台本テキストとSTT結果を整合.
@@ -176,15 +177,15 @@ class SubtitleAligner:
             text = text[:max_total]  # 50文字で切り詰め
 
         # 句読点で自然に分割
-        punctuation_positions = [i for i, char in enumerate(text) if char in '、。！？']
+        punctuation_positions = [i for i, char in enumerate(text) if char in "、。！？"]
 
         if punctuation_positions:
             # 最も中央に近い句読点を探す
             mid_point = len(text) // 2
             best_split = min(punctuation_positions, key=lambda x: abs(x - mid_point))
 
-            line1 = text[:best_split + 1].strip()
-            line2 = text[best_split + 1:].strip()
+            line1 = text[: best_split + 1].strip()
+            line2 = text[best_split + 1 :].strip()
 
             # 各行が最大文字数以内か確認
             if len(line1) <= self.max_subtitle_length and len(line2) <= self.max_subtitle_length:
@@ -195,8 +196,8 @@ class SubtitleAligner:
         # 日本語の文字境界を考慮して調整
         for offset in range(0, 5):
             if mid + offset < len(text):
-                line1 = text[:mid + offset].strip()
-                line2 = text[mid + offset:].strip()
+                line1 = text[: mid + offset].strip()
+                line2 = text[mid + offset :].strip()
                 if len(line1) <= self.max_subtitle_length and len(line2) <= self.max_subtitle_length:
                     return f"{line1}\\N{line2}"
 
@@ -334,7 +335,7 @@ class SubtitleAligner:
 
             # 時間の重複を解決
             if processed and subtitle["start"] < processed[-1]["end"]:
-                gap = 0.1  # 字幕間の最小ギャップ
+                gap = self.min_gap_between_subtitles  # 字幕間の最小ギャップ
                 # 前の字幕の終了時間を調整
                 new_prev_end = subtitle["start"] - gap
 

@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional
 
+from app.api_rotation import initialize_api_infrastructure
 from app.services.video_review import get_video_review_service
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,13 @@ def main():
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
     parser = build_parser()
     args = parser.parse_args()
+
+    # Initialize API infrastructure (loads API keys)
+    try:
+        initialize_api_infrastructure()
+        logger.info("API infrastructure initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize API infrastructure: {e}")
 
     if len(args.videos) > 1 and args.video_id:
         parser.error("--video-id は単一動画のときのみ指定できます")

@@ -173,7 +173,7 @@ class WOWScriptFlow:
                 return {
                     "success": True,
                     "final_script": cleaned_output.strip(),
-                    "crew_output": crew_result,
+                    "crew_output": crew_output_str,
                 }
 
             # final_scriptフィールドを抽出
@@ -199,7 +199,7 @@ class WOWScriptFlow:
             result = {
                 "success": True,
                 "final_script": final_script,
-                "crew_output": crew_result,
+                "crew_output": parsed_data,
                 "quality_data": parsed_data.get("quality_guarantee", {}),
                 "japanese_purity_score": parsed_data.get("japanese_purity_score", 0),
                 "character_count": parsed_data.get("character_count", len(final_script)),
@@ -213,7 +213,7 @@ class WOWScriptFlow:
             return {
                 "success": True,
                 "final_script": crew_output_str,
-                "crew_output": crew_result,
+                "crew_output": crew_output_str,
             }
 
 

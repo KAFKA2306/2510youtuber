@@ -244,12 +244,8 @@ class ContinuityContextBuilder:
             summary=ai_review.get("feedback", {}).get("summary")
             if isinstance(ai_review.get("feedback"), dict)
             else ai_review.get("summary"),
-            positive_highlights=_ensure_list(
-                _extract_feedback_field(ai_review, "positive_highlights")
-            ),
-            improvement_suggestions=_ensure_list(
-                _extract_feedback_field(ai_review, "improvement_suggestions")
-            ),
+            positive_highlights=_ensure_list(_extract_feedback_field(ai_review, "positive_highlights")),
+            improvement_suggestions=_ensure_list(_extract_feedback_field(ai_review, "improvement_suggestions")),
             retention_risks=_ensure_list(_extract_feedback_field(ai_review, "retention_risks")),
             next_video_actions=_ensure_list(_extract_feedback_field(ai_review, "next_video_actions")),
         )

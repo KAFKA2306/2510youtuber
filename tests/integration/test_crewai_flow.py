@@ -9,11 +9,20 @@ import logging
 import sys
 from pathlib import Path
 
+import pytest
+
 # プロジェクトルートをパスに追加
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from app.crew.flows import create_wow_script_crew
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.crewai,
+    pytest.mark.requires_api_key,
+    pytest.mark.slow,
+]
 
 # ロギング設定
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -54,8 +63,12 @@ SAMPLE_NEWS = [
 ]
 
 
-async def test_crewai_flow():
+@pytest.mark.asyncio
+async def test_crewai_flow(has_gemini_key):
     """CrewAI Flowのテスト実行"""
+    if not has_gemini_key:
+        pytest.skip("Gemini APIキーが設定されていません")
+
     logger.info("=" * 60)
     logger.info("🧪 CrewAI WOW Script Creation Flow テスト開始")
     logger.info("=" * 60)

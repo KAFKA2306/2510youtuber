@@ -100,9 +100,7 @@ class VideoQAConfig(BaseModel):
     """動画品質チェック設定"""
 
     enabled: bool = True
-    expected_resolution: VideoResolution = Field(
-        default_factory=lambda: VideoResolution(width=1920, height=1080)
-    )
+    expected_resolution: VideoResolution = Field(default_factory=lambda: VideoResolution(width=1920, height=1080))
     min_fps: float = 24.0
     max_fps: float = 61.0
     min_bitrate_kbps: int = 3200

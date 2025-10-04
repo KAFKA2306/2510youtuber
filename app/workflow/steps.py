@@ -15,6 +15,7 @@ from app.metadata import generate_youtube_metadata
 from app.search_news import collect_news
 from app.services.file_archival import FileArchivalManager
 from app.services.media import MediaQAPipeline
+from app.services.script import ScriptFormatError, ensure_dialogue_structure
 from app.services.video_review import get_video_review_service
 from app.services.visual_design import create_unified_design
 from app.sheets import load_prompts as load_prompts_from_sheets
@@ -108,13 +109,31 @@ class GenerateScriptStep(WorkflowStep):
         logger.info(f"CrewAI WOW Script Generation: {'ENABLED' if use_crewai else 'DISABLED'}")
 
         try:
+            crew_result = None
             if use_crewai:
-                script_content = await self._generate_with_crewai(news_items)
+                result_dict = await self._generate_with_crewai(news_items)
+                script_content = result_dict["script"]
+                crew_result = result_dict.get("crew_result")
             else:
                 script_content = await self._generate_legacy(context, news_items)
 
             if not script_content or len(script_content) < 100:
                 return self._failure("Generated script too short or empty")
+
+            try:
+                validation = ensure_dialogue_structure(script_content)
+            except ScriptFormatError as err:
+                logger.error(f"Script format validation failed: {err}")
+                return self._failure(str(err))
+
+            script_content = validation.normalized_script
+            if validation.warnings:
+                for issue in validation.warnings[:5]:
+                    logger.warning(
+                        "Script normalization warning (line %s): %s",
+                        issue.line_number,
+                        issue.message,
+                    )
 
             # Save to file
             script_path = FileUtils.get_temp_file(prefix="script_", suffix=".txt")
@@ -124,16 +143,28 @@ class GenerateScriptStep(WorkflowStep):
             # Store in context
             context.set("script_content", script_content)
             context.set("script_path", script_path)
+            context.set("script_validation", validation.to_dict())
+            if crew_result:
+                context.set("crew_result", crew_result)
 
             logger.info(f"Generated script: {len(script_content)} characters")
+
+            result_data = {
+                "script": script_content,
+                "script_path": script_path,
+                "length": len(script_content),
+                "quality_checked": use_crewai or cfg.use_three_stage_quality_check,
+                "used_crewai": use_crewai,
+                "validation": validation.to_dict(),
+            }
+
+            # Include quality metrics from CrewAI
+            if crew_result:
+                result_data["quality_data"] = crew_result.get("quality_data", {})
+                result_data["japanese_purity_score"] = crew_result.get("japanese_purity_score", 0)
+
             return self._success(
-                data={
-                    "script": script_content,
-                    "script_path": script_path,
-                    "length": len(script_content),
-                    "quality_checked": use_crewai or cfg.use_three_stage_quality_check,
-                    "used_crewai": use_crewai,
-                },
+                data=result_data,
                 files=[script_path],
             )
 
@@ -141,8 +172,12 @@ class GenerateScriptStep(WorkflowStep):
             logger.error(f"Step 2 failed: {e}")
             return self._failure(str(e))
 
-    async def _generate_with_crewai(self, news_items: List[Dict[str, Any]]) -> str:
-        """Generate script using CrewAI WOW Script Creation Flow."""
+    async def _generate_with_crewai(self, news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Generate script using CrewAI WOW Script Creation Flow.
+
+        Returns:
+            Dict with 'script' and 'crew_result' keys
+        """
         from app.crew.flows import create_wow_script_crew
 
         logger.info("🚀 Using CrewAI WOW Script Creation Crew...")
@@ -153,7 +188,10 @@ class GenerateScriptStep(WorkflowStep):
         if not crew_result.get("success"):
             raise Exception(f"CrewAI execution failed: {crew_result.get('error', 'Unknown error')}")
 
-        return crew_result.get("final_script", "")
+        return {
+            "script": crew_result.get("final_script", ""),
+            "crew_result": crew_result,
+        }
 
     async def _generate_legacy(self, context: WorkflowContext, news_items: List[Dict[str, Any]]) -> str:
         """Generate script using legacy 3-stage quality check."""
@@ -228,11 +266,7 @@ class GenerateVisualDesignStep(WorkflowStep):
             )
         else:
             try:
-                design = create_unified_design(
-                    news_items=news_items,
-                    script_content=script_content,
-                    mode=context.mode
-                )
+                design = create_unified_design(news_items=news_items, script_content=script_content, mode=context.mode)
             except Exception as e:
                 logger.error(f"Failed to create unified design: {e}, using default")
                 from app.background_theme import get_theme_manager
@@ -281,6 +315,16 @@ class SynthesizeAudioStep(WorkflowStep):
         script_content = context.get("script_content")
         if not script_content:
             return self._failure("No script content in context")
+
+        try:
+            validation = ensure_dialogue_structure(script_content)
+            if validation.normalized_script != script_content:
+                script_content = validation.normalized_script
+                context.set("script_content", script_content)
+                logger.info("Script content re-normalized before TTS synthesis")
+        except ScriptFormatError as err:
+            logger.error(f"Script format validation failed before TTS: {err}")
+            return self._failure(str(err))
 
         try:
             audio_paths = await synthesize_script(script_content)
@@ -430,10 +474,7 @@ class GenerateVideoStep(WorkflowStep):
                 files_to_archive["thumbnail"] = thumbnail_path
 
             archived_files = archival_manager.archive_workflow_files(
-                run_id=context.run_id,
-                timestamp=timestamp,
-                title=title,
-                files=files_to_archive
+                run_id=context.run_id, timestamp=timestamp, title=title, files=files_to_archive
             )
 
             # Update context with archived paths

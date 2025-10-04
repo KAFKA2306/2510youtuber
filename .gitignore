@@ -115,6 +115,7 @@ output/
 !docs/README_CREWAI.md
 !docs/API*.md
 !docs/VOICEVOX_SETUP.md
+!docs/VOICEVOX_NEMO.md
 !*CLAUDE.md*
 !*README.md*
 *Zone.Identifier*

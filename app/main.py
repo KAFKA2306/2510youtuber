@@ -74,19 +74,19 @@ class YouTubeWorkflow:
         # Define workflow steps (dependency injection ready)
         # NOTE: 視覚デザイン生成→サムネイル/メタデータ→動画生成の順序で視覚的統一性を確保
         self.steps: List[WorkflowStep] = [
-            CollectNewsStep(),           # Step 1: ニュース収集
-            GenerateScriptStep(),        # Step 2: 台本生成
+            CollectNewsStep(),  # Step 1: ニュース収集
+            GenerateScriptStep(),  # Step 2: 台本生成
             GenerateVisualDesignStep(),  # Step 2.5: 統一ビジュアルデザイン生成 (NEW)
-            GenerateMetadataStep(),      # Step 3: メタデータ生成
-            GenerateThumbnailStep(),     # Step 4: サムネイル生成
-            SynthesizeAudioStep(),       # Step 5: 音声合成
-            TranscribeAudioStep(),       # Step 6: 音声認識
-            AlignSubtitlesStep(),        # Step 7: 字幕整合
-            GenerateVideoStep(),         # Step 8: 動画生成 (統一デザインを使用)
-            QualityAssuranceStep(),      # Step 8.5: 自動QAゲート
-            UploadToDriveStep(),         # Step 9: Drive アップロード
-            UploadToYouTubeStep(),       # Step 10: YouTube アップロード
-            ReviewVideoStep(),           # Step 11: AIレビューで改善ログ生成
+            GenerateMetadataStep(),  # Step 3: メタデータ生成
+            GenerateThumbnailStep(),  # Step 4: サムネイル生成
+            SynthesizeAudioStep(),  # Step 5: 音声合成
+            TranscribeAudioStep(),  # Step 6: 音声認識
+            AlignSubtitlesStep(),  # Step 7: 字幕整合
+            GenerateVideoStep(),  # Step 8: 動画生成 (統一デザインを使用)
+            QualityAssuranceStep(),  # Step 8.5: 自動QAゲート
+            UploadToDriveStep(),  # Step 9: Drive アップロード
+            UploadToYouTubeStep(),  # Step 10: YouTube アップロード
+            ReviewVideoStep(),  # Step 11: AIレビューで改善ログ生成
         ]
 
     async def execute_full_workflow(self, mode: str = "daily") -> Dict[str, Any]:
@@ -287,6 +287,8 @@ class YouTubeWorkflow:
                     video_review_actions = [str(actions)]
 
         # Create WorkflowResult with rich data
+        script_step = step_results[1] if len(step_results) > 1 else None
+
         workflow_result = WorkflowResult(
             success=True,
             run_id=self.run_id,
@@ -300,10 +302,14 @@ class YouTubeWorkflow:
             title=title,
             thumbnail_path=thumbnail_path,
             # Quality metrics (extract if available)
-            wow_score=self._extract_wow_score(step_results[1] if len(step_results) > 1 else None),
-            japanese_purity=self._extract_japanese_purity(step_results[1] if len(step_results) > 1 else None),
+            wow_score=self._extract_wow_score(script_step),
+            surprise_points=self._extract_surprise_points(script_step),
+            emotion_peaks=self._extract_emotion_peaks(script_step),
+            visual_instructions=self._extract_visual_instructions(script_step),
+            retention_prediction=self._extract_retention_prediction(script_step),
+            japanese_purity=self._extract_japanese_purity(script_step),
             # Hook classification
-            hook_type=self._classify_hook_from_script(step_results[1] if len(step_results) > 1 else None),
+            hook_type=self._classify_hook_from_script(script_step),
             topic=self._extract_topic(step_results[0] if step_results else None),
             completed_steps=sum(1 for s in step_results if s.success),
             failed_steps=sum(1 for s in step_results if not s.success),
@@ -345,13 +351,61 @@ class YouTubeWorkflow:
 
     def _extract_wow_score(self, script_step: Any) -> Optional[float]:
         """Extract WOW score from script generation step."""
-        # TODO: Extract from CrewAI output if available
-        return None
+        if not script_step or not hasattr(script_step, "data"):
+            return None
+
+        quality_data = script_step.data.get("quality_data", {})
+        if not quality_data:
+            return None
+
+        # Try to extract from quality_guarantee structure
+        return quality_data.get("wow_score")
 
     def _extract_japanese_purity(self, script_step: Any) -> Optional[float]:
         """Extract Japanese purity from script generation step."""
-        # TODO: Extract from quality check if available
-        return None
+        if not script_step or not hasattr(script_step, "data"):
+            return None
+
+        # First try direct field
+        purity = script_step.data.get("japanese_purity_score")
+        if purity:
+            return purity
+
+        # Then try from quality_data
+        quality_data = script_step.data.get("quality_data", {})
+        return quality_data.get("japanese_purity")
+
+    def _extract_surprise_points(self, script_step: Any) -> Optional[int]:
+        """Extract surprise points count from quality data."""
+        if not script_step or not hasattr(script_step, "data"):
+            return None
+
+        quality_data = script_step.data.get("quality_data", {})
+        return quality_data.get("surprise_points")
+
+    def _extract_emotion_peaks(self, script_step: Any) -> Optional[int]:
+        """Extract emotion peaks count from quality data."""
+        if not script_step or not hasattr(script_step, "data"):
+            return None
+
+        quality_data = script_step.data.get("quality_data", {})
+        return quality_data.get("emotion_peaks")
+
+    def _extract_visual_instructions(self, script_step: Any) -> Optional[int]:
+        """Extract visual instructions count from quality data."""
+        if not script_step or not hasattr(script_step, "data"):
+            return None
+
+        quality_data = script_step.data.get("quality_data", {})
+        return quality_data.get("visual_instructions")
+
+    def _extract_retention_prediction(self, script_step: Any) -> Optional[float]:
+        """Extract retention prediction from quality data."""
+        if not script_step or not hasattr(script_step, "data"):
+            return None
+
+        quality_data = script_step.data.get("quality_data", {})
+        return quality_data.get("retention_prediction")
 
     def _classify_hook_from_script(self, script_step: Any) -> str:
         """Classify hook strategy from script content."""

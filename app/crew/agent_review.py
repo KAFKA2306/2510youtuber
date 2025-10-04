@@ -265,7 +265,9 @@ class AgentReviewCycle:
         for rubric_name, items in rubrics.items():
             readable = rubric_name.replace("_", " ")
             formatted_items = "\n        - ".join(str(item) for item in items)
-            rubric_lines.append(f"    {readable}:\n        - {formatted_items}" if formatted_items else f"    {readable}: (no entries)")
+            rubric_lines.append(
+                f"    {readable}:\n        - {formatted_items}" if formatted_items else f"    {readable}: (no entries)"
+            )
         rubric_block = "\n".join(rubric_lines)
         focus_block = focus if focus else "(前回の改善フォーカスはありません)"
 

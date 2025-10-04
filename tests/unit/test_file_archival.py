@@ -27,11 +27,7 @@ class TestVideoFileArchival:
         timestamp = "20251003_150000"
         title = "【速報】日銀利上げ"
 
-        output_path = manager.get_video_output_path(
-            run_id=run_id,
-            timestamp=timestamp,
-            title=title
-        )
+        output_path = manager.get_video_output_path(run_id=run_id, timestamp=timestamp, title=title)
 
         assert "output/" in output_path
         assert run_id in output_path
@@ -100,7 +96,7 @@ class TestVideoFileArchival:
                 files={
                     "video": temp_video,
                     "audio": temp_audio,
-                }
+                },
             )
 
             # Original temp files should be moved (or copied)
@@ -121,10 +117,7 @@ class TestVideoFileArchival:
             Path(temp_video).write_text("video content")
 
             archived = manager.archive_workflow_files(
-                run_id="test123",
-                timestamp="20251003_150000",
-                title="Test",
-                files={"video": temp_video}
+                run_id="test123", timestamp="20251003_150000", title="Test", files={"video": temp_video}
             )
 
             # After archival, file should exist
@@ -221,7 +214,8 @@ class TestVideoFileArchival:
             old_time = datetime(2020, 1, 1).timestamp()
             recent_time = datetime(2025, 10, 3).timestamp()
 
-            with patch('os.path.getmtime') as mock_getmtime:
+            with patch("os.path.getmtime") as mock_getmtime:
+
                 def mtime_side_effect(path):
                     path_str = str(path)
                     if "old_run" in path_str:
@@ -246,7 +240,7 @@ class TestWorkflowIntegration:
         from app.video import VideoGenerator
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch('app.video.FileArchivalManager') as mock_manager:
+            with patch("app.video.FileArchivalManager") as mock_manager:
                 mock_instance = MagicMock()
                 mock_manager.return_value = mock_instance
                 mock_instance.get_video_output_path.return_value = f"{tmpdir}/test_video.mp4"
@@ -291,7 +285,7 @@ class TestWorkflowIntegration:
                 "output/20251003_test123_TestVideo/video.mp4",
                 "output/20251003_test123_TestVideo/audio.wav",
                 "output/20251003_test123_TestVideo/thumbnail.png",
-            ]
+            ],
         )
 
         # All files should be in organized directory

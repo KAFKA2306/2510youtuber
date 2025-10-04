@@ -208,16 +208,17 @@ class GeminiVisionReviewer:
         title = str(raw_title) if raw_title is not None else None
         duration = str(raw_duration) if raw_duration is not None else None
         screenshot_lines = [
-            f"{idx + 1}. {shot.timestamp_label} ({os.path.basename(shot.path)})"
-            for idx, shot in enumerate(screenshots)
+            f"{idx + 1}. {shot.timestamp_label} ({os.path.basename(shot.path)})" for idx, shot in enumerate(screenshots)
         ]
 
-        context_block = "\n".join([
-            "あなたは金融系YouTubeチャンネルの品質管理AIです。",
-            "以下のスクリーンショットは動画を1分ごとにキャプチャしたものです。",
-            "視聴維持率、画面のバリエーション、テロップやグラフの可読性を評価し、次の動画改善に繋がるフィードバックを返してください。",
-            "視聴者は30代の投資家層で、最新ニュースを短時間で理解したいと考えています。",
-        ])
+        context_block = "\n".join(
+            [
+                "あなたは金融系YouTubeチャンネルの品質管理AIです。",
+                "以下のスクリーンショットは動画を1分ごとにキャプチャしたものです。",
+                "視聴維持率、画面のバリエーション、テロップやグラフの可読性を評価し、次の動画改善に繋がるフィードバックを返してください。",
+                "視聴者は30代の投資家層で、最新ニュースを短時間で理解したいと考えています。",
+            ]
+        )
 
         video_info_line = f"動画タイトル: {title}" if title else "動画タイトル: 不明"
         duration_line = f"推定尺: {duration}" if duration else "推定尺: 未取得"
@@ -234,7 +235,7 @@ class GeminiVisionReviewer:
                 '  "next_video_actions": ["次の動画で試すこと"]',
                 "}",
                 "日本語のみを使用し、簡潔かつ実行可能な提案にしてください。",
-                "未知の場合は""不明""と記載せず、推測で埋めないでください。",
+                "未知の場合は" "不明" "と記載せず、推測で埋めないでください。",
             ]
         )
 
