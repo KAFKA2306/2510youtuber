@@ -86,6 +86,12 @@ class CrewConfig(BaseModel):
     verbose: bool = False
 
 
+class ScriptGenerationConfig(BaseModel):
+    """Script generation feature flags."""
+
+    quality_gate_llm_enabled: bool = True
+
+
 class MediaQAGatingConfig(BaseModel):
     """QAゲートの挙動設定"""
 
@@ -200,6 +206,7 @@ class AppSettings(BaseModel):
     video_review: VideoReviewConfig = Field(default_factory=VideoReviewConfig)
     media_quality: MediaQAConfig = Field(default_factory=MediaQAConfig)
     gemini_models: GeminiModelConfig = Field(default_factory=GeminiModelConfig)
+    script_generation: ScriptGenerationConfig = Field(default_factory=ScriptGenerationConfig)
 
     # Google Drive/Sheets settings (for backward compatibility)
     google_sheet_id: Optional[str] = None
@@ -307,6 +314,11 @@ class AppSettings(BaseModel):
             config["media_quality"] = MediaQAConfig(**config["media_quality"])
         else:
             config["media_quality"] = MediaQAConfig()
+
+        if "script_generation" in config:
+            config["script_generation"] = ScriptGenerationConfig(**config["script_generation"])
+        else:
+            config["script_generation"] = ScriptGenerationConfig()
 
         # pydantic expects the quality field, but yaml has quality_thresholds
         if "quality_thresholds" in config:

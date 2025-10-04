@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config.paths import ProjectPaths
 
@@ -95,6 +95,12 @@ class CrewConfig(BaseModel):
     verbose: bool = False
 
 
+class ScriptGenerationConfig(BaseModel):
+    """Script generation feature toggles."""
+
+    quality_gate_llm_enabled: bool = True
+
+
 class AppSettings(BaseModel):
     """アプリケーション統合設定"""
 
@@ -117,6 +123,7 @@ class AppSettings(BaseModel):
 
     use_crewai_script_generation: bool = True
     use_three_stage_quality_check: bool = True
+    script_generation: ScriptGenerationConfig = Field(default_factory=ScriptGenerationConfig)
     max_video_duration_minutes: int = 15
     discord_webhook_url: Optional[str] = None
     google_credentials_json: Optional[Dict[str, Any]] = None  # Google Sheets認証情報
@@ -191,6 +198,10 @@ class AppSettings(BaseModel):
         # For compatibility with old cfg object
         config["use_crewai_script_generation"] = config.get("crew", {}).get("enabled", True)
         config["use_three_stage_quality_check"] = not config.get("crew", {}).get("enabled", True)
+        if "script_generation" in config:
+            config["script_generation"] = ScriptGenerationConfig(**config["script_generation"])
+        else:
+            config["script_generation"] = ScriptGenerationConfig()
         config["max_video_duration_minutes"] = config.get("video", {}).get("max_duration_minutes", 15)
 
         return cls(**config)

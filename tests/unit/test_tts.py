@@ -78,11 +78,10 @@ def test_split_by_speaker_only_newlines(tts_manager):
 
 
 def test_split_by_speaker_unrecognized_speaker(tts_manager):
-    """認識されない話者のテスト"""
+    """認識されない話者でもフォールバックとして処理されることをテスト"""
     text = "山田: こんにちは。"
-    expected = []
     result = tts_manager._split_by_speaker(text)
-    assert result == expected
+    assert result == [{"speaker": "山田", "content": "こんにちは。"}]
 
 
 def test_split_by_speaker_multiple_speakers_same_line(tts_manager):
@@ -99,8 +98,8 @@ def test_legacy_speaker_names_compatibility(tts_manager):
     result = tts_manager._split_by_speaker(text)
     # 旧話者名でも認識されること
     assert len(result) == 2
-    assert result[0]["speaker"] == "田中"
-    assert result[1]["speaker"] == "鈴木"
+    assert result[0]["speaker"] == "武宏"
+    assert result[1]["speaker"] == "つむぎ"
 
 
 def test_voice_config_contains_speaker_info(tts_manager):
@@ -132,3 +131,13 @@ def test_legacy_speaker_voice_config_mapping(tts_manager):
     # 鈴木 → つむぎ
     config_suzuki = tts_manager._get_voice_config("鈴木")
     assert config_suzuki["voicevox_speaker"] == 8
+
+
+def test_build_chunks_uses_fallback_voice_for_unknown_speaker(tts_manager):
+    """未知の話者でもフォールバック音声でチャンク化できることをテスト"""
+    chunks = tts_manager._build_chunks_from_dialogues(
+        [{"speaker": "山田", "line": "おはようございます。"}]
+    )
+
+    assert chunks
+    assert chunks[0]["speaker"] == tts_manager.speaker_registry.fallback_speaker

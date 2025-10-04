@@ -7,6 +7,9 @@
 gemini_models:
   default: gemini-2.5-flash-preview-09-2025
 
+script_generation:
+  quality_gate_llm_enabled: true
+
 # ============================================
 # 話者設定 (VOICEVOX対応)
 # ============================================
