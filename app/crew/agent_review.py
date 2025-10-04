@@ -237,23 +237,28 @@ class AgentReviewCycle:
     ) -> Optional[AgentReviewResult]:
         if not self._client:
             return None
-        
-        workflow_logger.agent_start(agent_key, task_name)
+
+        # エージェント開始ログ
         workflow_logger.agent_start(agent_key, task_name)
 
+        # Geminiへ評価リクエスト
         prompt = self._build_prompt(agent_key, task_name, task, task_output, agent_config)
         response_text = self._client.generate_structured(prompt)
-        
-        workflow_logger.logger.debug(f"Parsing output from {agent_key} ({len(response_text)} chars)")
-        workflow_logger.logger.debug(f"Parsing output from {agent_key} ({len(response_text)} chars)")
-        response = parse_json_from_gemini(response_text, agent_key)
-        
+
+        # GeminiClientがdictを返す場合とstrを返す場合を吸収
+        if isinstance(response_text, dict):
+            response = response_text
+        else:
+            # 出力解析ログ
+            workflow_logger.logger.debug(
+                f"Parsing output from {agent_key} ({len(response_text)} chars)"
+            )
+            response = parse_json_from_gemini(str(response_text), agent_key)
+
+        # 正規化
         processed = self._normalize_response(response)
-        
-        workflow_logger.agent_end(agent_key, len(response_text))
-        
-        processed = self._normalize_response(response)
-        
+
+        # エージェント終了ログ
         workflow_logger.agent_end(agent_key, len(response_text))
 
         return AgentReviewResult(
@@ -379,7 +384,10 @@ def parse_json_from_gemini(response_text: str, agent_key: str) -> dict:
         def _as_list(value: object) -> List[str]:
             if isinstance(value, list):
                 return [str(item).strip() for item in value if str(item).strip()]
-            if isinstance(value, str) and value.strip():
+            # If value is not a list, and it's not a string, convert it to string before stripping
+            if not isinstance(value, str):
+                value = str(value)
+            if value and value.strip():
                 return [value.strip()]
             return []
 

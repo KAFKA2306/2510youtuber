@@ -553,7 +553,7 @@ if __name__ == "__main__":
 
     async def main():
         mode = sys.argv[1] if len(sys.argv) > 1 else "test"
-        logger.step_start("YouTube Workflow", details=f"{mode} mode")
+        logger.info(f"🚀 Starting YouTube Workflow ({mode} mode)")
 
         try:
             start_time = time.time()
@@ -561,20 +561,17 @@ if __name__ == "__main__":
             duration = time.time() - start_time
 
             if result.get("success"):
-                logger.step_end("YouTube Workflow", duration=duration, status="SUCCESS")
-                logger.logger.info(f"Video URL: {result.get('video_url', 'N/A')}")
-                logger.logger.info(f"Files generated: {len(result.get('generated_files', []))}")
+                logger.info(f"✅ Workflow completed successfully! (Execution time: {duration:.1f}s)")
+                logger.info(f"Video URL: {result.get('video_url', 'N/A')}")
+                logger.info(f"Files generated: {len(result.get('generated_files', []))}")
             else:
-                logger.step_end("YouTube Workflow", duration=duration, status="FAILED")
-                logger.logger.error(f"Workflow failed: {result.get('error', 'Unknown error')}")
+                logger.error(f"❌ Workflow failed: {result.get('error', 'Unknown error')}")
                 sys.exit(1)
         except KeyboardInterrupt:
-            logger.step_end("YouTube Workflow", status="FAILED")
-            logger.logger.warning("\n⚠️ Workflow interrupted by user")
+            logger.warning("⚠️ Workflow interrupted by user")
             sys.exit(130)
         except Exception as e:
-            logger.step_end("YouTube Workflow", status="FAILED")
-            logger.logger.error(f"❌ Unexpected error: {e}", exc_info=True)
+            logger.error(f"❌ Unexpected error: {e}", exc_info=True)
             sys.exit(1)
 
     asyncio.run(main())

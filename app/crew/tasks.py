@@ -10,6 +10,7 @@ from crewai import Agent, Task
 
 from app.config_prompts.settings import settings
 from app.services.script.continuity import get_continuity_prompt_snippet
+from app.services.script.validator import Script
 
 logger = logging.getLogger(__name__)
 
@@ -183,9 +184,8 @@ def create_wow_tasks(
         context_tasks=[tasks["task1_deep_analysis"], tasks["task2_curiosity_gaps"], tasks["task3_story_arc"]],
         task_id="task4_script_writing",
         task_config={"agent_key": "script_writer"},
-        expected_output="高品質な動画スクリプト",
-        output_json=None,  # 追加: JSON強制を無効化
-        output_pydantic=None,  # 追加: Pydantic検証を無効化
+        expected_output="Pydantic Scriptモデルに準拠したJSON形式の動画スクリプト",
+        output_pydantic=Script,  # Pydantic Scriptモデルを期待
     )
 
     # Task 5: Engagement Optimization

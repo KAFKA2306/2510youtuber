@@ -5,7 +5,7 @@
 
 from .news import NewsCollection, NewsItem
 from .qa import CheckStatus, MediaCheckResult, QualityGateReport
-from .script import QualityScore, Script, ScriptSegment, WOWMetrics
+from app.services.script.validator import QualityScore, Script, ScriptSegment, WOWMetrics
 from .video_review import ScreenshotEvidence, VideoReviewFeedback, VideoReviewResult
 from .workflow import StepResult, WorkflowResult, WorkflowState
 

@@ -19,8 +19,10 @@ class ColoredFormatter(logging.Formatter):
         color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
         reset = self.COLORS['RESET']
         
-        # タイムスタンプを短縮
-        timestamp = datetime.fromtimestamp(record.created).strftime('%H:%M:%S')
+        # タイムスタンプを短縮 (record.asctimeを使用)
+        if not hasattr(record, "asctime"):
+            record.asctime = self.formatTime(record, self.datefmt)
+        timestamp = record.asctime.split(' ')[1] # Extract HH:MM:SS from asctime
         
         # モジュール名を短縮
         module = record.name.split('.')[-1][:15]

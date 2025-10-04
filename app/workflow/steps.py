@@ -179,6 +179,7 @@ class GenerateScriptStep(WorkflowStep):
             Dict with 'script' and 'crew_result' keys
         """
         from app.crew.flows import create_wow_script_crew
+        from app.services.script.validator import Script # Import Script model
 
         logger.info("🚀 Using CrewAI WOW Script Creation Crew...")
         crew_result = create_wow_script_crew(
@@ -188,8 +189,15 @@ class GenerateScriptStep(WorkflowStep):
         if not crew_result.get("success"):
             raise Exception(f"CrewAI execution failed: {crew_result.get('error', 'Unknown error')}")
 
+        # Assuming final_script is now a Pydantic Script object
+        script_obj: Script = crew_result.get("final_script")
+        if not isinstance(script_obj, Script):
+            raise TypeError("CrewAI did not return a Pydantic Script object.")
+
+        script_content = script_obj.to_text() # Convert to plain text
+
         return {
-            "script": crew_result.get("final_script", ""),
+            "script": script_content,
             "crew_result": crew_result,
         }
 
@@ -469,6 +477,7 @@ class GenerateVideoStep(WorkflowStep):
                 "video": video_path,
                 "audio": audio_path,
                 "subtitle": subtitle_path,
+                "script": context.get("script_path"), # Add script_path
             }
             if thumbnail_path and os.path.exists(thumbnail_path):
                 files_to_archive["thumbnail"] = thumbnail_path
