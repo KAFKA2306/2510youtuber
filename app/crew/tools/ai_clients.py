@@ -528,9 +528,7 @@ try:
         model_mapping = {}
 
         resolved_model = model or settings.gemini_models.get("crew_agents")
-        clean_model = (
-            resolved_model.replace("models/", "") if resolved_model.startswith("models/") else resolved_model
-        )
+        clean_model = resolved_model.replace("models/", "") if resolved_model.startswith("models/") else resolved_model
         final_model = model_mapping.get(clean_model, clean_model)
 
         logger.info(f"CrewAI LLM: {resolved_model} -> {final_model} (Direct Gemini SDK)")
