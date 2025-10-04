@@ -8,7 +8,6 @@ from typing import Dict, Iterable, List, Optional
 
 from app.config.settings import SpeakerConfig, settings
 
-
 LEGACY_SPEAKER_ALIASES: Dict[str, str] = {"田中": "武宏", "鈴木": "つむぎ", "司会": "ナレーター"}
 
 
@@ -21,6 +20,10 @@ class SpeakerRegistry:
     @property
     def canonical_names(self) -> List[str]:
         return list(self.voice_configs.keys())
+
+    @property
+    def fallback_speaker(self) -> Optional[str]:
+        return next(iter(self.voice_configs), None)
 
     @property
     def alias_map(self) -> Dict[str, str]:
@@ -58,6 +61,12 @@ class SpeakerRegistry:
         if canonical and canonical in self.voice_configs:
             return self.voice_configs[canonical]
         return None
+
+    def resolve_voice_target(self, speaker: Optional[str]) -> Optional[str]:
+        canonical = self.canonicalize(speaker)
+        if canonical in self.voice_configs:
+            return canonical
+        return self.fallback_speaker
 
 
 @lru_cache(maxsize=1)

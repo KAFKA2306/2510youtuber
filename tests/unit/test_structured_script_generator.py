@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from app.services.script.generator import StructuredScriptGenerator
+from app.config.settings import settings
+from app.services.script.generator import ScriptQualityReport, StructuredScriptGenerator
 from app.services.script.validator import Script
 
 
@@ -75,3 +76,68 @@ def test_structured_generator_returns_script(monkeypatch):
     assert result.metadata.wow_score == pytest.approx(8.4)
     assert result.metadata.japanese_purity_score == pytest.approx(97.2)
     assert result.metadata.retention_prediction == pytest.approx(0.56)
+    assert isinstance(result.metadata.quality_report, ScriptQualityReport)
+    assert result.metadata.quality_report.dialogue_lines == 4
+
+
+def test_generator_uses_fallback_when_quality_gate_disabled(monkeypatch):
+    raw_script = "武宏: 今朝のマーケットは大きく動きました。\nつむぎ: 具体的にはどの指標ですか？"
+    response = {"choices": [{"message": {"content": raw_script}}]}
+
+    monkeypatch.setattr(
+        settings.script_generation,
+        "quality_gate_llm_enabled",
+        False,
+        raising=False,
+    )
+
+    generator = StructuredScriptGenerator(client=DummyClient([response]), max_attempts=1)
+
+    result = generator.generate(
+        news_items=[
+            {
+                "title": "日経平均が急伸",
+                "summary": "米国株高を受けて東京市場が反発した。",
+                "source": "日経",
+                "impact_level": "medium",
+            }
+        ]
+    )
+
+    assert isinstance(result.script, Script)
+    assert len(result.script.dialogues) >= 2
+    assert result.script.dialogues[0].speaker == "武宏"
+    assert result.metadata.wow_score is None
+    assert result.metadata.quality_report is not None
+    assert result.metadata.quality_report.dialogue_lines >= 1
+    assert result.metadata.quality_report.errors
+
+
+def test_generator_returns_fallback_when_quality_gate_enabled(monkeypatch):
+    raw_script = "武宏: リスクイベントを振り返りましょう。\n解析: 補助テキストのみ。"
+    response = {"choices": [{"message": {"content": raw_script}}]}
+
+    monkeypatch.setattr(
+        settings.script_generation,
+        "quality_gate_llm_enabled",
+        True,
+        raising=False,
+    )
+
+    generator = StructuredScriptGenerator(client=DummyClient([response]), max_attempts=1)
+
+    result = generator.generate(
+        news_items=[
+            {
+                "title": "TOPIXが続伸",
+                "summary": "好決算を受けた買いで幅広い銘柄が上昇。",
+                "source": "Bloomberg",
+                "impact_level": "medium",
+            }
+        ]
+    )
+
+    assert result.script.dialogues[0].speaker == "武宏"
+    assert result.metadata.quality_report is not None
+    assert result.metadata.quality_report.dialogue_lines >= 1
+    assert result.metadata.quality_report.errors

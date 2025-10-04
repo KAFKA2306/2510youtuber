@@ -8,7 +8,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from elevenlabs import VoiceSettings
 from elevenlabs.client import AsyncElevenLabs
@@ -95,11 +95,8 @@ class TTSManager:
         認識可能な話者ラベルが含まれない場合は空リストを返す。
         """
         alias_pattern = self.speaker_registry.aliases_regex_pattern()
-        if alias_pattern:
-            compiled_pattern = re.compile(rf"^({alias_pattern})\s*([:：])\s*(.*)")
-        else:
-            logger.warning("Speaker registry has no configured names; falling back to generic label parsing")
-            compiled_pattern = re.compile(r"^([^:：\s]{1,32})\s*([:：])\s*(.*)")
+        compiled_pattern = re.compile(rf"^({alias_pattern})\s*([:：])\s*(.*)") if alias_pattern else None
+        generic_pattern = re.compile(r"^([^:：\s]{1,32})\s*([:：])\s*(.*)")
 
         lines = text.split("\n")
         speaker_lines: List[Dict[str, str]] = []
@@ -111,7 +108,9 @@ class TTSManager:
             line = line.strip()
             if not line:
                 continue
-            speaker_match = compiled_pattern.match(line)
+            speaker_match = compiled_pattern.match(line) if compiled_pattern else None
+            if not speaker_match:
+                speaker_match = generic_pattern.match(line)
             if speaker_match:
                 if current_speaker is not None and current_content:
                     speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
@@ -128,7 +127,9 @@ class TTSManager:
             speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
 
         if not speaker_lines and (unmatched_content or text.strip()):
-            logger.warning("No recognizable speaker labels found; returning empty speaker list")
+            logger.warning(
+                "No recognizable speaker labels matched configured aliases; using generic parsing"
+            )
 
         return speaker_lines
 
@@ -145,9 +146,16 @@ class TTSManager:
                 speaker = entry.get("speaker")
                 content = entry.get("line") or entry.get("text") or entry.get("content")
 
-            canonical = self.speaker_registry.canonicalize(speaker)
-            if not canonical or not content:
+            if not content:
                 continue
+
+            canonical = self.speaker_registry.resolve_voice_target(speaker)
+            if not canonical:
+                logger.warning("Skipping dialogue with no resolvable speaker: %s", speaker)
+                continue
+
+            if speaker and canonical != self.speaker_registry.canonicalize(speaker):
+                logger.info("Unknown speaker '%s'; routing to fallback voice '%s'", speaker, canonical)
 
             sub_chunks = self._split_long_content(content, self.chunk_size)
             for chunk_text in sub_chunks:
@@ -198,19 +206,23 @@ class TTSManager:
             config = voice_configs.get(legacy_mapping[speaker])
             logger.info(f"Using legacy speaker mapping: {speaker} → {legacy_mapping[speaker]}")
 
-        # デフォルトフォールバック
         if not config:
-            default_speaker = list(voice_configs.values())[0] if voice_configs else None
-            if default_speaker:
-                config = default_speaker
-                logger.warning(f"Speaker '{speaker}' not found, using default: {config.name}")
-            else:
-                logger.warning(f"No voice configuration found for speaker '{speaker}'. Using default VoiceSettings.")
-                return {
-                    "voice_id": "default_voice_id",
-                    "voicevox_speaker": 3,
-                    "settings": VoiceSettings(),
-                }
+            fallback = self.speaker_registry.fallback_speaker
+            if fallback and fallback in voice_configs:
+                config = voice_configs[fallback]
+                logger.warning(
+                    f"Voice config for '{speaker}' not found; using fallback speaker '{fallback}'"
+                )
+
+        if not config:
+            logger.warning(
+                f"No voice configuration found for speaker '{speaker}'. Using default VoiceSettings."
+            )
+            return {
+                "voice_id": "default_voice_id",
+                "voicevox_speaker": 3,
+                "settings": VoiceSettings(),
+            }
 
         config_dict = config.dict()
         config_dict["settings"] = VoiceSettings(

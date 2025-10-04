@@ -59,7 +59,10 @@ class VideoScreenshotExtractor:
 
         existing = sorted(Path(output_dir).glob("*.png"))
         duration = self._get_video_duration(video_path)
-        expected_count = max(1, min(max_screenshots, math.ceil(duration / interval_seconds)))
+        if duration > 0:
+            expected_count = max(1, min(max_screenshots, math.ceil(duration / interval_seconds)))
+        else:
+            expected_count = max_screenshots
 
         if existing and not force:
             logger.info(
@@ -113,7 +116,7 @@ class VideoScreenshotExtractor:
                 if stream.get("codec_type") == "video" and stream.get("duration"):
                     return float(stream["duration"])
             return float(probe.get("format", {}).get("duration", 0.0))
-        except ffmpeg.Error as exc:  # type: ignore[attr-defined]
+        except (ffmpeg.Error, FileNotFoundError) as exc:  # type: ignore[attr-defined]
             logger.warning("Failed to probe video duration: %s", exc)
             return 0.0
 
@@ -124,8 +127,9 @@ class VideoScreenshotExtractor:
         duration: float,
     ) -> List[ScreenshotEvidence]:
         screenshots: List[ScreenshotEvidence] = []
+        effective_duration = duration if duration > 0 else max((len(files) - 1) * interval_seconds, 0)
         for idx, path in enumerate(files):
-            timestamp = min(duration, idx * interval_seconds)
+            timestamp = min(effective_duration, idx * interval_seconds)
             screenshots.append(
                 ScreenshotEvidence(
                     index=idx,

@@ -13,15 +13,14 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from app.logging_config import WorkflowLogger, setup_logging
+from app.logging_config import get_log_session, setup_logging
 
 # 環境変数からログレベル取得（デフォルトはINFO）
 log_level_str = os.getenv("LOG_LEVEL", "INFO")
 log_level = getattr(logging, log_level_str.upper(), logging.INFO)
 
 # ロギングセットアップ
-setup_logging(log_level=log_level)
-logger = WorkflowLogger(__name__)
+_LOG_SESSION = setup_logging(log_level=log_level)
 
 from .api_rotation import initialize_api_infrastructure
 from .config import cfg
@@ -82,6 +81,7 @@ class YouTubeWorkflow:
         self.run_id = None
         self.mode = "daily"
         self.context: Optional[WorkflowContext] = None
+        self._log_session = get_log_session()
 
         # Define workflow steps (dependency injection ready)
         # NOTE: 視覚デザイン生成→サムネイル/メタデータ→動画生成の順序で視覚的統一性を確保
@@ -189,6 +189,17 @@ class YouTubeWorkflow:
                 execution_time = (datetime.now() - start_time).total_seconds()
                 result = self._compile_final_result(final_results, execution_time)
 
+                if self._log_session:
+                    self._log_session.mark_status(
+                        "succeeded",
+                        execution_time_seconds=execution_time,
+                        attempts=attempt,
+                        max_attempts=max_attempts,
+                        steps=[step.step_name for step in self.steps],
+                        video_url=video_url,
+                        news_count=result.get("news_count"),
+                    )
+
                 await self._notify_workflow_success(result)
                 self._update_run_status("completed", result)
 
@@ -211,6 +222,13 @@ class YouTubeWorkflow:
             }
             await self._notify_workflow_error(e)
             self._update_run_status("failed", error_result)
+            if self._log_session:
+                self._log_session.mark_status(
+                    "failed",
+                    error=str(e),
+                    step="exception",
+                    execution_time_seconds=execution_time,
+                )
             return error_result
         finally:
             self._cleanup_temp_files()
@@ -248,14 +266,21 @@ class YouTubeWorkflow:
             if sheets_manager:
                 run_id = sheets_manager.create_run(mode)
                 logger.info(f"Initialized workflow run: {run_id}")
+                if self._log_session:
+                    self._log_session.bind_workflow_run(run_id, mode=mode)
                 return run_id
             else:
                 run_id = f"local_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 logger.warning(f"Sheets not available, using local run ID: {run_id}")
+                if self._log_session:
+                    self._log_session.bind_workflow_run(run_id, mode=mode)
                 return run_id
         except Exception as e:
             logger.error(f"Failed to initialize run: {e}")
-            return f"fallback_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            fallback_run_id = f"fallback_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            if self._log_session:
+                self._log_session.bind_workflow_run(fallback_run_id, mode=mode)
+            return fallback_run_id
 
     async def _handle_workflow_failure(self, step_name: str, result: Any) -> Dict[str, Any]:
         """ステップ失敗時の処理"""
@@ -263,6 +288,13 @@ class YouTubeWorkflow:
         logger.error(error_message)
         await self._notify_workflow_error(RuntimeError(error_message))
         self._update_run_status("failed", {"error": error_message})
+        if self._log_session:
+            self._log_session.mark_status(
+                "failed",
+                failed_step=step_name,
+                error=error_message,
+                run_id=self.run_id,
+            )
         return {
             "success": False,
             "failed_step": step_name,

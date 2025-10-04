@@ -10,13 +10,20 @@ import json
 import logging
 import textwrap
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field, ValidationError
 
 from app.adapters.llm import LLMClient
+from app.adapters.llm import _extract_message_text as adapter_extract_message_text
 from app.config.settings import settings
-from app.services.script.validator import DialogueEntry, Script
+from app.services.script.validator import (
+    DialogueEntry,
+    Script,
+    ScriptFormatError,
+    ScriptValidationResult,
+    ensure_dialogue_structure,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +32,25 @@ class ScriptGenerationMetadata(BaseModel):
     """Optional quality metrics returned alongside the generated script."""
 
     wow_score: Optional[float] = Field(default=None, description="WOW score")
-    japanese_purity_score: Optional[float] = Field(default=None, description="Japanese purity score (0-100)")
-    retention_prediction: Optional[float] = Field(default=None, description="Predicted audience retention (0-1)")
+    japanese_purity_score: Optional[float] = Field(
+        default=None, description="Japanese purity score (0-100)"
+    )
+    retention_prediction: Optional[float] = Field(
+        default=None, description="Predicted audience retention (0-1)"
+    )
+    quality_report: Optional["ScriptQualityReport"] = Field(
+        default=None, description="Static quality heuristics calculated locally"
+    )
+
+
+class ScriptQualityReport(BaseModel):
+    """Static dialogue quality heuristics independent from the LLM."""
+
+    dialogue_lines: int
+    total_nonempty_lines: int
+    distinct_speakers: int
+    warnings: List[str] = Field(default_factory=list)
+    errors: List[str] = Field(default_factory=list)
 
 
 class StructuredScriptPayload(BaseModel):
@@ -73,6 +97,7 @@ class StructuredScriptGenerator:
         model_name = settings.gemini_models.get("script_generation")
         self.client = client or LLMClient(model=model_name, temperature=temperature)
         self._allowed_speakers = [speaker.name for speaker in settings.speakers]
+        self._quality_gate_enabled = settings.script_generation.quality_gate_llm_enabled
 
         if len(self._allowed_speakers) < 2:
             raise RuntimeError("At least two speakers must be configured for script generation")
@@ -103,16 +128,38 @@ class StructuredScriptGenerator:
             response_text = self._extract_message_text(response)
             logger.debug("LLM raw response (first 400 chars): %r", response_text[:400])
 
+            fallback_candidate: Optional[ScriptGenerationResult] = None
+
             try:
                 payload = self._parse_payload(response_text)
             except ValueError as exc:
                 logger.warning("Structured script parse failed: %s", exc)
+                try:
+                    script, quality_report = self._build_script_from_text(response_text)
+                except ValueError as fallback_error:
+                    logger.warning("Fallback script conversion failed: %s", fallback_error)
+                    continue
+
+                metadata = ScriptGenerationMetadata(quality_report=quality_report)
+                fallback_candidate = ScriptGenerationResult(
+                    script=script,
+                    metadata=metadata,
+                    raw_response=response_text,
+                )
+                if not self._quality_gate_enabled:
+                    return fallback_candidate
+                logger.info("Quality gate enabled; retrying after fallback candidate")
                 continue
 
             script = payload.to_script()
             metadata = payload.to_metadata()
+            metadata.quality_report = self._compute_quality_report(script)
 
             return ScriptGenerationResult(script=script, metadata=metadata, raw_response=response_text)
+
+        if fallback_candidate:
+            logger.warning("Returning fallback script after all attempts failed to parse JSON")
+            return fallback_candidate
 
         raise RuntimeError("Structured script generation failed after all attempts")
 
@@ -153,24 +200,6 @@ class StructuredScriptGenerator:
 
         return textwrap.dedent(template).strip()
 
-    @staticmethod
-    def _extract_message_text(response: Any) -> str:
-        """Mirror logic from :func:`app.adapters.llm._extract_message_text`."""
-
-        if isinstance(response, dict) and "choices" in response:
-            try:
-                choice = response["choices"][0]
-                message = choice.get("message") or choice.get("content")
-                if isinstance(message, dict):
-                    return str(message.get("content") or message.get("text") or "").strip()
-                if isinstance(message, list):
-                    return "".join(str(part.get("text", part)) for part in message).strip()
-                if message is not None:
-                    return str(message).strip()
-            except Exception:  # pragma: no cover - defensive path
-                pass
-        return str(response).strip()
-
     def _parse_payload(self, response_text: str) -> StructuredScriptPayload:
         json_blob = self._extract_json_block(response_text)
         if not json_blob:
@@ -208,6 +237,12 @@ class StructuredScriptGenerator:
         return candidate if StructuredScriptGenerator._is_balanced_json(candidate) else None
 
     @staticmethod
+    def _extract_message_text(response: Dict[str, Any]) -> str:
+        """Expose adapter helper for tests and fallback paths."""
+
+        return adapter_extract_message_text(response)
+
+    @staticmethod
     def _find_matching_brace(text: str) -> Optional[int]:
         depth = 0
         for idx, char in enumerate(text):
@@ -226,6 +261,128 @@ class StructuredScriptGenerator:
             return True
         except json.JSONDecodeError:
             return False
+
+    def _build_script_from_text(self, response_text: str) -> Tuple[Script, ScriptQualityReport]:
+        """Derive a :class:`Script` from arbitrary LLM output."""
+
+        validation: Optional[ScriptValidationResult] = None
+        try:
+            validation = ensure_dialogue_structure(
+                response_text,
+                allowed_speakers=self._allowed_speakers,
+                min_dialogue_lines=10,
+            )
+        except ScriptFormatError as exc:
+            validation = exc.result
+            logger.debug("Dialogue structure issues: %s", exc)
+
+        dialogues = self._dialogues_from_validation(validation)
+
+        if not dialogues:
+            dialogues = self._fabricate_dialogues(response_text)
+
+        title = self._infer_title(response_text)
+        script = Script(title=title, dialogues=dialogues)
+        quality_report = self._build_quality_report_from_validation(validation, script)
+
+        return script, quality_report
+
+    def _dialogues_from_validation(
+        self, validation: Optional[ScriptValidationResult]
+    ) -> List[DialogueEntry]:
+        if not validation:
+            return []
+
+        dialogues: List[DialogueEntry] = []
+        for raw_line in validation.normalized_script.splitlines():
+            stripped = raw_line.strip()
+            if not stripped or ":" not in stripped:
+                continue
+            speaker, content = stripped.split(":", 1)
+            speaker = speaker.strip()
+            content = content.strip() or "(内容未設定)"
+            dialogues.append(DialogueEntry(speaker=speaker, line=content))
+
+        return dialogues
+
+    def _fabricate_dialogues(self, response_text: str) -> List[DialogueEntry]:
+        dialogues: List[DialogueEntry] = []
+
+        for raw_line in response_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            speaker = None
+            content = line
+
+            if ":" in line:
+                potential, remainder = line.split(":", 1)
+                normalized_speaker = potential.strip()
+                remainder = remainder.strip()
+                if remainder:
+                    speaker = normalized_speaker
+                    content = remainder
+
+            if speaker is None:
+                speaker = self._allowed_speakers[len(dialogues) % len(self._allowed_speakers)]
+            if not content:
+                content = "(内容未設定)"
+
+            dialogues.append(DialogueEntry(speaker=speaker, line=content))
+
+        if not dialogues:
+            raise ValueError("No dialogue lines discovered in text output")
+
+        if len(dialogues) == 1:
+            alternate = self._allowed_speakers[1 % len(self._allowed_speakers)]
+            dialogues.append(DialogueEntry(speaker=alternate, line="(補完台詞)"))
+
+        return dialogues
+
+    def _infer_title(self, response_text: str) -> str:
+        for line in response_text.splitlines():
+            candidate = line.strip()
+            if not candidate:
+                continue
+            if candidate.startswith("{"):
+                continue
+            return candidate[:80]
+        return "自動生成スクリプト"
+
+    def _build_quality_report_from_validation(
+        self,
+        validation: Optional[ScriptValidationResult],
+        script: Script,
+    ) -> ScriptQualityReport:
+        if not validation:
+            return ScriptQualityReport(
+                dialogue_lines=len(script.dialogues),
+                total_nonempty_lines=len(script.dialogues),
+                distinct_speakers=len({d.speaker for d in script.dialogues}),
+                warnings=[],
+                errors=[],
+            )
+
+        return ScriptQualityReport(
+            dialogue_lines=validation.dialogue_line_count,
+            total_nonempty_lines=validation.nonempty_line_count,
+            distinct_speakers=sum(1 for count in validation.speaker_counts.values() if count > 0),
+            warnings=[issue.message for issue in validation.warnings],
+            errors=[issue.message for issue in validation.errors],
+        )
+
+    def _compute_quality_report(self, script: Script) -> ScriptQualityReport:
+        try:
+            validation = ensure_dialogue_structure(
+                script.to_text(),
+                allowed_speakers=self._allowed_speakers,
+                min_dialogue_lines=10,
+            )
+        except ScriptFormatError as exc:
+            validation = exc.result
+
+        return self._build_quality_report_from_validation(validation, script)
 
     @staticmethod
     def _format_news_digest(news_items: List[Dict[str, Any]]) -> str:
@@ -250,4 +407,7 @@ class StructuredScriptGenerator:
             )
 
         return "\n\n".join(lines)
+
+
+ScriptGenerationMetadata.model_rebuild()
 

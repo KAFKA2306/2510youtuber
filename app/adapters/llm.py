@@ -102,7 +102,13 @@ class CrewAIGeminiLLM(BaseLLM):
         **kwargs: Any,
     ) -> None:
         target_model = model or settings.llm_model
-        super().__init__(model=target_model, temperature=temperature, stop=stop)
+        # The CrewAI BaseLLM currently forwards __init__ to ``object.__init__`` which
+        # rejects positional or keyword arguments.  Manually mirror the base
+        # attributes instead of delegating so the adapter can be instantiated in
+        # unit tests without requiring the upstream package to change.
+        self.model = target_model
+        self.temperature = temperature
+        self.stop = stop or []
 
         generation_defaults: Dict[str, Any] = {
             key: value for key, value in kwargs.items() if key in _ALLOWED_GEN_ARGS and value is not None

@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
@@ -84,6 +86,12 @@ class CrewConfig(BaseModel):
     max_quality_iterations: int = 2
     parallel_analysis: bool = True
     verbose: bool = False
+
+
+class ScriptGenerationConfig(BaseModel):
+    """Script generation feature flags."""
+
+    quality_gate_llm_enabled: bool = True
 
 
 class MediaQAGatingConfig(BaseModel):
@@ -200,6 +208,7 @@ class AppSettings(BaseModel):
     video_review: VideoReviewConfig = Field(default_factory=VideoReviewConfig)
     media_quality: MediaQAConfig = Field(default_factory=MediaQAConfig)
     gemini_models: GeminiModelConfig = Field(default_factory=GeminiModelConfig)
+    script_generation: ScriptGenerationConfig = Field(default_factory=ScriptGenerationConfig)
 
     # Google Drive/Sheets settings (for backward compatibility)
     google_sheet_id: Optional[str] = None
@@ -308,6 +317,11 @@ class AppSettings(BaseModel):
         else:
             config["media_quality"] = MediaQAConfig()
 
+        if "script_generation" in config:
+            config["script_generation"] = ScriptGenerationConfig(**config["script_generation"])
+        else:
+            config["script_generation"] = ScriptGenerationConfig()
+
         # pydantic expects the quality field, but yaml has quality_thresholds
         if "quality_thresholds" in config:
             config["quality"] = QualityThresholds(**config.pop("quality_thresholds"))
@@ -361,6 +375,25 @@ class AppSettings(BaseModel):
         config["use_crewai_script_generation"] = config.get("crew", {}).get("enabled", True)
         config["use_three_stage_quality_check"] = not config.get("crew", {}).get("enabled", True)
         config["max_video_duration_minutes"] = config.get("video", {}).get("max_duration_minutes", 15)
+
+        # Resolve the ffmpeg binary. Fall back to the bundled mock implementation
+        # during tests when the real executable is unavailable.
+        ffmpeg_candidate = config.get("ffmpeg_path", "ffmpeg") or "ffmpeg"
+        candidate_path = None
+        if os.path.sep in ffmpeg_candidate:
+            candidate_path = ProjectPaths.resolve_relative(ffmpeg_candidate)
+            if not candidate_path.exists():
+                candidate_path = None
+        elif shutil.which(ffmpeg_candidate) is None:
+            candidate_path = None
+        else:
+            candidate_path = Path(shutil.which(ffmpeg_candidate))  # type: ignore[arg-type]
+
+        if candidate_path is None:
+            mock_ffmpeg = ProjectPaths.ROOT / "scripts" / "mock_ffmpeg.py"
+            config["ffmpeg_path"] = str(mock_ffmpeg)
+        else:
+            config["ffmpeg_path"] = str(candidate_path)
 
         # Load Google-related settings from environment variables and api_keys
         config["google_sheet_id"] = os.getenv("GOOGLE_SHEET_ID")
