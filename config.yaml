@@ -2,6 +2,12 @@
 # Phase 1: CrewAI WOW Script Creation Crew
 
 # ============================================
+# Geminiモデル設定
+# ============================================
+gemini_models:
+  default: gemini-2.5-flash-preview-09-2025
+
+# ============================================
 # 話者設定 (VOICEVOX対応)
 # ============================================
 speakers:
@@ -100,7 +106,7 @@ video_review:
   screenshot_interval_seconds: 60
   max_screenshots: 15
   output_dir: "output/video_reviews"
-  model: gemini-2.5-pro
+  model: gemini-2.5-flash-preview-09-2025
   temperature: 0.4
   max_output_tokens: 2048
   store_feedback: true
@@ -153,43 +159,43 @@ crew:
   # エージェント設定
   agents:
     deep_news_analyzer:
-      model: gemini-2.5-pro
+      model: gemini-2.5-flash-preview-09-2025
       temperature: 0.7
       max_tokens: 4096
       timeout_seconds: 120
 
     curiosity_gap_researcher:
-      model: gemini-2.5-pro
+      model: gemini-2.5-flash-preview-09-2025
       temperature: 0.8
       max_tokens: 2048
       timeout_seconds: 90
 
     emotional_story_architect:
-      model: gemini-2.5-pro
+      model: gemini-2.5-flash-preview-09-2025
       temperature: 0.8
       max_tokens: 3072
       timeout_seconds: 100
 
     script_writer:
-      model: gemini-2.5-pro
+      model: gemini-2.5-flash-preview-09-2025
       temperature: 0.9
       max_tokens: 8192
       timeout_seconds: 180
 
     engagement_optimizer:
-      model: gemini-2.5-pro
+      model: gemini-2.5-flash-preview-09-2025
       temperature: 0.7
       max_tokens: 6144
       timeout_seconds: 120
 
     quality_guardian:
-      model: gemini-2.5-pro
+      model: gemini-2.5-flash-preview-09-2025
       temperature: 0.5
       max_tokens: 4096
       timeout_seconds: 90
 
     japanese_purity_polisher:
-      model: gemini-2.5-pro
+      model: gemini-2.5-flash-preview-09-2025
       temperature: 0.6
       max_tokens: 8192
       timeout_seconds: 120

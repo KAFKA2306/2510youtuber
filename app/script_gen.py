@@ -211,7 +211,8 @@ class ScriptGenerator:
             try:
                 # キーごとにクライアントを再設定
                 genai.configure(api_key=api_key)
-                client = genai.GenerativeModel("models/gemini-2.5-pro")  # 統一モデル名
+                model_name = cfg.gemini_models.get("script_generation")
+                client = genai.GenerativeModel(f"models/{model_name}")
 
                 # リクエストタイムアウトを設定（120秒）
                 generation_config = genai.GenerationConfig(

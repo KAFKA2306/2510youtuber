@@ -33,7 +33,8 @@ class ThreeStageScriptGenerator:
                 raise ValueError("Gemini API key not configured")
 
             genai.configure(api_key=cfg.gemini_api_key)
-            self.client = genai.GenerativeModel("models/gemini-2.5-pro")
+            model_name = cfg.gemini_models.get("quality_review")
+            self.client = genai.GenerativeModel(f"models/{model_name}")
             logger.info("Three-stage script generator initialized with Gemini")
 
         except Exception as e:

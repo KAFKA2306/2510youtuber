@@ -59,7 +59,7 @@ class VideoReviewConfig(BaseModel):
     screenshot_interval_seconds: int = 60
     max_screenshots: int = 15
     output_dir: str = "output/video_reviews"
-    model: str = "gemini-2.5-pro"
+    model: str = "gemini-2.5-flash-preview-09-2025"
     temperature: float = 0.4
     max_output_tokens: int = 2048
     store_feedback: bool = True
@@ -133,6 +133,27 @@ class MediaQAConfig(BaseModel):
     subtitles: SubtitleQAConfig = Field(default_factory=SubtitleQAConfig)
 
 
+class GeminiModelConfig(BaseModel):
+    """Geminiモデルの用途別設定"""
+
+    default: str = "gemini-2.5-flash-preview-09-2025"
+    script_generation: Optional[str] = None
+    metadata_generation: Optional[str] = None
+    quality_review: Optional[str] = None
+    agent_review: Optional[str] = None
+    video_review: Optional[str] = None
+    crew_agents: Optional[str] = None
+
+    def get(self, usage: Optional[str] = None) -> str:
+        """用途名に応じたモデル名を取得"""
+        if usage:
+            usage_key = usage.replace("-", "_")
+            value = getattr(self, usage_key, None)
+            if value:
+                return value
+        return self.default
+
+
 class AppSettings(BaseModel):
     """アプリケーション統合設定"""
 
@@ -176,6 +197,7 @@ class AppSettings(BaseModel):
     max_video_duration_minutes: int = 15
     video_review: VideoReviewConfig = Field(default_factory=VideoReviewConfig)
     media_quality: MediaQAConfig = Field(default_factory=MediaQAConfig)
+    gemini_models: GeminiModelConfig = Field(default_factory=GeminiModelConfig)
 
     # Google Drive/Sheets settings (for backward compatibility)
     google_sheet_id: Optional[str] = None
@@ -339,6 +361,10 @@ class AppSettings(BaseModel):
         # Load gemini_daily_quota_limit from config.yaml
         if "api" in config:
             config["gemini_daily_quota_limit"] = config["api"].get("gemini_daily_quota_limit", 0)
+
+        # Geminiモデル設定
+        if "gemini_models" not in config:
+            config["gemini_models"] = {}
 
         # Load save_local_backup from config.yaml
         if "backup" in config:

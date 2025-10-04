@@ -144,7 +144,7 @@ class AgentReviewCycle:
     def __init__(
         self,
         storage: Optional[AgentReviewStorage] = None,
-        model: str = "gemini-2.5-pro",
+        model: Optional[str] = None,
         temperature: float = 0.35,
     ) -> None:
         self.storage = storage or AgentReviewStorage()
@@ -155,8 +155,10 @@ class AgentReviewCycle:
         }
         self.enabled = self._is_enabled()
         self._client: Optional[GeminiClient]
+        resolved_model = model or settings.gemini_models.get("agent_review")
+
         if self.enabled:
-            self._client = GeminiClient(model=model, temperature=temperature)
+            self._client = GeminiClient(model=resolved_model, temperature=temperature)
         else:
             self._client = None
 

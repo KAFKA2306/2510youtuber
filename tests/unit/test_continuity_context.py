@@ -64,7 +64,7 @@ def _write_feedback_json(path: Path) -> None:
                     "retention_risks": ["グラフが静止して変化が少ない"],
                     "next_video_actions": ["30秒ごとに視覚要素を切り替える"],
                 },
-                "model_name": "gemini-2.5-pro",
+                "model_name": "gemini-2.5-flash-preview-09-2025",
             },
         },
     }

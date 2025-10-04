@@ -57,7 +57,7 @@ class GeminiClient(AIClient):
 
     def __init__(
         self,
-        model: str = "gemini-2.5-pro",
+        model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
         timeout_seconds: int = 120,
@@ -69,7 +69,7 @@ class GeminiClient(AIClient):
             max_tokens: 最大トークン数
             timeout_seconds: タイムアウト（秒）
         """
-        self.model_name = model
+        self.model_name = model or settings.gemini_models.get()
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout_seconds = timeout_seconds
@@ -79,7 +79,7 @@ class GeminiClient(AIClient):
         self.rotation_manager = get_rotation_manager()
         self.client = None
 
-        logger.info(f"GeminiClient initialized: model={model}, temp={temperature}")
+        logger.info(f"GeminiClient initialized: model={self.model_name}, temp={temperature}")
 
     def generate(
         self,
@@ -312,7 +312,7 @@ class FallbackAIClient(AIClient):
 
     def __init__(
         self,
-        gemini_model: str = "gemini-2.5-pro",
+        gemini_model: Optional[str] = None,
         perplexity_model: str = "sonar",
         temperature: float = 0.7,
         max_tokens: int = 4096,
@@ -326,6 +326,7 @@ class FallbackAIClient(AIClient):
             max_tokens: 最大トークン数
             timeout_seconds: タイムアウト（秒）
         """
+        resolved_gemini_model = gemini_model or settings.gemini_models.get("crew_agents")
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout_seconds = timeout_seconds
@@ -333,10 +334,13 @@ class FallbackAIClient(AIClient):
         # Primary: Gemini
         try:
             self.primary_client = GeminiClient(
-                model=gemini_model, temperature=temperature, max_tokens=max_tokens, timeout_seconds=timeout_seconds
+                model=resolved_gemini_model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout_seconds=timeout_seconds,
             )
             self.current_client = "gemini"
-            logger.info("FallbackAIClient using Gemini as primary")
+            logger.info("FallbackAIClient using Gemini as primary: %s", resolved_gemini_model)
         except Exception as e:
             logger.warning(f"Gemini initialization failed, starting with Perplexity: {e}")
             self.primary_client = None
@@ -445,7 +449,7 @@ class AIClientFactory:
         if use_fallback:
             # FallbackAIClientを使用（推奨）
             return FallbackAIClient(
-                gemini_model=agent_config.get("model", "gemini-2.5-pro"),
+                gemini_model=agent_config.get("model", settings.gemini_models.get("crew_agents")),
                 perplexity_model="sonar",
                 temperature=agent_config.get("temperature", 0.7),
                 max_tokens=agent_config.get("max_tokens", 4096),
@@ -454,7 +458,7 @@ class AIClientFactory:
         else:
             # Geminiのみ（フォールバックなし）
             return GeminiClient(
-                model=agent_config.get("model", "gemini-2.5-pro"),
+                model=agent_config.get("model", settings.gemini_models.get("crew_agents")),
                 temperature=agent_config.get("temperature", 0.7),
                 max_tokens=agent_config.get("max_tokens", 4096),
                 timeout_seconds=agent_config.get("timeout_seconds", 300),
@@ -466,9 +470,10 @@ class AIClientFactory:
 # ===================================
 
 
-def get_gemini_client(model: str = "gemini-2.5-pro", temperature: float = 0.7, **kwargs) -> GeminiClient:
+def get_gemini_client(model: Optional[str] = None, temperature: float = 0.7, **kwargs) -> GeminiClient:
     """Gemini Clientを取得（簡易関数）"""
-    return GeminiClient(model=model, temperature=temperature, **kwargs)
+    resolved_model = model or settings.gemini_models.get()
+    return GeminiClient(model=resolved_model, temperature=temperature, **kwargs)
 
 
 def get_perplexity_client(model: str = "sonar", **kwargs) -> PerplexityClient:
@@ -487,7 +492,7 @@ try:
     class GeminiDirectLLM(BaseLLM):
         """Direct Gemini SDK LLM - bypasses ALL LiteLLM/Vertex AI routing"""
 
-        model_name: str = "gemini-2.5-pro"
+        model_name: str = settings.gemini_models.get("crew_agents")
         temperature: float = 0.7
         api_key: str = ""
         _genai_client: Any = None
@@ -517,15 +522,18 @@ try:
                 logger.error(f"Gemini Direct call failed: {e}")
                 raise
 
-    def get_crewai_gemini_llm(model: str = "gemini-2.5-pro", temperature: float = 0.7, **kwargs):
+    def get_crewai_gemini_llm(model: Optional[str] = None, temperature: float = 0.7, **kwargs):
         """CrewAI用のGemini LLM（Direct SDK - NO LiteLLM/Vertex AI）"""
         # モデル名の正規化 - Google AI Studio API compatible names
         model_mapping = {}
 
-        clean_model = model.replace("models/", "") if model.startswith("models/") else model
+        resolved_model = model or settings.gemini_models.get("crew_agents")
+        clean_model = (
+            resolved_model.replace("models/", "") if resolved_model.startswith("models/") else resolved_model
+        )
         final_model = model_mapping.get(clean_model, clean_model)
 
-        logger.info(f"CrewAI LLM: {model} -> {final_model} (Direct Gemini SDK)")
+        logger.info(f"CrewAI LLM: {resolved_model} -> {final_model} (Direct Gemini SDK)")
 
         return GeminiDirectLLM(
             model=final_model,  # model_nameをmodelに変更
@@ -536,7 +544,8 @@ try:
 except ImportError as e:
     logger.warning(f"Failed to import required modules for CrewAI: {e}")
 
-    def get_crewai_gemini_llm(model: str = "gemini-2.5-pro", temperature: float = 0.7, **kwargs):
+    def get_crewai_gemini_llm(model: Optional[str] = None, temperature: float = 0.7, **kwargs):
         """Fallback: GeminiClientを返す"""
         logger.warning("Using fallback GeminiClient instead of LangChain wrapper")
-        return get_gemini_client(model=model, temperature=temperature, **kwargs)
+        resolved_model = model or settings.gemini_models.get("crew_agents")
+        return get_gemini_client(model=resolved_model, temperature=temperature, **kwargs)

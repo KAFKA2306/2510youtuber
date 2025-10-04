@@ -153,7 +153,8 @@ class MetadataGenerator:
             """単一APIキーでの呼び出し"""
             try:
                 genai.configure(api_key=api_key)
-                client = genai.GenerativeModel("models/gemini-2.5-pro")  # 統一モデル名
+                model_name = cfg.gemini_models.get("metadata_generation")
+                client = genai.GenerativeModel(f"models/{model_name}")
 
                 generation_config = genai.GenerationConfig(
                     temperature=0.7,
