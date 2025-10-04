@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from pydantic import BaseModel, Field, model_validator
 
 from app.config.settings import settings
+from app.services.script.speakers import get_speaker_registry
 
 _DIALOGUE_PREFIX_PATTERN = re.compile(r"[：:\-―ー\s　]*")
 _QUOTE_TRIM_PATTERN = re.compile(r"^[「『]\s*|\s*[」』]$")
@@ -78,9 +79,9 @@ class Script(BaseModel):
 
     @model_validator(mode="after")
     def check_distinct_speakers(self) -> "Script":
-        speakers = {entry.speaker for entry in self.dialogues}
-        if len(speakers) < 2:
-            raise ValueError("スクリプトには2人以上の異なる話者が必要です。")
+        speakers = {entry.speaker for entry in self.dialogues if entry.speaker}
+        if not speakers:
+            raise ValueError("スクリプトには少なくとも1人の話者が必要です。")
         return self
 
     def to_text(self) -> str:
@@ -213,7 +214,8 @@ def _resolve_speakers(allowed_speakers: Optional[Sequence[str]]) -> List[str]:
     if allowed_speakers:
         resolved = [speaker.strip() for speaker in allowed_speakers if speaker and speaker.strip()]
     else:
-        resolved = sorted(settings.tts_voice_configs.keys())
+        registry = get_speaker_registry()
+        resolved = sorted(registry.canonical_names) if registry.canonical_names else []
     if not resolved:
         raise ValueError("Allowed speakers list cannot be empty")
     return resolved

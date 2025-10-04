@@ -366,12 +366,12 @@ class YouTubeWorkflow:
         if not script_step or not hasattr(script_step, "data"):
             return None
 
-        quality_data = script_step.data.get("quality_data", {})
-        if not quality_data:
+        metrics = script_step.data.get("script_metrics", {})
+        if not metrics:
             return None
 
         # Try to extract from quality_guarantee structure
-        return quality_data.get("wow_score")
+        return metrics.get("wow_score")
 
     def _extract_japanese_purity(self, script_step: Any) -> Optional[float]:
         """Extract Japanese purity from script generation step."""
@@ -384,40 +384,40 @@ class YouTubeWorkflow:
             return purity
 
         # Then try from quality_data
-        quality_data = script_step.data.get("quality_data", {})
-        return quality_data.get("japanese_purity")
+        metrics = script_step.data.get("script_metrics", {})
+        return metrics.get("japanese_purity")
 
     def _extract_surprise_points(self, script_step: Any) -> Optional[int]:
         """Extract surprise points count from quality data."""
         if not script_step or not hasattr(script_step, "data"):
             return None
 
-        quality_data = script_step.data.get("quality_data", {})
-        return quality_data.get("surprise_points")
+        metrics = script_step.data.get("script_metrics", {})
+        return metrics.get("surprise_points")
 
     def _extract_emotion_peaks(self, script_step: Any) -> Optional[int]:
         """Extract emotion peaks count from quality data."""
         if not script_step or not hasattr(script_step, "data"):
             return None
 
-        quality_data = script_step.data.get("quality_data", {})
-        return quality_data.get("emotion_peaks")
+        metrics = script_step.data.get("script_metrics", {})
+        return metrics.get("emotion_peaks")
 
     def _extract_visual_instructions(self, script_step: Any) -> Optional[int]:
         """Extract visual instructions count from quality data."""
         if not script_step or not hasattr(script_step, "data"):
             return None
 
-        quality_data = script_step.data.get("quality_data", {})
-        return quality_data.get("visual_instructions")
+        metrics = script_step.data.get("script_metrics", {})
+        return metrics.get("visual_instructions")
 
     def _extract_retention_prediction(self, script_step: Any) -> Optional[float]:
         """Extract retention prediction from quality data."""
         if not script_step or not hasattr(script_step, "data"):
             return None
 
-        quality_data = script_step.data.get("quality_data", {})
-        return quality_data.get("retention_prediction")
+        metrics = script_step.data.get("script_metrics", {})
+        return metrics.get("retention_prediction")
 
     def _classify_hook_from_script(self, script_step: Any) -> str:
         """Classify hook strategy from script content."""

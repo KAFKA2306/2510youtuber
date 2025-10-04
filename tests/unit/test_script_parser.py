@@ -44,6 +44,17 @@ def test_tts_empty_script():
 
 
 @pytest.mark.unit
+def test_tts_structured_dialogues(sample_script_segments):
+    """構造化された対話リストからの分割を確認"""
+    from app.tts import tts_manager
+
+    chunks = tts_manager.split_dialogues_for_tts(sample_script_segments)
+
+    assert len(chunks) == len(sample_script_segments)
+    assert all(chunk["speaker"] in {"武宏", "つむぎ"} for chunk in chunks)
+
+
+@pytest.mark.unit
 def test_tts_chunk_order():
     """チャンクの順序が保持されるか確認"""
     from app.tts import tts_manager

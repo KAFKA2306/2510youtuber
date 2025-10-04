@@ -8,7 +8,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 
 from elevenlabs import VoiceSettings
 from elevenlabs.client import AsyncElevenLabs
@@ -16,6 +16,8 @@ from pydub import AudioSegment
 
 from app.config.paths import ProjectPaths
 from app.config.settings import settings
+from app.services.script.speakers import get_speaker_registry
+from app.services.script.validator import DialogueEntry
 
 from .providers import create_tts_chain
 
@@ -43,6 +45,7 @@ class TTSManager:
         self.chunk_size = settings.tts_chunk_size
         self.voicevox_port = settings.tts_voicevox_port
         self.voicevox_speaker = settings.tts_voicevox_speaker
+        self.speaker_registry = get_speaker_registry()
 
         # Initialize clients
         if self.api_key:
@@ -77,37 +80,26 @@ class TTSManager:
 
     def split_text_for_tts(self, text: str) -> List[Dict[str, Any]]:
         """テキストをTTS用チャンクに分割"""
-        speaker_lines = self._split_by_speaker(text)
-        chunks = []
-        for speaker_data in speaker_lines:
-            speaker = speaker_data["speaker"]
-            content = speaker_data["content"]
-            sub_chunks = self._split_long_content(content, self.chunk_size)
-            for i, chunk_text in enumerate(sub_chunks):
-                chunks.append(
-                    {
-                        "id": f"{speaker}_{len(chunks)}_{i}",
-                        "speaker": speaker,
-                        "text": chunk_text,
-                        "voice_config": self._get_voice_config(speaker),
-                        "order": len(chunks),
-                    }
-                )
-        logger.info(f"Split text into {len(chunks)} TTS chunks")
-        return chunks
+        dialogues = self._split_by_speaker(text)
+        return self._build_chunks_from_dialogues(dialogues)
+
+    def split_dialogues_for_tts(
+        self, dialogues: Sequence[Union[DialogueEntry, Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
+        """Structured dialogueリストからチャンクを生成."""
+        return self._build_chunks_from_dialogues(dialogues)
 
     def _split_by_speaker(self, text: str) -> List[Dict[str, str]]:
         """話者別にテキストを分割
 
         認識可能な話者ラベルが含まれない場合は空リストを返す。
         """
-        # 設定から話者名を動的に取得
-        speaker_names = [speaker.name for speaker in settings.speakers]
-        speaker_pattern = "|".join(re.escape(name) for name in speaker_names)
-
-        # 後方互換性のため旧話者名もサポート
-        legacy_speakers = ["田中", "鈴木", "司会"]
-        all_speakers = speaker_pattern + "|" + "|".join(legacy_speakers)
+        alias_pattern = self.speaker_registry.aliases_regex_pattern()
+        if alias_pattern:
+            compiled_pattern = re.compile(rf"^({alias_pattern})\s*([:：])\s*(.*)")
+        else:
+            logger.warning("Speaker registry has no configured names; falling back to generic label parsing")
+            compiled_pattern = re.compile(r"^([^:：\s]{1,32})\s*([:：])\s*(.*)")
 
         lines = text.split("\n")
         speaker_lines: List[Dict[str, str]] = []
@@ -119,11 +111,12 @@ class TTSManager:
             line = line.strip()
             if not line:
                 continue
-            speaker_match = re.match(rf"^({all_speakers})\s*([:：])\s*(.*)", line)
+            speaker_match = compiled_pattern.match(line)
             if speaker_match:
-                if current_speaker and current_content:
+                if current_speaker is not None and current_content:
                     speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
-                current_speaker = speaker_match.group(1)
+                raw_speaker = speaker_match.group(1)
+                current_speaker = self.speaker_registry.canonicalize(raw_speaker) or raw_speaker
                 current_content = [speaker_match.group(3)]
             else:
                 if current_speaker is not None:
@@ -138,6 +131,37 @@ class TTSManager:
             logger.warning("No recognizable speaker labels found; returning empty speaker list")
 
         return speaker_lines
+
+    def _build_chunks_from_dialogues(
+        self, dialogues: Sequence[Union[DialogueEntry, Dict[str, Any]]]
+    ) -> List[Dict[str, Any]]:
+        chunks: List[Dict[str, Any]] = []
+
+        for entry in dialogues:
+            if isinstance(entry, DialogueEntry):
+                speaker = entry.speaker
+                content = entry.line
+            else:
+                speaker = entry.get("speaker")
+                content = entry.get("line") or entry.get("text") or entry.get("content")
+
+            canonical = self.speaker_registry.canonicalize(speaker)
+            if not canonical or not content:
+                continue
+
+            sub_chunks = self._split_long_content(content, self.chunk_size)
+            for chunk_text in sub_chunks:
+                chunk = {
+                    "id": f"{canonical}_{len(chunks)}",
+                    "speaker": canonical,
+                    "text": chunk_text,
+                    "voice_config": self._get_voice_config(canonical),
+                    "order": len(chunks),
+                }
+                chunks.append(chunk)
+
+        logger.info(f"Prepared {len(chunks)} TTS chunks from dialogues")
+        return chunks
 
     def _split_long_content(self, content: str, max_chars: int) -> List[str]:
         """長いコンテンツを適切な長さに分割"""
@@ -218,7 +242,12 @@ class TTSManager:
         )
         return optimal
 
-    async def synthesize_script(self, script_text: str, target_voice: str = "neutral") -> List[str]:
+    async def synthesize_script(
+        self,
+        script_text: str,
+        target_voice: str = "neutral",
+        dialogues: Optional[Sequence[Union[DialogueEntry, Dict[str, Any]]]] = None,
+    ) -> List[str]:
         """台本全体を音声合成
 
         Args:
@@ -229,13 +258,18 @@ class TTSManager:
             生成された音声ファイルのパスリスト
         """
         try:
-            chunks = self.split_text_for_tts(script_text)
+            if dialogues:
+                chunks = self.split_dialogues_for_tts(dialogues)
+            else:
+                chunks = self.split_text_for_tts(script_text)
             if not chunks:
                 logger.warning("No chunks to synthesize")
                 return []
 
+            effective_text = script_text if script_text else "\n".join(chunk["text"] for chunk in chunks)
+
             # 推定動画長を計算（平均300文字/分）
-            estimated_duration_minutes = len(script_text) / 300
+            estimated_duration_minutes = len(effective_text) / 300 if effective_text else len(chunks) * 0.5
 
             # 最適な並列度を計算
             optimal_concurrency = self._calculate_optimal_concurrency(len(chunks), estimated_duration_minutes)
@@ -360,9 +394,13 @@ class _TTSManagerProxy:
 tts_manager = _TTSManagerProxy()
 
 
-async def synthesize_script(script_text: str, voice: str = "neutral") -> List[str]:
+async def synthesize_script(
+    script_text: str,
+    voice: str = "neutral",
+    dialogues: Optional[Sequence[Union[DialogueEntry, Dict[str, Any]]]] = None,
+) -> List[str]:
     """台本音声合成の簡易関数"""
-    return await _get_tts_manager().synthesize_script(script_text, voice)
+    return await _get_tts_manager().synthesize_script(script_text, voice, dialogues)
 
 
 def split_text_for_tts(text: str) -> List[Dict[str, Any]]:

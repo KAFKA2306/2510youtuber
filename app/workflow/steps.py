@@ -24,6 +24,7 @@ from app.sheets import sheets_manager
 from app.stt import transcribe_long_audio
 from app.thumbnail import generate_thumbnail
 from app.tts import synthesize_script
+from app.services.script.validator import Script
 from app.utils import FileUtils
 from app.video import generate_video
 from app.youtube import upload_video as youtube_upload
@@ -111,10 +112,12 @@ class GenerateScriptStep(WorkflowStep):
 
         try:
             crew_result = None
+            structured_script = None
             if use_crewai:
                 result_dict = await self._generate_with_crewai(news_items)
                 script_content = result_dict["script"]
                 crew_result = result_dict.get("crew_result")
+                structured_script = result_dict.get("structured_script")
             else:
                 script_content = await self._generate_legacy(context, news_items)
 
@@ -145,8 +148,14 @@ class GenerateScriptStep(WorkflowStep):
             context.set("script_content", script_content)
             context.set("script_path", script_path)
             context.set("script_validation", validation.to_dict())
+            if structured_script:
+                context.set("script_structured", structured_script)
+
             if crew_result:
                 context.set("crew_result", crew_result)
+                structured = crew_result.get("structured_script")
+                if structured:
+                    context.set("script_structured", structured)
 
             logger.info(f"Generated script: {len(script_content)} characters")
 
@@ -161,8 +170,16 @@ class GenerateScriptStep(WorkflowStep):
 
             # Include quality metrics from CrewAI
             if crew_result:
-                result_data["quality_data"] = crew_result.get("quality_data", {})
-                result_data["japanese_purity_score"] = crew_result.get("japanese_purity_score", 0)
+                metadata = crew_result.get("metadata") or {}
+                result_data["script_metrics"] = metadata
+                if "japanese_purity_score" in metadata:
+                    result_data["japanese_purity_score"] = metadata.get("japanese_purity_score")
+                structured_from_result = crew_result.get("structured_script")
+                if structured_from_result:
+                    result_data["structured_script"] = structured_from_result
+
+            if structured_script and "structured_script" not in result_data:
+                result_data["structured_script"] = structured_script
 
             return self._success(
                 data=result_data,
@@ -193,32 +210,21 @@ class GenerateScriptStep(WorkflowStep):
         script_payload = crew_result.get("final_script")
 
         if isinstance(script_payload, Script):
-            script_content = script_payload.to_text()
+            script_model = script_payload
         elif isinstance(script_payload, dict):
-            try:
-                script_content = Script.model_validate(script_payload).to_text()
-                logger.debug("CrewAI returned Script dict; parsed into Pydantic model")
-            except Exception as exc:  # pragma: no cover - defensive log path
-                logger.warning("CrewAI script payload dict could not be parsed into Script model: %s", exc)
-                script_content = json.dumps(script_payload, ensure_ascii=False)
-        elif isinstance(script_payload, str):
-            logger.warning("CrewAI returned raw script text instead of Script model; proceeding with fallback")
-            script_content = script_payload
+            script_model = Script.model_validate(script_payload)
         else:
-            raise TypeError("CrewAI returned an unsupported script payload type.")
+            raise TypeError("Script generator returned unsupported payload type")
 
-        if isinstance(script_content, str):
-            from app.crew.flows import WOWScriptFlow
-
-            coerced = WOWScriptFlow._extract_script_text_from_string(script_content)
-            if coerced:
-                script_content = coerced
+        script_content = script_model.to_text()
+        structured_payload = script_model.model_dump(mode="json")
 
         logger.info("Script preview (first 200 chars): %r", script_content[:200])
 
         return {
             "script": script_content,
             "crew_result": crew_result,
+            "structured_script": structured_payload,
         }
 
     async def _generate_legacy(self, context: WorkflowContext, news_items: List[Dict[str, Any]]) -> str:
@@ -355,7 +361,16 @@ class SynthesizeAudioStep(WorkflowStep):
             return self._failure(str(err))
 
         try:
-            audio_paths = await synthesize_script(script_content)
+            structured_script = context.get("script_structured")
+            dialogues = None
+            if structured_script:
+                try:
+                    script_model = Script.model_validate(structured_script)
+                    dialogues = script_model.dialogues
+                except Exception as exc:  # pragma: no cover - defensive path
+                    logger.debug(f"Failed to restore structured script for TTS: {exc}")
+
+            audio_paths = await synthesize_script(script_content, dialogues=dialogues)
             if not audio_paths:
                 return self._failure("Audio synthesis failed")
 

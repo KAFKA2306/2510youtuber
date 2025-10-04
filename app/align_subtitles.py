@@ -7,7 +7,7 @@
 import logging
 import re
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Pattern, Tuple
 
 from rapidfuzz import fuzz
 
@@ -23,6 +23,8 @@ except ImportError:
     HAS_JAPANESE_QUALITY_CHECK = False
     logger.warning("Japanese quality check not available for subtitles")
 
+from app.services.script.speakers import get_speaker_registry
+
 
 class SubtitleAligner:
     """字幕整合クラス."""
@@ -36,6 +38,9 @@ class SubtitleAligner:
         self.max_display_duration = 8.0  # 最大表示時間（秒）
         self.min_gap_between_subtitles = 0.05  # 字幕間の最小ギャップ（秒）- 音声との同期を優先
         self.reading_speed_chars_per_sec = 8  # 読み速度：1秒あたり8文字（日本語の平均）
+        registry = get_speaker_registry()
+        self.speaker_alias_map = registry.alias_map
+        self.speaker_pattern: Optional[Pattern[str]] = self._compile_speaker_pattern(self.speaker_alias_map.keys())
 
     def align_script_with_stt(self, script_text: str, stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """台本テキストとSTT結果を整合.
@@ -100,14 +105,17 @@ class SubtitleAligner:
                 continue
 
             # 話者名を検出
-            speaker_match = re.match(r"^(田中|鈴木|ナレーター|司会)[:：]\s*(.+)", line)
+            speaker = None
+            content = line
+            if self.speaker_pattern:
+                speaker_match = self.speaker_pattern.match(line)
+            else:
+                speaker_match = None
 
             if speaker_match:
-                speaker = speaker_match.group(1)
+                raw_speaker = speaker_match.group(1)
+                speaker = self.speaker_alias_map.get(raw_speaker, raw_speaker)
                 content = speaker_match.group(2)
-            else:
-                speaker = None
-                content = line
 
             # ビジュアル指示を除外（括弧内の映像指示）
             if re.match(r"^\(.*\)$", content):
@@ -127,6 +135,17 @@ class SubtitleAligner:
                     sentences.append({"text": sub_sentence.strip(), "speaker": speaker})
 
         return sentences
+
+    def _compile_speaker_pattern(self, aliases: Iterable[str]) -> Optional[Pattern[str]]:
+        """Compile a regex pattern that matches any known speaker alias."""
+        alias_list = [alias for alias in aliases if alias]
+        if not alias_list:
+            return None
+
+        # Sort by length to avoid partial matches when names share prefixes
+        alias_list.sort(key=len, reverse=True)
+        pattern = "|".join(re.escape(alias) for alias in alias_list)
+        return re.compile(rf"^({pattern})[:：]\s*(.+)")
 
     def _split_long_sentence(self, sentence: str) -> List[str]:
         """長い文を適切な長さに分割 (2行字幕対応)."""
