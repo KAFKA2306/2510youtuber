@@ -111,26 +111,32 @@ class ElevenLabsProvider(TTSProvider):
 class VoicevoxProvider(TTSProvider):
     """VOICEVOX Nemo TTS provider (free, local, high quality Japanese)."""
 
-    def __init__(self, port: int = 50121, speaker: int = 0, next_provider: Optional[TTSProvider] = None):
+    def __init__(self, port: int = 50121, speaker: int = 3, next_provider: Optional[TTSProvider] = None):
         super().__init__(next_provider)
         self.port = port
         self.speaker = speaker
 
     async def _try_synthesize(self, text: str, output_path: str, **kwargs) -> bool:
+        # voice_configからvoicevox_speakerを取得（話者ごとに異なる声）
+        voice_config = kwargs.get("voice_config", {})
+        speaker_id = voice_config.get("voicevox_speaker", self.speaker)
+
+        logger.debug(f"VOICEVOX synthesis: speaker_id={speaker_id}, text_length={len(text)}")
+
         # Health check
         health_response = requests.get(f"http://localhost:{self.port}/health", timeout=3)
         if health_response.status_code != 200:
             raise Exception("VOICEVOX server not healthy")
 
         # Generate audio query
-        query_params = {"text": text, "speaker": self.speaker}
+        query_params = {"text": text, "speaker": speaker_id}
         query_response = requests.post(f"http://localhost:{self.port}/audio_query", params=query_params, timeout=10)
 
         if query_response.status_code != 200:
             raise Exception(f"Audio query failed: {query_response.status_code}")
 
         # Synthesize audio
-        synthesis_params = {"speaker": self.speaker}
+        synthesis_params = {"speaker": speaker_id}
         synthesis_response = requests.post(
             f"http://localhost:{self.port}/synthesis", params=synthesis_params, json=query_response.json(), timeout=30
         )
@@ -235,7 +241,7 @@ def create_tts_chain(
     elevenlabs_client=None,
     openai_client=None,
     voicevox_port: int = 50121,
-    voicevox_speaker: int = 0,
+    voicevox_speaker: int = 3,
 ) -> TTSProvider:
     """Create the TTS provider chain.
 

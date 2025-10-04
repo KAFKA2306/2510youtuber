@@ -14,12 +14,15 @@ class SpeakerConfig(BaseModel):
     """話者設定"""
 
     name: str
+    display_name: str = ""
     role: str
     voice_id_env: str
+    voicevox_speaker: int = 3  # VOICEVOX話者ID（デフォルト: ずんだもん）
     stability: float = 0.5
     speaking_style: str
-    similarity_boost: float = 0.75  # 追加
-    style: float = 0.1  # 追加
+    similarity_boost: float = 0.75
+    style: float = 0.1
+    character_note: str = ""
     voice_id: str | None = None
 
     @validator("voice_id", pre=True, always=True)
@@ -29,6 +32,11 @@ class SpeakerConfig(BaseModel):
         if voice_id_env_key:
             return os.getenv(voice_id_env_key)
         return None  # 環境変数が設定されていない場合はNoneを返す
+
+    @validator("display_name", pre=True, always=True)
+    def set_display_name_default(cls, v: Optional[str], values: Dict[str, Any]) -> str:
+        """display_nameが未設定の場合はnameを使用"""
+        return v if v else values.get("name", "")
 
 
 class VideoResolution(BaseModel):
@@ -276,8 +284,10 @@ class AppSettings(BaseModel):
         if "tts" in config:
             config["max_concurrent_tts"] = config["tts"].get("max_concurrent", 4)
             config["tts_chunk_size"] = config["tts"].get("chunk_size", 500)
-            config["tts_voicevox_port"] = config["tts"].get("voicevox_port", 50121)
-            config["tts_voicevox_speaker"] = config["tts"].get("voicevox_speaker", 0)
+            # VOICEVOX設定は voicevox サブキーから読み込む
+            voicevox_config = config["tts"].get("voicevox", {})
+            config["tts_voicevox_port"] = voicevox_config.get("port", 50121)
+            config["tts_voicevox_speaker"] = voicevox_config.get("speaker", 3)
 
         # 字幕関連の設定をトップレベルにマッピング
         if "subtitle" in config:

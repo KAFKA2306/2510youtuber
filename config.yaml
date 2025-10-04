@@ -2,35 +2,44 @@
 # Phase 1: CrewAI WOW Script Creation Crew
 
 # ============================================
-# 話者設定
+# 話者設定 (VOICEVOX対応)
 # ============================================
 speakers:
-  - name: 田中
-    role: 経済専門家
-    voice_id_env: TTS_VOICE_TANAKA
+  - name: 武宏
+    display_name: 玄野武宏
+    role: 経済アナリスト（男性・専門家）
+    voice_id_env: TTS_VOICE_TAKEHIRO
+    voicevox_speaker: 11  # 玄野武宏 ノーマル (落ち着いた男性声)
     stability: 0.5
     similarity_boost: 0.75
     style: 0.1
     speaking_style: 落ち着いた、論理的、データ重視
-    speaking_pattern: 3文連続で説明 → 鈴木に振る
+    speaking_pattern: 3文連続で説明 → つむぎに振る
+    character_note: 冷静沈着な経済専門家。数字と事実で語る
 
-  - name: 鈴木
-    role: 金融アナリスト・質問役
-    voice_id_env: TTS_VOICE_SUZUKI
+  - name: つむぎ
+    display_name: 春日部つむぎ
+    role: 金融レポーター（女性・質問役）
+    voice_id_env: TTS_VOICE_TSUMUGI
+    voicevox_speaker: 8  # 春日部つむぎ ノーマル (明るい女性声)
     stability: 0.4
     similarity_boost: 0.8
     style: 0.2
     speaking_style: やや早口、リアクション多め、視聴者目線
     speaking_pattern: 短い質問・確認（1文）
+    character_note: 好奇心旺盛な若手レポーター。視聴者代表として疑問を投げかける
 
   - name: ナレーター
+    display_name: ナレーション
     role: 導入・まとめ担当
     voice_id_env: TTS_VOICE_NARRATOR
+    voicevox_speaker: 3  # ずんだもん ノーマル (ニュートラルな声)
     stability: 0.6
     similarity_boost: 0.7
     style: 0.0
     speaking_style: 明瞭、テンポ良く
     speaking_pattern: 簡潔な要約
+    character_note: 中立的なナレーター。導入と締めを担当
 
 # ============================================
 # 動画設定
@@ -258,11 +267,12 @@ tts:
   voicevox:
     enabled: true  # VOICEVOX Nemoを有効化（ElevenLabsのバックアップ）
     port: 50121
-    speaker: 1  # 話者ID（1: 四国めたん（ノーマル））
+    speaker: 3  # 話者ID（3: ずんだもん ノーマル - 金融ニュース推奨）
     # 管理スクリプト: scripts/voicevox_manager.sh
     # 起動: ./scripts/voicevox_manager.sh start
     # 停止: ./scripts/voicevox_manager.sh stop
     # ステータス: ./scripts/voicevox_manager.sh status
+    # 推奨話者: 3 (ずんだもん), 11 (玄野武宏 男性), 2 (四国めたん 女性)
 
 # ============================================
 # デバッグ・ロギング

@@ -33,8 +33,10 @@ class SystemVerifier:
 
     def __init__(self):
         self.project_root = Path(__file__).parent.parent
-        self.voicevox_port = 50121
-        self.voicevox_speaker = 1
+        # VOICEVOX設定を settings から取得
+        from app.config.settings import settings
+        self.voicevox_port = settings.tts_voicevox_port
+        self.voicevox_speaker = settings.tts_voicevox_speaker
         self.voicevox_manager = self.project_root / "scripts" / "voicevox_manager.sh"
         self.errors = []
         self.warnings = []
@@ -100,7 +102,7 @@ class SystemVerifier:
         try:
             result = subprocess.run([str(self.voicevox_manager), "status"], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
-                logger.info(f"✅ VOICEVOX Nemo is running on port {self.voicevox_port}")
+                logger.info(f"✅ VOICEVOX Nemo is running on port {self.voicevox_port} (speaker: {self.voicevox_speaker})")
                 return True
             else:
                 logger.warning("⚠️  VOICEVOX Nemo is not running")

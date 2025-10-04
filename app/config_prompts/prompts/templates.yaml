@@ -14,10 +14,10 @@ templates:
 
   main_section:
     prep_structure: |
-      田中: 「{{ point }}」（結論）
-      田中: 「なぜなら{{ reason }}だからです」（理由）
-      田中: 「例えば{{ example }}」（具体例）
-      鈴木: 「つまり{{ restate_point }}ってことですね」（再結論）
+      武宏: 「{{ point }}」（結論）
+      武宏: 「なぜなら{{ reason }}だからです」（理由）
+      武宏: 「例えば{{ example }}」（具体例）
+      つむぎ: 「つまり{{ restate_point }}ってことですね」（再結論）
 
   closing:
     summary: |

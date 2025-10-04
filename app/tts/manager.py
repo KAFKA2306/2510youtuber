@@ -100,6 +100,14 @@ class TTSManager:
 
         認識可能な話者ラベルが含まれない場合は空リストを返す。
         """
+        # 設定から話者名を動的に取得
+        speaker_names = [speaker.name for speaker in settings.speakers]
+        speaker_pattern = "|".join(re.escape(name) for name in speaker_names)
+
+        # 後方互換性のため旧話者名もサポート
+        legacy_speakers = ["田中", "鈴木", "司会"]
+        all_speakers = speaker_pattern + "|" + "|".join(legacy_speakers)
+
         lines = text.split("\n")
         speaker_lines: List[Dict[str, str]] = []
         current_speaker = None
@@ -110,7 +118,7 @@ class TTSManager:
             line = line.strip()
             if not line:
                 continue
-            speaker_match = re.match(r"^(田中|鈴木|ナレーター|司会)\s*([:：])\s*(.*)", line)
+            speaker_match = re.match(rf"^({all_speakers})\s*([:：])\s*(.*)", line)
             if speaker_match:
                 if current_speaker and current_content:
                     speaker_lines.append({"speaker": current_speaker, "content": " ".join(current_content)})
@@ -153,17 +161,31 @@ class TTSManager:
         return chunks
 
     def _get_voice_config(self, speaker: str) -> Dict[str, Any]:
-        """話者に応じた音声設定を取得"""
+        """話者に応じた音声設定を取得（VOICEVOX speaker ID含む）"""
         voice_configs = settings.tts_voice_configs
-        config = voice_configs.get(speaker)
-        if not config:
-            config = voice_configs.get("田中")  # デフォルト話者
 
+        # 話者名でマッチング（旧名前との互換性も考慮）
+        config = voice_configs.get(speaker)
+
+        # 旧話者名から新話者名へのマッピング
+        legacy_mapping = {"田中": "武宏", "鈴木": "つむぎ"}
+        if not config and speaker in legacy_mapping:
+            config = voice_configs.get(legacy_mapping[speaker])
+            logger.info(f"Using legacy speaker mapping: {speaker} → {legacy_mapping[speaker]}")
+
+        # デフォルトフォールバック
         if not config:
-            logger.warning(
-                f"No voice configuration found for speaker '{speaker}' or default '田中'. Using default VoiceSettings."
-            )
-            return {"voice_id": "default_voice_id", "settings": VoiceSettings()}
+            default_speaker = list(voice_configs.values())[0] if voice_configs else None
+            if default_speaker:
+                config = default_speaker
+                logger.warning(f"Speaker '{speaker}' not found, using default: {config.name}")
+            else:
+                logger.warning(f"No voice configuration found for speaker '{speaker}'. Using default VoiceSettings.")
+                return {
+                    "voice_id": "default_voice_id",
+                    "voicevox_speaker": 3,
+                    "settings": VoiceSettings(),
+                }
 
         config_dict = config.dict()
         config_dict["settings"] = VoiceSettings(
@@ -172,6 +194,8 @@ class TTSManager:
             style=config.style,
             use_speaker_boost=True,
         )
+        # VOICEVOX speaker IDを追加
+        config_dict["voicevox_speaker"] = config.voicevox_speaker
         return config_dict
 
     def _calculate_optimal_concurrency(self, total_chunks: int, estimated_duration_minutes: float) -> int:

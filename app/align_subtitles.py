@@ -32,9 +32,10 @@ class SubtitleAligner:
         self.min_similarity_threshold = 60  # 類似度閾値
         self.max_subtitle_length = 25  # 字幕の最大文字数 (1920px幅対応: 1720px表示領域 ÷ 61px/文字)
         self.enable_two_line_mode = True  # 2行字幕モード (25文字 × 2行 = 50文字分の情報量)
-        self.min_display_duration = 2.5  # 最小表示時間（秒）- 読みやすさのために延長
+        self.min_display_duration = 0.8  # 最小表示時間（秒）- 音声と同期優先
         self.max_display_duration = 8.0  # 最大表示時間（秒）
-        self.min_gap_between_subtitles = 0.3  # 字幕間の最小ギャップ（秒）- 視認性向上
+        self.min_gap_between_subtitles = 0.05  # 字幕間の最小ギャップ（秒）- 音声との同期を優先
+        self.reading_speed_chars_per_sec = 8  # 読み速度：1秒あたり8文字（日本語の平均）
 
     def align_script_with_stt(self, script_text: str, stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """台本テキストとSTT結果を整合.
@@ -255,12 +256,19 @@ class SubtitleAligner:
         self, sentence: str, start_time: float, end_time: float, speaker: Optional[str]
     ) -> List[Dict[str, Any]]:
         """字幕アイテムを作成."""
-        # 表示時間を調整
-        duration = end_time - start_time
-        if duration < self.min_display_duration:
-            end_time = start_time + self.min_display_duration
-        elif duration > self.max_display_duration:
-            end_time = start_time + self.max_display_duration
+        # 音声の実際の長さ
+        audio_duration = end_time - start_time
+
+        # 読むのに必要な時間を計算（日本語：1秒あたり8文字）
+        text_length = len(sentence)
+        reading_time = text_length / self.reading_speed_chars_per_sec
+
+        # 音声と読む時間の長い方を採用（ただし最小値と最大値の範囲内）
+        optimal_duration = max(audio_duration, reading_time)
+        optimal_duration = max(optimal_duration, self.min_display_duration)
+        optimal_duration = min(optimal_duration, self.max_display_duration)
+
+        end_time = start_time + optimal_duration
 
         # 長い文の場合は分割
         if len(sentence) > self.max_subtitle_length:
