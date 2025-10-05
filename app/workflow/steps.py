@@ -20,7 +20,7 @@ from app.prompts import (
 )
 from app.search_news import collect_news
 from app.services.file_archival import FileArchivalManager
-from app.services.media import MediaQAPipeline
+from app.services.media.qa_pipeline import MediaQAPipeline
 from app.services.script import ScriptFormatError, ensure_dialogue_structure
 from app.services.script.validator import Script
 from app.services.video_review import get_video_review_service

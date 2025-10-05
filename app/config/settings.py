@@ -355,6 +355,13 @@ class AppSettings(BaseModel):
                 imageio_ffmpeg = importlib.import_module(module_name)
                 config["ffmpeg_path"] = imageio_ffmpeg.get_ffmpeg_exe()
 
+        from app.services.media.ffmpeg_support import FFmpegConfigurationError, ensure_ffmpeg_tooling
+
+        try:
+            config["ffmpeg_path"] = ensure_ffmpeg_tooling(config.get("ffmpeg_path"))
+        except (FileNotFoundError, FFmpegConfigurationError) as exc:
+            raise RuntimeError(f"Failed to validate FFmpeg tooling: {exc}") from exc
+
         enable_stock_env = os.getenv("ENABLE_STOCK_FOOTAGE")
         if enable_stock_env is not None:
             config["enable_stock_footage"] = enable_stock_env.strip().lower() in {"1", "true", "yes", "on"}
