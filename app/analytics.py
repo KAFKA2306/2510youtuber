@@ -49,9 +49,9 @@ class FeedbackAnalyzer:
             logger.error(f"Failed to load executions: {e}")
             return []
 
-    def analyze_hook_performance(self) -> Dict[str, Dict[str, float]]:
+    def analyze_hook_performance(self, limit: Optional[int] = None) -> Dict[str, Dict[str, float]]:
         """フック戦略ごとのパフォーマンスを分析."""
-        executions = self.load_executions()
+        executions = self.load_executions(limit=limit or 100)
         if not executions:
             return {}
 
@@ -76,9 +76,9 @@ class FeedbackAnalyzer:
 
         return hook_stats
 
-    def analyze_topic_distribution(self) -> Dict[str, int]:
+    def analyze_topic_distribution(self, limit: Optional[int] = None) -> Dict[str, int]:
         """トピック別の動画数を分析."""
-        executions = self.load_executions()
+        executions = self.load_executions(limit=limit or 100)
         topic_count = {}
 
         for ex in executions:
@@ -103,9 +103,9 @@ class FeedbackAnalyzer:
         successful = sum(1 for ex in executions if ex.success)
         return (successful / len(executions)) * 100
 
-    def generate_weekly_report(self) -> str:
+    def generate_weekly_report(self, limit: Optional[int] = None) -> str:
         """週次レポートを生成."""
-        executions = self.load_executions(limit=50)
+        executions = self.load_executions(limit=limit or 50)
         recent = executions[:7]  # Last 7
 
         if not recent:

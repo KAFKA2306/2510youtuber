@@ -111,10 +111,10 @@ uv run python3 -m app.main daily
 uv run python3 test_crewai_flow.py
 
 # 動画レビュー
-uv run python -m scripts.video_review "output/video.mp4"
+python scripts/tasks.py review output/video.mp4
 
 # 分析レポート
-python scripts/analytics_report.py
+python scripts/tasks.py analytics
 ```
 
 ### テスト

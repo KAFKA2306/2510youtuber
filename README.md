@@ -32,7 +32,11 @@ Automated YouTube video generation system using AI agents.
 uv run python3 -m app.main daily
 
 # Iterate verification loop (tests + optional workflow)
-python scripts/continuous_improvement.py --iterations 3
+python scripts/tasks.py improve --iterations 3
+
+# Inspect analytics & logs
+python scripts/tasks.py analytics
+python scripts/tasks.py logs
 
 # Test script generation
 uv run python3 test_crewai_flow.py

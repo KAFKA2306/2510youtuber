@@ -5,7 +5,7 @@ This repository automates finance-themed YouTube production through a CrewAI wor
 ## Project Structure & Module Organization
 - `app/` contains runtime code: `crew/` orchestrates agents, `config/` maps `config.yaml` into Pydantic settings, `models/` defines workflow schemas, and `services/media/` handles footage, audio, and archival.
 - `tests/` is split into `unit/`, `integration/`, and `e2e/` suites with shared `fixtures/` and `helpers/`; add new tests beside the closest peer suite.
-- `scripts/` offers CLI utilities such as `analytics_report.py`; `docs/` explains architecture; runtime artifacts land in `output/` and `data/` and should stay untracked.
+- `scripts/` offers CLI utilities such as `tasks.py`; `docs/` explains architecture; runtime artifacts land in `output/` and `data/` and should stay untracked.
 
 ## Build, Test, and Development Commands
 - `uv run python3 -m app.main daily` runs the end-to-end daily news → video publication loop.
