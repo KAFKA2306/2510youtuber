@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
 from app.config.paths import ProjectPaths
@@ -142,9 +143,16 @@ class DriveManager:
             error_str = str(e)
             logger.error(f"File upload failed: {error_str}")
 
+            analysis = self._analyze_drive_error(e)
+
             # ストレージクォータエラーの場合は警告のみでスキップ
             if "storageQuotaExceeded" in error_str or "Service Accounts do not have storage quota" in error_str:
-                logger.warning(f"Skipping Drive upload due to storage quota limitation (file: {file_name})")
+                reason = analysis.get("message", error_str)
+                logger.warning(
+                    "Skipping Drive upload due to storage quota limitation (file: %s): %s",
+                    file_name,
+                    reason,
+                )
                 # エラーではなく、スキップ情報として返す
                 return {
                     "skipped": True,
@@ -153,9 +161,63 @@ class DriveManager:
                     "file_name": file_name,
                     "file_size": file_size,
                     "message": "File not uploaded to Drive due to service account storage limitation. Use shared drive or local backup.",
+                    "analysis": analysis,
                 }
 
-            return self._get_upload_error_info(file_path, error_str)
+            return self._get_upload_error_info(file_path, error_str, analysis)
+
+    @staticmethod
+    def _analyze_drive_error(error: Exception) -> Dict[str, Any]:
+        """Pull structured details from Drive API errors for easier troubleshooting."""
+
+        analysis: Dict[str, Any] = {
+            "status": None,
+            "reason": None,
+            "message": str(error),
+            "classification": None,
+            "suggestions": [],
+        }
+
+        if isinstance(error, HttpError):
+            analysis["status"] = getattr(error.resp, "status", None)
+            raw_content = getattr(error, "content", b"")
+
+            payload: Dict[str, Any] = {}
+            if isinstance(raw_content, bytes) and raw_content:
+                try:
+                    payload = json.loads(raw_content.decode("utf-8"))
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    payload = {}
+
+            error_info = payload.get("error") if isinstance(payload, dict) else {}
+            if isinstance(error_info, dict):
+                message = error_info.get("message")
+                if message:
+                    analysis["message"] = message
+
+                details = error_info.get("errors") or error_info.get("details")
+                if isinstance(details, list) and details:
+                    first = details[0]
+                    if isinstance(first, dict):
+                        analysis["reason"] = first.get("reason") or analysis["reason"]
+
+        message_lower = analysis["message"].lower() if analysis["message"] else ""
+        reason_lower = analysis["reason"].lower() if analysis["reason"] else ""
+
+        if "storagequotaexceeded" in reason_lower or "storage quota" in message_lower:
+            analysis["classification"] = "storage_quota"
+            analysis.setdefault("suggestions", [])
+            analysis["suggestions"].append(
+                "Service accounts do not have personal Drive storage. Upload to a shared drive or enable domain-wide delegation."
+            )
+        elif "insufficientfilepermissions" in reason_lower or "insufficient permissions" in message_lower:
+            analysis["classification"] = "permission_denied"
+            analysis.setdefault("suggestions", [])
+            analysis["suggestions"].append(
+                "Check that the service account has access to the target folder or shared drive."
+            )
+
+        return analysis
 
     def _get_mime_type(self, file_path: str) -> str:
         import mimetypes
@@ -313,13 +375,16 @@ class DriveManager:
             logger.warning(f"Failed to get folder link: {e}")
             return f"https://drive.google.com/drive/folders/{folder_id}"
 
-    def _get_upload_error_info(self, file_path: str, error_msg: str) -> Dict[str, Any]:
+    def _get_upload_error_info(
+        self, file_path: str, error_msg: str, analysis: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
         return {
             "error": error_msg,
             "file_path": file_path,
             "file_exists": os.path.exists(file_path),
             "file_size": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
             "upload_failed_at": datetime.now().isoformat(),
+            "analysis": analysis or {},
         }
 
     def _create_local_backup_folder(self, metadata: Dict[str, Any] = None) -> str:

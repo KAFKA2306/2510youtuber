@@ -117,6 +117,40 @@ def test_generator_uses_fallback_when_quality_gate_disabled(monkeypatch):
     assert result.metadata.quality_report.errors
 
 
+def test_fallback_text_single_dialogue_is_padded(monkeypatch):
+    raw_script = "武宏: 急激な円高が進んでいます。"
+    response = {"choices": [{"message": {"content": raw_script}}]}
+
+    monkeypatch.setattr(
+        settings.script_generation,
+        "quality_gate_llm_enabled",
+        False,
+        raising=False,
+    )
+
+    generator = StructuredScriptGenerator(
+        client=DummyClient([response]),
+        allowed_speakers=["武宏", "つむぎ"],
+        max_attempts=1,
+    )
+
+    result = generator.generate(
+        news_items=[
+            {
+                "title": "円が全面高",
+                "summary": "主要通貨に対して円が短時間で大きく上昇している。",
+                "source": "ロイター",
+            }
+        ]
+    )
+
+    assert len(result.script.dialogues) == 2
+    assert result.script.dialogues[0].speaker == "武宏"
+    assert result.script.dialogues[1].speaker == "つむぎ"
+    assert result.script.dialogues[1].line == "(補完台詞)"
+    assert result.metadata.quality_report.dialogue_lines >= 2
+
+
 def test_generator_repairs_single_dialogue_payload():
     payload = {
         "title": "市場速報: クイックアップデート",
