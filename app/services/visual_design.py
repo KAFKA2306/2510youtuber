@@ -6,7 +6,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from app.background_theme import BackgroundTheme, get_theme_manager
 from app.config.paths import ProjectPaths
@@ -39,6 +39,9 @@ class UnifiedVisualDesign:
     primary_color: Tuple[int, int, int]
     accent_color: Tuple[int, int, int]
     text_color: Tuple[int, int, int]
+
+    # サムネイルスタイル
+    thumbnail_style: Optional[str] = None
 
     # フォント設定
     subtitle_font_size: int = 48
@@ -91,6 +94,16 @@ class UnifiedVisualDesign:
             primary = (0, 120, 215)  # 青（信頼）
             accent = (255, 215, 0)  # 金色（クリック誘導）
 
+        theme_to_thumbnail_style = {
+            "professional_blue": "economic_blue",
+            "elegant_purple": "youtube_style",
+            "dynamic_green": "financial_green",
+            "minimal_gray": "economic_blue",
+            "modern_growth": "financial_green",
+            "professional_alert": "market_red",
+        }
+        thumbnail_style = theme_to_thumbnail_style.get(theme.name)
+
         logger.info(f"Selected visual design: theme={theme.name}, sentiment={sentiment}")
 
         return cls(
@@ -100,6 +113,7 @@ class UnifiedVisualDesign:
             primary_color=primary,
             accent_color=accent,
             text_color=(255, 255, 255),  # 白（視認性最強）
+            thumbnail_style=thumbnail_style,
         )
 
     @staticmethod
@@ -175,6 +189,9 @@ class UnifiedVisualDesign:
         Returns:
             str: カラースキーム名 ("economic_blue", "financial_green", "market_red")
         """
+        if self.thumbnail_style:
+            return self.thumbnail_style
+
         if self.sentiment == "positive":
             return "financial_green"
         elif self.sentiment == "negative":
@@ -193,6 +210,7 @@ class UnifiedVisualDesign:
             "primary_color": self.primary_color,
             "accent_color": self.accent_color,
             "text_color": self.text_color,
+            "thumbnail_style": self.get_thumbnail_style(),
             "subtitle_font_size": self.subtitle_font_size,
             "thumbnail_title_font_size": self.thumbnail_title_font_size,
             "robot_icon_enabled": self.robot_icon_enabled,
