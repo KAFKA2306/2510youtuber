@@ -29,7 +29,7 @@ main() {
 
     # Run with nohup in background
     log "Starting continuous improvement with workflow execution..."
-    nohup uv run python scripts/continuous_improvement.py --run-workflow >> "${LOG_FILE}" 2>&1 &
+    nohup uv run python scripts/tasks.py improve --run-workflow >> "${LOG_FILE}" 2>&1 &
 
     PID=$!
     log "✅ Process started with PID: ${PID}"

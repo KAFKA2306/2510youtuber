@@ -123,8 +123,7 @@ youtuber/
 │   └── api/                      # API安定性テスト
 │
 ├── scripts/                      # スクリプト
-│   ├── analytics_report.py       # 分析レポート生成
-│   ├── video_review.py           # 動画レビューCLI
+│   ├── tasks.py                  # 統合CLI（分析・ログ・改善ループ・レビュー）
 │   └── voicevox_manager.sh       # VOICEVOX管理
 │
 ├── config.yaml                   # 統合設定ファイル

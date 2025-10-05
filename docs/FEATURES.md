@@ -214,16 +214,14 @@ topics = analyzer.topic_distribution()
 
 ```bash
 # 週次レポート
-python scripts/analytics_report.py
+python scripts/tasks.py analytics
 
 # フック戦略分析
-python scripts/analytics_report.py --hooks
+python scripts/tasks.py analytics --hooks
 
 # トピック分布
-python scripts/analytics_report.py --topics
+python scripts/tasks.py analytics --topics
 
-# 特定期間のレポート
-python scripts/analytics_report.py --start 2025-01-01 --end 2025-01-31
 ```
 
 ### 設定
@@ -628,15 +626,15 @@ video_review:
 
 ```bash
 # 動画をレビュー
-uv run python -m scripts.video_review "output/video.mp4" \
+python scripts/tasks.py review output/video.mp4 \
     --title "経済ニュース解説" \
     --duration "8分12秒"
 
 # JSONで出力
-uv run python -m scripts.video_review "output/video.mp4" --json
+python scripts/tasks.py review output/video.mp4 --json
 
 # 既存のスクリーンショットを再生成
-uv run python -m scripts.video_review "output/video.mp4" --force
+python scripts/tasks.py review output/video.mp4 --force
 ```
 
 #### Python API

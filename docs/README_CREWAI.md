@@ -41,7 +41,7 @@ uv run python3 test_crewai_flow.py
 uv run python3 -m app.main daily
 
 # 実行後、品質分析レポートを確認
-python scripts/analytics_report.py
+python scripts/tasks.py analytics
 ```
 
 ***
@@ -80,13 +80,13 @@ CrewAIは以下の専門チームで台本を生成します：
 **分析レポート**:
 ```bash
 # 週次レポート（最新7実行）
-python scripts/analytics_report.py
+python scripts/tasks.py analytics
 
 # フック戦略別パフォーマンス
-python scripts/analytics_report.py --hooks
+python scripts/tasks.py analytics --hooks
 
 # トピック分布
-python scripts/analytics_report.py --topics
+python scripts/tasks.py analytics --topics
 ```
 
 ### Phase 3の改善内容（継続中）
@@ -164,7 +164,7 @@ agents:
 
 **症状**:
 ```bash
-python scripts/analytics_report.py
+python scripts/tasks.py analytics
 # 出力: 平均WOWスコア: 0.00/10.0
 # 警告: 品質メトリクスが未記録（CrewAI未使用またはデータ抽出エラー）
 ```
@@ -182,7 +182,7 @@ USE_CREWAI_SCRIPT_GENERATION=true
 uv run python3 -m app.main daily
 
 # 確認
-python scripts/analytics_report.py
+python scripts/tasks.py analytics
 ```
 
 #### 問題2: Analytics レポートのクラッシュ
@@ -355,13 +355,13 @@ app/
 1. ✅ `test_crewai_flow.py`でテスト実行
 2. ✅ 生成された台本を確認（`output/test_crewai_script.txt`）
 3. ✅ 満足したら本番実行（`uv run python3 -m app.main daily`）
-4. ✅ **NEW**: Analytics レポートで品質を確認（`python scripts/analytics_report.py`）
+4. ✅ **NEW**: Analytics レポートで品質を確認（`python scripts/tasks.py analytics`）
 
 ### 推奨設定（優先度順）
 1. **P0**: VOICEVOX Nemoサーバー起動（完全無料）
    - 手順・設定・テスト: `docs/VOICEVOX_NEMO.md`
 2. **P1**: 複数回実行してフィードバックループを活用
-   - 5-10本の動画を生成後、`analytics_report.py`でパターン分析
+   - 5-10本の動画を生成後、`python scripts/tasks.py analytics`でパターン分析
    - 高WOWスコアの動画の特徴を把握し、プロンプト改善に活用
 
 ### 参考ドキュメント

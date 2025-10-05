@@ -20,7 +20,7 @@ uv run python3 test_crewai_flow.py
 uv run python -m app.verify
 
 # Generate analytics report (feedback loop)
-python scripts/analytics_report.py
+python scripts/tasks.py analytics
 
 # Lint code
 uv run ruff check .
@@ -357,9 +357,9 @@ Always check `ffmpeg -version` shows version 4.4+ for subtitle rendering support
 uv run python3 -m app.main daily
 
 # View analytics
-python scripts/analytics_report.py           # Weekly report
-python scripts/analytics_report.py --hooks   # Hook performance
-python scripts/analytics_report.py --topics  # Topic distribution
+python scripts/tasks.py analytics           # Weekly report
+python scripts/tasks.py analytics --hooks   # Hook performance
+python scripts/tasks.py analytics --topics  # Topic distribution
 ```
 
 ### Data Flow
@@ -390,7 +390,7 @@ Workflow → WorkflowResult → JSONL Log + Google Sheets (3 tabs)
 - `app/models/workflow.py` - Extended `WorkflowResult` + `YouTubeFeedback` models
 - `app/metadata_storage.py` - Integrated logging with Sheets formatting
 - `app/analytics.py` - `FeedbackAnalyzer` for pattern detection
-- `scripts/analytics_report.py` - CLI reporting tool
+- `scripts/tasks.py (analytics)` - CLI reporting tool
 - `docs/FEEDBACK_LOOP.md` - Complete documentation
 
 **Design Principle**: Minimal integration, zero breaking changes. Extends existing `WorkflowResult` and `MetadataStorage` rather than creating new infrastructure.

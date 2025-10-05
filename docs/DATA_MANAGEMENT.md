@@ -360,19 +360,14 @@ for topic, count in topics.items():
 
 ```bash
 # 週次レポート
-python scripts/analytics_report.py
+python scripts/tasks.py analytics
 
 # フック戦略分析
-python scripts/analytics_report.py --hooks
+python scripts/tasks.py analytics --hooks
 
 # トピック分布
-python scripts/analytics_report.py --topics
+python scripts/tasks.py analytics --topics
 
-# 特定期間
-python scripts/analytics_report.py --start 2025-01-01 --end 2025-01-31
-
-# CSV出力
-python scripts/analytics_report.py --output report.csv
 ```
 
 ### 過去データの活用
