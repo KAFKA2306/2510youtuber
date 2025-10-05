@@ -13,7 +13,7 @@ import textwrap
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING
 
@@ -99,24 +99,85 @@ def _load_metadata_from_structured(structured_path: Path) -> Dict[str, object]:
     return {}
 
 
+def _parse_iso_timestamp(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        text = str(value).strip()
+        if not text:
+            return None
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        dt = datetime.fromisoformat(text)
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _run_timestamp(run_dir: Path) -> float:
+    metadata_file = run_dir / "metadata.json"
+    timestamps: List[datetime] = []
+    if metadata_file.exists():
+        try:
+            metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            metadata = {}
+        for key in ("updated_at", "created_at"):
+            parsed = _parse_iso_timestamp(metadata.get(key))
+            if parsed:
+                timestamps.append(parsed)
+
+    if timestamps:
+        return max(timestamps).timestamp()
+
+    structured = run_dir / "events.jsonl"
+    if structured.exists():
+        return structured.stat().st_mtime
+
+    text_log = run_dir / "workflow.log"
+    if text_log.exists():
+        return text_log.stat().st_mtime
+
+    return run_dir.stat().st_mtime
+
+
 def _discover_latest_structured(log_dir: Path) -> Optional[Path]:
     runs_dir = log_dir / "runs"
     if not runs_dir.exists():
         return None
-    candidates = sorted(runs_dir.glob("*/events.jsonl"), key=lambda p: p.stat().st_mtime)
-    return candidates[-1] if candidates else None
+
+    run_dirs = [path for path in runs_dir.iterdir() if path.is_dir()]
+    if not run_dirs:
+        return None
+
+    run_dirs.sort(key=_run_timestamp)
+    for run_dir in reversed(run_dirs):
+        candidate = run_dir / "events.jsonl"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def _discover_latest_text(log_dir: Path) -> Optional[Path]:
     runs_dir = log_dir / "runs"
-    candidates: List[Path] = []
+    candidates: List[Tuple[float, Path]] = []
+
     if runs_dir.exists():
-        candidates.extend(runs_dir.glob("*/workflow.log"))
-    candidates.extend(log_dir.glob("workflow_*.log"))
+        for run_dir in runs_dir.iterdir():
+            if not run_dir.is_dir():
+                continue
+            text_log = run_dir / "workflow.log"
+            if text_log.exists():
+                candidates.append((_run_timestamp(run_dir), text_log))
+
+    for text_log in log_dir.glob("workflow_*.log"):
+        candidates.append((text_log.stat().st_mtime, text_log))
+
     if not candidates:
         return None
-    candidates.sort(key=lambda p: p.stat().st_mtime)
-    return candidates[-1]
+
+    candidates.sort(key=lambda item: item[0])
+    return candidates[-1][1]
 
 
 def analyze_structured_log(structured_path: Path) -> Dict[str, object]:
