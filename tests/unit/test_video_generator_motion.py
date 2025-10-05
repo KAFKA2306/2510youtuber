@@ -14,9 +14,13 @@ pytestmark = pytest.mark.unit
 @pytest.fixture()
 def video_components(monkeypatch):
     """Load app.video with lightweight stubbed workflow steps."""
+    stub_ensure = lambda path=None: "ffmpeg"
+    monkeypatch.setattr("app.services.media.ffmpeg_support.ensure_ffmpeg_tooling", stub_ensure)
+
     preloaded = "app.video" in sys.modules
     if preloaded:
         module = sys.modules["app.video"]
+        monkeypatch.setattr(module, "ensure_ffmpeg_tooling", stub_ensure)
         yield module, module.VideoGenerator
         return
 
@@ -42,6 +46,7 @@ def video_components(monkeypatch):
     monkeypatch.setitem(sys.modules, "app.workflow.steps", stub_steps)
 
     module = importlib.import_module("app.video")
+    monkeypatch.setattr(module, "ensure_ffmpeg_tooling", stub_ensure)
     try:
         yield module, module.VideoGenerator
     finally:
