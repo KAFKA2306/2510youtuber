@@ -5,7 +5,11 @@ import json
 import pytest
 
 from app.config.settings import settings
-from app.services.script.generator import ScriptQualityReport, StructuredScriptGenerator
+from app.services.script.generator import (
+    ScriptQualityReport,
+    SpeakerRoster,
+    StructuredScriptGenerator,
+)
 from app.services.script.validator import Script
 
 
@@ -174,3 +178,50 @@ def test_generator_returns_backup_script_when_all_attempts_fail(monkeypatch):
     assert result.script.title.startswith("バックアップ台本")
     assert len(result.script.dialogues) >= 24
     assert result.metadata.quality_report.dialogue_lines >= 24
+
+
+def test_generator_augments_single_configured_speaker():
+    roster = SpeakerRoster(["独り語り"])
+    payload = {
+        "title": "単独話者でも成立する市場解説",
+        "dialogues": [
+            {"speaker": roster.names[0], "line": "今日のマーケットを振り返ります。"},
+            {"speaker": roster.names[1], "line": "視点を補足してリスクも伝えましょう。"},
+        ],
+    }
+
+    response = _build_response(payload)
+    generator = StructuredScriptGenerator(
+        client=DummyClient([response]),
+        allowed_speakers=["独り語り"],
+        max_attempts=1,
+    )
+
+    result = generator.generate(
+        news_items=[{"title": "dummy", "summary": "dummy", "source": "test"}]
+    )
+
+    assert {d.speaker for d in result.script.dialogues} == set(roster.names)
+    warning = roster.warning_message
+    assert warning in result.metadata.quality_report.warnings
+
+
+def test_generator_injects_placeholders_when_no_speakers_provided():
+    roster = SpeakerRoster([])
+    payload = {
+        "title": "自動補完された話者で進行",
+        "dialogues": [
+            {"speaker": roster.names[0], "line": "最初の視点を共有します。"},
+            {"speaker": roster.names[1], "line": "別の視点も追加しましょう。"},
+        ],
+    }
+
+    response = _build_response(payload)
+    generator = StructuredScriptGenerator(client=DummyClient([response]), allowed_speakers=[])
+
+    result = generator.generate(
+        news_items=[{"title": "dummy", "summary": "dummy", "source": "test"}]
+    )
+
+    assert len(generator._allowed_speakers) >= SpeakerRoster.MIN_SPEAKERS
+    assert set(d.speaker for d in result.script.dialogues) == set(roster.names)

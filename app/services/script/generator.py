@@ -10,7 +10,7 @@ import json
 import logging
 import textwrap
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -84,6 +84,57 @@ class ScriptGenerationResult:
     raw_response: str
 
 
+class SpeakerRoster:
+    """Normalize speaker names and guarantee a dialogue-ready roster."""
+
+    MIN_SPEAKERS = 2
+    DEFAULT_PLACEHOLDERS = ("ナビゲーター", "アナリスト")
+
+    def __init__(self, speakers: Iterable[str]) -> None:
+        cleaned = [name.strip() for name in speakers if isinstance(name, str) and name.strip()]
+        self.configured_names: List[str] = list(cleaned)
+        self.added_names: List[str] = []
+
+        while len(cleaned) < self.MIN_SPEAKERS:
+            next_name = self._next_placeholder(cleaned)
+            cleaned.append(next_name)
+            self.added_names.append(next_name)
+
+        self._names = cleaned
+
+    @classmethod
+    def from_settings(cls) -> "SpeakerRoster":
+        return cls(speaker.name for speaker in settings.speakers)
+
+    @staticmethod
+    def _next_placeholder(current: List[str]) -> str:
+        for candidate in SpeakerRoster.DEFAULT_PLACEHOLDERS:
+            if candidate not in current:
+                return candidate
+
+        index = 1
+        while True:
+            candidate = f"話者{index}"
+            if candidate not in current:
+                return candidate
+            index += 1
+
+    @property
+    def names(self) -> List[str]:
+        return list(self._names)
+
+    @property
+    def was_augmented(self) -> bool:
+        return bool(self.added_names)
+
+    @property
+    def warning_message(self) -> Optional[str]:
+        if not self.was_augmented:
+            return None
+        joined = "、".join(self.added_names)
+        return f"設定された話者が不足していたため、台本生成で代替話者({joined})を補っています。"
+
+
 class StructuredScriptGenerator:
     """Single-pass script generator backed by Gemini through :class:`LLMClient`."""
 
@@ -92,15 +143,23 @@ class StructuredScriptGenerator:
         client: Optional[LLMClient] = None,
         max_attempts: int = 3,
         temperature: float = 0.6,
+        allowed_speakers: Optional[Sequence[str]] = None,
     ) -> None:
         self.max_attempts = max(1, max_attempts)
         model_name = settings.gemini_models.get("script_generation")
         self.client = client or LLMClient(model=model_name, temperature=temperature)
-        self._allowed_speakers = [speaker.name for speaker in settings.speakers]
+        self._speaker_roster = (
+            SpeakerRoster(allowed_speakers) if allowed_speakers is not None else SpeakerRoster.from_settings()
+        )
+        self._allowed_speakers = self._speaker_roster.names
         self._quality_gate_enabled = settings.script_generation.quality_gate_llm_enabled
 
-        if len(self._allowed_speakers) < 2:
-            raise RuntimeError("At least two speakers must be configured for script generation")
+        if self._speaker_roster.was_augmented:
+            logger.warning(
+                "Speaker roster augmented with fallback names: configured=%s, added=%s",
+                self._speaker_roster.configured_names,
+                self._speaker_roster.added_names,
+            )
 
     def generate(
         self,
@@ -371,21 +430,25 @@ class StructuredScriptGenerator:
         script: Script,
     ) -> ScriptQualityReport:
         if not validation:
-            return ScriptQualityReport(
-                dialogue_lines=len(script.dialogues),
-                total_nonempty_lines=len(script.dialogues),
-                distinct_speakers=len({d.speaker for d in script.dialogues}),
-                warnings=[],
-                errors=[],
+            return self._apply_roster_warnings(
+                ScriptQualityReport(
+                    dialogue_lines=len(script.dialogues),
+                    total_nonempty_lines=len(script.dialogues),
+                    distinct_speakers=len({d.speaker for d in script.dialogues}),
+                    warnings=[],
+                    errors=[],
+                )
             )
 
-        return ScriptQualityReport(
+        report = ScriptQualityReport(
             dialogue_lines=validation.dialogue_line_count,
             total_nonempty_lines=validation.nonempty_line_count,
             distinct_speakers=sum(1 for count in validation.speaker_counts.values() if count > 0),
             warnings=[issue.message for issue in validation.warnings],
             errors=[issue.message for issue in validation.errors],
         )
+
+        return self._apply_roster_warnings(report)
 
     def _compute_quality_report(self, script: Script) -> ScriptQualityReport:
         try:
@@ -398,6 +461,18 @@ class StructuredScriptGenerator:
             validation = exc.result
 
         return self._build_quality_report_from_validation(validation, script)
+
+    def _apply_roster_warnings(self, report: ScriptQualityReport) -> ScriptQualityReport:
+        warning = self._speaker_roster.warning_message
+        if not warning:
+            return report
+
+        existing = list(report.warnings)
+        if warning in existing:
+            return report
+
+        existing.append(warning)
+        return report.copy(update={"warnings": existing})
 
     def _build_backup_script(
         self,

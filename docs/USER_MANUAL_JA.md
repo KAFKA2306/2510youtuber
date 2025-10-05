@@ -47,7 +47,7 @@
 - 日次実行前に `git pull` で最新コードと設定を取得し、変更点を確認する。
 - APIキーのローテーション設定を四半期ごとに見直し、`get_rotation_manager` に登録されているキー数が十分かを確認する。【F:app/search_news.py†L13-L78】
 - QAレポートとAIレビューをNotionやSlackに転送し、継続的改善のタスクリストを作成する。
-- 新しい話者を追加するときは、`StructuredScriptGenerator` が最低2話者を要求する点に注意して、台本テンプレの整合性を保つ。【F:app/services/script/generator.py†L55-L88】
+- 新しい話者を追加するときは、`StructuredScriptGenerator` が不足分を自動補完して警告を出す仕組みになった。1人しか設定しない場合でもプレースホルダー話者が補われるため、会話テンプレの整合性を維持しつつ手動設定の抜け漏れを検知できる。【F:app/services/script/generator.py†L55-L132】
 
 ## 7. 参考コマンド
 - CrewAIフロー単体テスト: `uv run python3 test_crewai_flow.py`
