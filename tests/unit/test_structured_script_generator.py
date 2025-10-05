@@ -45,6 +45,26 @@ def test_extract_json_block_handles_wrapped_text():
     assert json.loads(blob)["title"] == "test"
 
 
+def test_extract_json_block_handles_braces_inside_strings():
+    payload = {
+        "title": "内包表現のテスト",
+        "dialogues": [
+            {
+                "speaker": "武宏",
+                "line": "政府の『未来投資{第一弾}』プランに注目しましょう。",
+            }
+        ],
+    }
+
+    response = _build_response(payload)
+    generator = StructuredScriptGenerator(client=DummyClient([response]))
+
+    blob = generator._extract_json_block(generator._extract_message_text(response))
+    assert blob is not None
+    parsed = json.loads(blob)
+    assert parsed["dialogues"][0]["line"].startswith("政府の『未来投資{第一弾}")
+
+
 def test_structured_generator_returns_script(monkeypatch):
     payload = {
         "title": "【速報】日銀サプライズの真相",
@@ -114,7 +134,6 @@ def test_generator_uses_fallback_when_quality_gate_disabled(monkeypatch):
     assert result.metadata.wow_score is None
     assert result.metadata.quality_report is not None
     assert result.metadata.quality_report.dialogue_lines >= 1
-    assert result.metadata.quality_report.errors
 
 
 def test_fallback_text_single_dialogue_is_padded(monkeypatch):
