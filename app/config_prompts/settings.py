@@ -1,5 +1,6 @@
 import json
 import os
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 import yaml
@@ -36,25 +37,59 @@ class PromptManager:
             loader=loader, autoescape=select_autoescape(["html", "xml"]), trim_blocks=True, lstrip_blocks=True
         )
 
+    def _resolve_template_path(self, template_name: str) -> str:
+        """Resolve a configured template name to an on-disk path for Jinja2."""
+
+        file_name = self.prompt_config.get("files", {}).get(template_name, f"{template_name}.yaml")
+        candidate = os.path.join("prompts", file_name)
+
+        for search_path in self.env.loader.searchpath:
+            if os.path.exists(os.path.join(search_path, candidate)):
+                return candidate
+
+        return file_name
+
     def get_prompt_template(self, template_name: str) -> str:
         """指定された名前のプロンプトテンプレートを読み込む"""
-        # config.yamlのfilesセクションからファイル名を解決
-        file_name = self.prompt_config.get("files", {}).get(template_name, f"{template_name}.yaml")
 
-        # YAMLファイルを読み込み、Jinja2テンプレートとして返す
-        template_path = os.path.join("prompts", file_name)  # デフォルトのpromptsサブディレクトリを想定
-
-        # 直接ファイル名が指定された場合も考慮
-        if not os.path.exists(os.path.join(self.env.loader.searchpath[0], template_path)):
-            template_path = file_name
-
-        template = self.env.get_template(template_path)
-        return template.render()  # テンプレート自体を文字列として返す
+        template_path = self._resolve_template_path(template_name)
+        source, _, _ = self.env.loader.get_source(self.env, template_path)
+        return source
 
     def render_prompt(self, template_name: str, data: Dict[str, Any]) -> str:
         """プロンプトテンプレートをレンダリングする"""
+
         template_content = self.get_prompt_template(template_name)
         template = self.env.from_string(template_content)
+        return template.render(**data)
+
+    @lru_cache(maxsize=None)
+    def _load_yaml_template(self, template_name: str) -> Dict[str, Any]:
+        """Load a YAML template file as a dictionary for structured access."""
+
+        template_content = self.get_prompt_template(template_name)
+        loaded = yaml.safe_load(template_content)
+        if not isinstance(loaded, dict):
+            return {}
+        return loaded
+
+    def get_task_definition(self, template_name: str, task_key: str) -> Dict[str, Any]:
+        """Return the task block for the given key within a template."""
+
+        template_data = self._load_yaml_template(template_name)
+        tasks = template_data.get("tasks") if isinstance(template_data, dict) else None
+        if not isinstance(tasks, dict) or task_key not in tasks:
+            raise KeyError(
+                f"Task '{task_key}' not found in template '{template_name}'. "
+                f"Available tasks: {', '.join(tasks.keys()) if isinstance(tasks, dict) else 'none'}"
+            )
+        task_definition = tasks[task_key]
+        return task_definition if isinstance(task_definition, dict) else {}
+
+    def render_text(self, template_text: str, data: Dict[str, Any]) -> str:
+        """Render a raw text snippet using the prompt environment."""
+
+        template = self.env.from_string(template_text or "")
         return template.render(**data)
 
 
