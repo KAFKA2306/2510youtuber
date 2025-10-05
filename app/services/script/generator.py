@@ -213,7 +213,19 @@ class StructuredScriptGenerator:
                 logger.info("Quality gate enabled; retrying after fallback candidate")
                 continue
 
-            script = payload.to_script()
+            try:
+                script = payload.to_script()
+            except ValidationError as exc:
+                logger.warning("Structured payload failed validation: %s", exc)
+                try:
+                    repaired_dialogues = self._ensure_min_dialogues(payload.dialogues)
+                except ValueError as repair_error:
+                    logger.warning("Unable to repair dialogues: %s", repair_error)
+                    last_error = str(exc)
+                    continue
+
+                script = Script(title=payload.title, dialogues=repaired_dialogues)
+                logger.info("Augmented structured payload with %s dialogue lines", len(script.dialogues))
             metadata = payload.to_metadata()
             metadata.quality_report = self._compute_quality_report(script)
 
@@ -413,6 +425,32 @@ class StructuredScriptGenerator:
             dialogues.append(DialogueEntry(speaker=alternate, line="(補完台詞)"))
 
         return dialogues
+
+    def _ensure_min_dialogues(
+        self, dialogues: Sequence[DialogueEntry]
+    ) -> List[DialogueEntry]:
+        if not dialogues:
+            raise ValueError("Structured payload did not contain any dialogue lines")
+
+        normalized = [
+            DialogueEntry(speaker=entry.speaker, line=entry.line) for entry in dialogues
+        ]
+
+        if len(normalized) >= 2:
+            return normalized
+
+        first_speaker = normalized[0].speaker or self._allowed_speakers[0]
+        fallback_speaker: Optional[str] = None
+        for candidate in self._allowed_speakers:
+            if candidate and candidate != first_speaker:
+                fallback_speaker = candidate
+                break
+
+        if not fallback_speaker:
+            fallback_speaker = first_speaker or (self._allowed_speakers[0] if self._allowed_speakers else "ナビゲーター")
+
+        normalized.append(DialogueEntry(speaker=fallback_speaker, line="(補完台詞)"))
+        return normalized
 
     def _infer_title(self, response_text: str) -> str:
         for line in response_text.splitlines():
