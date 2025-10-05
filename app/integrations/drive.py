@@ -18,7 +18,7 @@ from googleapiclient.http import MediaFileUpload
 
 from app.config.paths import ProjectPaths
 
-from .config import cfg
+from app.config import cfg
 
 logger = logging.getLogger(__name__)
 

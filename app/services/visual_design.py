@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
-from app.background_theme import BackgroundTheme, get_theme_manager
+from app.media.background_theme import BackgroundTheme, get_theme_manager
 from app.config.paths import ProjectPaths
 
 logger = logging.getLogger(__name__)

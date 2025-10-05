@@ -11,7 +11,7 @@ import litellm
 from crewai.llms.base_llm import BaseLLM
 from pydantic import BaseModel
 
-from app.api_rotation import get_rotation_manager
+from app.core.api_rotation import get_rotation_manager
 from app.config.settings import settings
 
 _LOGGER = logging.getLogger(__name__)

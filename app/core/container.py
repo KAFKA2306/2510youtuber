@@ -50,7 +50,7 @@ class AppContainer:
     def tts_manager(self):
         """Get TTS manager instance (lazy-loaded)."""
         if self._tts_manager is None:
-            from app.tts import TTSManager
+            from app.media.tts import TTSManager
 
             self._tts_manager = TTSManager()
             logger.debug("TTSManager created")
@@ -65,7 +65,7 @@ class AppContainer:
     def video_generator(self):
         """Get video generator instance (lazy-loaded)."""
         if self._video_generator is None:
-            from app.video import VideoGenerator
+            from app.media.video import VideoGenerator
 
             self._video_generator = VideoGenerator()
             logger.debug("VideoGenerator created")
@@ -80,7 +80,7 @@ class AppContainer:
     def metadata_storage(self):
         """Get metadata storage instance (lazy-loaded)."""
         if self._metadata_storage is None:
-            from app.metadata_storage import MetadataStorage
+            from app.integrations.metadata_storage import MetadataStorage
 
             self._metadata_storage = MetadataStorage()
             logger.debug("MetadataStorage created")
@@ -98,7 +98,7 @@ class AppContainer:
             from app.config import settings
 
             if settings.google_sheet_id:
-                from app.sheets import SheetsManager
+                from app.integrations.sheets import SheetsManager
 
                 self._sheets_manager = SheetsManager()
                 logger.debug("SheetsManager created")
@@ -116,7 +116,7 @@ class AppContainer:
     def discord_notifier(self):
         """Get discord notifier instance (lazy-loaded)."""
         if self._discord_notifier is None:
-            from app.discord import DiscordNotifier
+            from app.integrations.discord import DiscordNotifier
 
             self._discord_notifier = DiscordNotifier()
             logger.debug("DiscordNotifier created")

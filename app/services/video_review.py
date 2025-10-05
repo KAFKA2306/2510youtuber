@@ -18,15 +18,15 @@ from typing import Dict, List, Optional
 import ffmpeg
 import google.generativeai as genai
 
-from app.api_rotation import get_rotation_manager
+from app.core.api_rotation import get_rotation_manager
 from app.config.settings import settings
 from app.models.video_review import (
     ScreenshotEvidence,
     VideoReviewFeedback,
     VideoReviewResult,
 )
-from app.utils import FileUtils
-from app.video_feedback import get_feedback_collector
+from app.core.utils import FileUtils
+from app.media.video_feedback import get_feedback_collector
 
 logger = logging.getLogger(__name__)
 

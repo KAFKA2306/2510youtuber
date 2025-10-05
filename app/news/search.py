@@ -12,8 +12,8 @@ from typing import Any, Dict, List
 
 import httpx
 
-from .api_rotation import get_rotation_manager
-from .config import cfg
+from app.core.api_rotation import get_rotation_manager
+from app.config import cfg
 
 logger = logging.getLogger(__name__)
 

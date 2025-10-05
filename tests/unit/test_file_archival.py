@@ -237,10 +237,10 @@ class TestWorkflowIntegration:
 
     def test_video_generator_uses_archival_manager(self):
         """VideoGenerator should use FileArchivalManager for output paths."""
-        from app.video import VideoGenerator
+        from app.media.video import VideoGenerator
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("app.video.FileArchivalManager") as mock_manager:
+            with patch("app.media.video.FileArchivalManager") as mock_manager:
                 mock_instance = MagicMock()
                 mock_manager.return_value = mock_instance
                 mock_instance.get_video_output_path.return_value = f"{tmpdir}/test_video.mp4"

@@ -9,7 +9,7 @@ from pydub import AudioSegment
 
 from app.config.paths import ProjectPaths
 
-from .config import cfg
+from app.config import cfg
 from .stt_fallback import stt_fallback_manager
 
 logger = logging.getLogger(__name__)

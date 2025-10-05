@@ -42,3 +42,8 @@ class PromptManager:
 
 def get_prompt_manager():
     return PromptManager()
+
+
+def get_prompt_cache():
+    """Backward-compatible alias for PromptManager factory."""
+    return get_prompt_manager()

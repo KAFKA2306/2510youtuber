@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.services.media import VisualMatcher
-from app.video import video_generator
+from app.media.video import video_generator
 
 
 def test_stock_footage_capability():

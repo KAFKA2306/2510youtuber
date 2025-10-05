@@ -13,13 +13,13 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture()
 def video_components(monkeypatch):
-    """Load app.video with lightweight stubbed workflow steps."""
+    """Load app.media.video with lightweight stubbed workflow steps."""
     stub_ensure = lambda path=None: "ffmpeg"
     monkeypatch.setattr("app.services.media.ffmpeg_support.ensure_ffmpeg_tooling", stub_ensure)
 
-    preloaded = "app.video" in sys.modules
+    preloaded = "app.media.video" in sys.modules
     if preloaded:
-        module = sys.modules["app.video"]
+        module = sys.modules["app.media.video"]
         monkeypatch.setattr(module, "ensure_ffmpeg_tooling", stub_ensure)
         yield module, module.VideoGenerator
         return
@@ -45,12 +45,12 @@ def video_components(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "app.workflow.steps", stub_steps)
 
-    module = importlib.import_module("app.video")
+    module = importlib.import_module("app.media.video")
     monkeypatch.setattr(module, "ensure_ffmpeg_tooling", stub_ensure)
     try:
         yield module, module.VideoGenerator
     finally:
-        sys.modules.pop("app.video", None)
+        sys.modules.pop("app.media.video", None)
 
 
 def test_subtitle_style_contains_core_fields(video_components):

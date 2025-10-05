@@ -9,7 +9,7 @@ from typing import Dict, Optional
 from crewai import Agent
 
 from app.config.settings import settings
-from app.prompt_cache import get_prompt_manager
+from app.content.prompt_cache import get_prompt_manager
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 import pytest
 
-from app.tts import TTSManager
+from app.media.tts import TTSManager
 
 
 @pytest.fixture

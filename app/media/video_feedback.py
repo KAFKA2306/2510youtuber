@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Optional
 
 from .background_theme import get_theme_manager
-from .models.video_review import VideoReviewResult
+from app.models.video_review import VideoReviewResult
 
 logger = logging.getLogger(__name__)
 

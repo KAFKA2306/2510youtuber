@@ -13,7 +13,7 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from app.logging_config import get_log_session, setup_logging
+from app.core.logging_config import get_log_session, setup_logging
 
 # 環境変数からログレベル取得（デフォルトはINFO）
 log_level_str = os.getenv("LOG_LEVEL", "INFO")
@@ -22,12 +22,12 @@ log_level = getattr(logging, log_level_str.upper(), logging.INFO)
 # ロギングセットアップ
 _LOG_SESSION = setup_logging(log_level=log_level)
 
-from .api_rotation import initialize_api_infrastructure
+from .core.api_rotation import initialize_api_infrastructure
 from .config import cfg
-from .discord import discord_notifier
-from .metadata_storage import metadata_storage
+from .integrations.discord import discord_notifier
+from .integrations.metadata_storage import metadata_storage
 from .models.workflow import WorkflowResult
-from .sheets import sheets_manager
+from .integrations.sheets import sheets_manager
 from .workflow import (
     AlignSubtitlesStep,
     CollectNewsStep,

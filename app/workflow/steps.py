@@ -8,25 +8,25 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List
 
-from app.align_subtitles import align_script_with_stt, export_srt
+from app.media.align_subtitles import align_script_with_stt, export_srt
 from app.config import cfg
-from app.drive import upload_video_package
-from app.metadata import generate_youtube_metadata
-from app.search_news import collect_news
+from app.integrations.drive import upload_video_package
+from app.integrations.metadata import generate_youtube_metadata
+from app.news.search import collect_news
 from app.services.file_archival import FileArchivalManager
 from app.services.media import MediaQAPipeline
 from app.services.script import ScriptFormatError, ensure_dialogue_structure
 from app.services.script.validator import Script
 from app.services.video_review import get_video_review_service
 from app.services.visual_design import create_unified_design
-from app.sheets import load_prompts as load_prompts_from_sheets
-from app.sheets import sheets_manager
-from app.stt import transcribe_long_audio
-from app.thumbnail import generate_thumbnail
-from app.tts import synthesize_script
-from app.utils import FileUtils
-from app.video import generate_video
-from app.youtube import upload_video as youtube_upload
+from app.integrations.sheets import load_prompts as load_prompts_from_sheets
+from app.integrations.sheets import sheets_manager
+from app.media.stt import transcribe_long_audio
+from app.media.thumbnail import generate_thumbnail
+from app.media.tts import synthesize_script
+from app.core.utils import FileUtils
+from app.media.video import generate_video
+from app.integrations.youtube import upload_video as youtube_upload
 
 from .base import StepResult, WorkflowContext, WorkflowStep
 
@@ -228,7 +228,7 @@ class GenerateScriptStep(WorkflowStep):
 
     async def _generate_legacy(self, context: WorkflowContext, news_items: List[Dict[str, Any]]) -> str:
         """Generate script using legacy 3-stage quality check."""
-        from app.script_gen import generate_dialogue
+        from app.content.script_gen import generate_dialogue
 
         logger.info(f"3-stage quality check: {'ENABLED' if cfg.use_three_stage_quality_check else 'DISABLED'}")
 
@@ -283,7 +283,7 @@ class GenerateVisualDesignStep(WorkflowStep):
         if not news_items or not script_content:
             logger.warning("Missing news_items or script_content, using default design")
             # デフォルトデザインを使用
-            from app.background_theme import get_theme_manager
+            from app.media.background_theme import get_theme_manager
             from app.services.visual_design import UnifiedVisualDesign
 
             theme_manager = get_theme_manager()
@@ -302,7 +302,7 @@ class GenerateVisualDesignStep(WorkflowStep):
                 design = create_unified_design(news_items=news_items, script_content=script_content, mode=context.mode)
             except Exception as e:
                 logger.error(f"Failed to create unified design: {e}, using default")
-                from app.background_theme import get_theme_manager
+                from app.media.background_theme import get_theme_manager
                 from app.services.visual_design import UnifiedVisualDesign
 
                 theme_manager = get_theme_manager()
@@ -533,7 +533,7 @@ class GenerateVideoStep(WorkflowStep):
             video_size = os.path.getsize(archived_video)
 
             # Record which method was used
-            from app.video import video_generator
+            from app.media.video import video_generator
 
             generation_method = video_generator.last_generation_method
 
@@ -652,7 +652,7 @@ class GenerateMetadataStep(WorkflowStep):
         try:
             from datetime import datetime
 
-            from app.metadata_storage import metadata_storage
+            from app.integrations.metadata_storage import metadata_storage
 
             metadata = generate_youtube_metadata(news_items, script_content, context.mode)
             if not metadata:

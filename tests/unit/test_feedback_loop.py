@@ -5,7 +5,7 @@ import json
 import pytest
 
 from app.analytics import FeedbackAnalyzer
-from app.metadata_storage import MetadataStorage
+from app.integrations.metadata_storage import MetadataStorage
 from app.models.workflow import WorkflowResult, YouTubeFeedback
 
 

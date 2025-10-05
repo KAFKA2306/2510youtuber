@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.japanese_quality import (
+from app.content.japanese_quality import (
     check_script_japanese_purity,
     clean_subtitle_text,
     improve_japanese_quality,

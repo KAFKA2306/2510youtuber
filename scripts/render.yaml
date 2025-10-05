@@ -41,7 +41,7 @@ services:
       pip install -r requirements.txt
     startCommand: |
       python -c "
-      from app.utils import FileUtils
+      from app.core.utils import FileUtils
       import os
       # 一時ファイルクリーンアップ
       for directory in ['temp', 'logs']:

@@ -390,7 +390,7 @@ class TTSManager:
 # Deprecated: Use container.tts_manager instead
 def _get_tts_manager() -> TTSManager:
     """Get TTS manager from container (backward compatibility)."""
-    from app.container import get_container
+    from app.core.container import get_container
 
     return get_container().tts_manager
 

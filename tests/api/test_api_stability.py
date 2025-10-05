@@ -23,7 +23,7 @@ print("\n【Test 1】API Key Rotation (Gemini)")
 print("-" * 60)
 
 try:
-    from app.api_rotation import get_rotation_manager
+    from app.core.api_rotation import get_rotation_manager
 
     manager = get_rotation_manager()
 
@@ -62,7 +62,7 @@ try:
     newsapi_key = os.getenv("NEWSAPI_API_KEY")
 
     if newsapi_key and newsapi_key != "your_newsapi_key":
-        from app.search_news import NewsCollector
+        from app.news.search import NewsCollector
 
         collector = NewsCollector()
         print("✓ NewsCollector初期化完了")
@@ -91,7 +91,7 @@ print("\n【Test 3】プロンプトキャッシュ")
 print("-" * 60)
 
 try:
-    from app.prompt_cache import get_prompt_cache
+    from app.content.prompt_cache import get_prompt_cache
 
     cache = get_prompt_cache()
     print("✓ PromptCache初期化完了")

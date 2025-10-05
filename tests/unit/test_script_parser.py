@@ -6,7 +6,7 @@ import pytest
 @pytest.mark.unit
 def test_tts_text_splitting(sample_script):
     """TTSテキスト分割が正しく動作するか確認"""
-    from app.tts import tts_manager
+    from app.media.tts import tts_manager
 
     chunks = tts_manager.split_text_for_tts(sample_script)
 
@@ -24,7 +24,7 @@ def test_tts_text_splitting(sample_script):
 @pytest.mark.unit
 def test_tts_speaker_extraction(sample_script):
     """話者名が正しく抽出されるか確認"""
-    from app.tts import tts_manager
+    from app.media.tts import tts_manager
 
     chunks = tts_manager.split_text_for_tts(sample_script)
     speakers = set(chunk["speaker"] for chunk in chunks)
@@ -36,7 +36,7 @@ def test_tts_speaker_extraction(sample_script):
 @pytest.mark.unit
 def test_tts_empty_script():
     """空のスクリプトを処理できるか確認"""
-    from app.tts import tts_manager
+    from app.media.tts import tts_manager
 
     chunks = tts_manager.split_text_for_tts("")
 
@@ -46,7 +46,7 @@ def test_tts_empty_script():
 @pytest.mark.unit
 def test_tts_structured_dialogues(sample_script_segments):
     """構造化された対話リストからの分割を確認"""
-    from app.tts import tts_manager
+    from app.media.tts import tts_manager
 
     chunks = tts_manager.split_dialogues_for_tts(sample_script_segments)
 
@@ -57,7 +57,7 @@ def test_tts_structured_dialogues(sample_script_segments):
 @pytest.mark.unit
 def test_tts_chunk_order():
     """チャンクの順序が保持されるか確認"""
-    from app.tts import tts_manager
+    from app.media.tts import tts_manager
 
     test_script = """
 武宏: 最初の発言

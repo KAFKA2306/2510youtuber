@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional
 
-from app.api_rotation import initialize_api_infrastructure
+from app.core.api_rotation import initialize_api_infrastructure
 from app.services.video_review import get_video_review_service
 
 logger = logging.getLogger(__name__)

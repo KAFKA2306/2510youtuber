@@ -18,7 +18,7 @@ from pydub import AudioSegment
 from app.config.paths import ProjectPaths
 from app.config.settings import settings
 from app.services.file_archival import FileArchivalManager
-from app.utils import FileUtils
+from app.core.utils import FileUtils
 from app.services.media.ffmpeg_support import ensure_ffmpeg_tooling
 
 from .background_theme import BackgroundTheme, get_theme_manager
@@ -542,7 +542,7 @@ class VideoGenerator:
     def _ensure_stock_services(self):
         """Lazy load stock footage services."""
         if self._stock_manager is None:
-            from .services.media import BRollGenerator, StockFootageManager, VisualMatcher
+            from app.services.media import BRollGenerator, StockFootageManager, VisualMatcher
 
             self._stock_manager = StockFootageManager(
                 pexels_api_key=settings.pexels_api_key,
@@ -691,7 +691,7 @@ class VideoGenerator:
 # Deprecated: Use container.video_generator instead
 def _get_video_generator() -> VideoGenerator:
     """Get video generator from container (backward compatibility)."""
-    from app.container import get_container
+    from app.core.container import get_container
 
     return get_container().video_generator
 

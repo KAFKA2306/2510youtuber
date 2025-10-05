@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 
 from app.config.paths import ProjectPaths
 
-from .models.workflow import WorkflowResult
+from app.models.workflow import WorkflowResult
 
 logger = logging.getLogger(__name__)
 

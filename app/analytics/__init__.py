@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from app.metadata_storage import metadata_storage
+from app.integrations.metadata_storage import metadata_storage
 from app.models.workflow import WorkflowResult
 
 logger = logging.getLogger(__name__)

@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 
 from app.config.settings import settings
 from app.crew.tools.ai_clients import GeminiClient
-from app.logging_config import WorkflowLogger
-from app.prompt_cache import get_prompt_manager
+from app.core.logging_config import WorkflowLogger
+from app.content.prompt_cache import get_prompt_manager
 
 logger = logging.getLogger(__name__)
 workflow_logger = WorkflowLogger(__name__)

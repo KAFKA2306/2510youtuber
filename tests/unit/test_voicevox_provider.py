@@ -7,7 +7,7 @@ from typing import Dict
 import pytest
 from requests import RequestException
 
-from app.tts.providers import VoicevoxProvider
+from app.media.tts.providers import VoicevoxProvider
 
 
 class DummyResponse:
@@ -27,14 +27,14 @@ async def test_voicevox_provider_enters_cooldown(monkeypatch, tmp_path):
 
     provider = VoicevoxProvider(port=59999, health_cooldown_seconds=120)
 
-    monkeypatch.setattr("app.tts.providers.time.monotonic", lambda: clock["now"])
+    monkeypatch.setattr("app.media.tts.providers.time.monotonic", lambda: clock["now"])
 
     def failing_get(url, timeout):
         calls["get"] += 1
         raise RequestException("server down")
 
-    monkeypatch.setattr("app.tts.providers.requests.get", failing_get)
-    monkeypatch.setattr("app.tts.providers.requests.post", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.media.tts.providers.requests.get", failing_get)
+    monkeypatch.setattr("app.media.tts.providers.requests.post", lambda *args, **kwargs: None)
 
     output_path = tmp_path / "voicevox.wav"
 
@@ -60,8 +60,8 @@ async def test_voicevox_provider_enters_cooldown(monkeypatch, tmp_path):
             return DummyResponse(status_code=200, json_data={"query": "ok"})
         return DummyResponse(status_code=200, content=b"audio-bytes")
 
-    monkeypatch.setattr("app.tts.providers.requests.get", healthy_get)
-    monkeypatch.setattr("app.tts.providers.requests.post", fake_post)
+    monkeypatch.setattr("app.media.tts.providers.requests.get", healthy_get)
+    monkeypatch.setattr("app.media.tts.providers.requests.post", fake_post)
 
     success_result = await provider.synthesize("テスト音声", str(output_path))
     assert success_result is True

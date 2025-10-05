@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from app.logging_config import get_log_session, setup_logging
+from app.core.logging_config import get_log_session, setup_logging
 
 
 def test_setup_logging_creates_structured_files(tmp_path):

@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-from app.utils import FileUtils
-from app.video import VideoGenerator
+from app.core.utils import FileUtils
+from app.media.video import VideoGenerator
 
 
 @pytest.mark.unit

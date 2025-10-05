@@ -21,7 +21,7 @@ DEFAULT_TEST_COMMANDS: List[List[str]] = [
 ]
 
 DEFAULT_VERIFY_COMMANDS: List[List[str]] = [
-    ["uv", "run", "python", "-m", "app.verify"],
+    ["uv", "run", "python", "-m", "app.core.verify"],
 ]
 
 WORKFLOW_COMMAND = ["uv", "run", "python3", "-m", "app.main", "daily"]

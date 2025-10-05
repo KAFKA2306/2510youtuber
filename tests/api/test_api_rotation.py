@@ -4,14 +4,14 @@ import os
 
 import pytest
 
-from app.api_rotation import APIKey  # APIKeyをファイルの先頭でインポート
+from app.core.api_rotation import APIKey  # APIKeyをファイルの先頭でインポート
 
 
 @pytest.mark.api
 @pytest.mark.requires_api_key
 def test_rotation_manager_initialization():
     """APIローテーションマネージャーが初期化できるか確認"""
-    from app.api_rotation import get_rotation_manager
+    from app.core.api_rotation import get_rotation_manager
 
     manager = get_rotation_manager()
 
@@ -25,7 +25,7 @@ def test_gemini_key_registration(has_gemini_key):
     if not has_gemini_key:
         pytest.skip("Gemini APIキーが設定されていません")
 
-    from app.api_rotation import get_rotation_manager
+    from app.core.api_rotation import get_rotation_manager
 
     manager = get_rotation_manager()
 
@@ -55,7 +55,7 @@ def test_gemini_key_registration(has_gemini_key):
 @pytest.mark.api
 def test_rotation_manager_stats():
     """ローテーションマネージャーの統計情報が取得できるか確認"""
-    from app.api_rotation import get_rotation_manager
+    from app.core.api_rotation import get_rotation_manager
 
     manager = get_rotation_manager()
 
@@ -74,7 +74,7 @@ def test_rotation_manager_stats():
 @pytest.mark.api
 def test_key_rotation_mechanism():
     """キーローテーション機構が動作するか確認"""
-    from app.api_rotation import get_rotation_manager
+    from app.core.api_rotation import get_rotation_manager
 
     manager = get_rotation_manager()
 
@@ -102,7 +102,7 @@ def test_gemini_daily_quota_limit_exceeded():
     import datetime
     from unittest.mock import MagicMock
 
-    from app.api_rotation import APIKeyRotationManager
+    from app.core.api_rotation import APIKeyRotationManager
 
     manager = APIKeyRotationManager()
     manager.register_keys("gemini", [("GEMINI_API_KEY_2", "key2")])  # GEMINI_API_KEY_2を使用
@@ -128,7 +128,7 @@ def test_gemini_daily_quota_reset():
     import datetime
     from unittest.mock import MagicMock
 
-    from app.api_rotation import APIKeyRotationManager
+    from app.core.api_rotation import APIKeyRotationManager
 
     manager = APIKeyRotationManager()
     manager.register_keys("gemini", [("GEMINI_API_KEY_2", "key2")])  # GEMINI_API_KEY_2を使用
@@ -150,7 +150,7 @@ def test_log_output_contains_key_name(caplog):
     import logging
     from unittest.mock import MagicMock
 
-    from app.api_rotation import APIKeyRotationManager
+    from app.core.api_rotation import APIKeyRotationManager
 
     manager = APIKeyRotationManager()
     manager.key_pools["test_service"] = [

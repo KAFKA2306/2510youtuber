@@ -13,8 +13,8 @@ from typing import Any, Dict, List
 
 import google.generativeai as genai
 
-from .api_rotation import get_rotation_manager  # 追加
-from .config import cfg
+from app.core.api_rotation import get_rotation_manager  # 追加
+from app.config import cfg
 
 logger = logging.getLogger(__name__)
 
