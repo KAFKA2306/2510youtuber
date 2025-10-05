@@ -1,3 +1,5 @@
+import importlib
+import importlib.util
 import json
 import logging
 import os
@@ -63,9 +65,12 @@ class STTFallbackManager:
 
     def _whisper_transcribe(self, audio_path: str) -> List[Dict[str, Any]]:
         """Whisper による音声認識"""
-        try:
-            import whisper
+        if importlib.util.find_spec("whisper") is None:
+            self.logger.warning("whisper library not installed, trying CLI.")
+            return self._whisper_cli_transcribe(audio_path)
 
+        whisper = importlib.import_module("whisper")
+        try:
             model = whisper.load_model("base")
             result = model.transcribe(audio_path, word_timestamps=True)
 
@@ -81,10 +86,6 @@ class STTFallbackManager:
                         }
                     )
             return words
-        except ImportError:
-            self.logger.warning("whisper library not installed, trying CLI.")
-            # Try using whisper CLI if library not installed
-            return self._whisper_cli_transcribe(audio_path)
         except Exception as e:
             self.logger.error(f"Whisper library transcription failed: {e}")
             return []

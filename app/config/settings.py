@@ -1,3 +1,5 @@
+import importlib
+import importlib.util
 import json
 import os
 import shutil
@@ -348,11 +350,9 @@ class AppSettings(BaseModel):
 
         ffmpeg_candidate = config.get("ffmpeg_path", "ffmpeg")
         if not shutil.which(ffmpeg_candidate):
-            try:
-                import imageio_ffmpeg
-            except ImportError:
-                pass
-            else:
+            module_name = "imageio_ffmpeg"
+            if importlib.util.find_spec(module_name):
+                imageio_ffmpeg = importlib.import_module(module_name)
                 config["ffmpeg_path"] = imageio_ffmpeg.get_ffmpeg_exe()
 
         enable_stock_env = os.getenv("ENABLE_STOCK_FOOTAGE")

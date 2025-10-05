@@ -13,6 +13,7 @@ from app.config import cfg
 from app.config.settings import settings
 from app.drive import upload_video_package
 from app.metadata import generate_youtube_metadata
+from app.metadata_storage import metadata_storage
 from app.prompts import (
     get_default_news_collection_prompt,
     get_default_script_generation_prompt,
@@ -704,10 +705,6 @@ class GenerateMetadataStep(WorkflowStep):
             return self._failure("Missing news_items or script_content in context")
 
         try:
-            from datetime import datetime
-
-            from app.metadata_storage import metadata_storage
-
             metadata = generate_youtube_metadata(news_items, script_content, context.mode)
             if not metadata:
                 return self._failure("Metadata generation failed")
@@ -715,16 +712,13 @@ class GenerateMetadataStep(WorkflowStep):
             context.set("metadata", metadata)
 
             # Save metadata to storage
-            try:
-                metadata_storage.save_metadata(
-                    metadata=metadata,
-                    run_id=context.run_id,
-                    mode=context.mode,
-                    news_items=news_items,
-                )
-                logger.info("Metadata saved to storage")
-            except Exception as e:
-                logger.warning(f"Failed to save metadata to storage: {e}")
+            metadata_storage.save_metadata(
+                metadata=metadata,
+                run_id=context.run_id,
+                mode=context.mode,
+                news_items=news_items,
+            )
+            logger.info("Metadata saved to storage")
 
             logger.info(f"Generated metadata: {metadata.get('title', 'No title')}")
             return self._success(
@@ -737,8 +731,6 @@ class GenerateMetadataStep(WorkflowStep):
         except Exception as e:
             logger.error(f"Step 3 failed: {e}")
             # Fallback metadata
-            from datetime import datetime
-
             fallback_metadata = {
                 "title": f"経済ニュース解説 - {datetime.now().strftime('%Y/%m/%d')}",
                 "description": "経済ニュースの解説動画です。",

@@ -7,8 +7,9 @@
 import json
 import logging
 import os
+import shutil
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -408,8 +409,6 @@ class DriveManager:
     def _save_local_copy(self, source_path: str, dest_dir: str, dest_filename: str):
         """ファイルをローカルにコピー"""
         try:
-            import shutil
-
             source = ProjectPaths.resolve_relative(source_path)
             if not source.exists():
                 logger.warning(f"Source file for local backup not found: {source}")
@@ -467,8 +466,6 @@ class DriveManager:
 
     def cleanup_old_files(self, days_old: int = 30) -> int:
         try:
-            from datetime import timedelta
-
             cutoff_date = datetime.now() - timedelta(days=days_old)
             cutoff_str = cutoff_date.isoformat()
             query = f"createdTime < '{cutoff_str}' and trashed=false"

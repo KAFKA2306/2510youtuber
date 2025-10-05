@@ -5,6 +5,8 @@ YouTube統計と組み合わせて継続的改善のためのフィードバッ�
 """
 
 import csv
+import importlib
+import importlib.util
 import json
 import logging
 import os
@@ -17,6 +19,14 @@ from app.config.paths import ProjectPaths
 from .models.workflow import WorkflowResult
 
 logger = logging.getLogger(__name__)
+
+
+def _load_sheets_manager():
+    module_name = "app.sheets"
+    if importlib.util.find_spec(module_name) is None:
+        return None
+    module = importlib.import_module(module_name)
+    return getattr(module, "sheets_manager", None)
 
 
 class MetadataStorage:
@@ -85,17 +95,12 @@ class MetadataStorage:
 
     def _initialize_sheets(self):
         """Google Sheets接続を初期化."""
-        try:
-            from .sheets import sheets_manager
-
-            self.sheets_manager = sheets_manager
-            if self.sheets_manager and self.sheets_manager.service:
-                logger.info("Google Sheets connection available for metadata storage")
-            else:
-                logger.warning("Google Sheets not available, using CSV only")
-        except Exception as e:
-            logger.warning(f"Failed to initialize Sheets: {e}")
-            self.sheets_manager = None
+        manager = _load_sheets_manager()
+        self.sheets_manager = manager
+        if manager and getattr(manager, "service", None):
+            logger.info("Google Sheets connection available for metadata storage")
+        else:
+            logger.warning("Google Sheets not available, using CSV only")
 
     def save_metadata(
         self,
@@ -115,49 +120,44 @@ class MetadataStorage:
         Returns:
             保存成功時True
         """
-        try:
-            timestamp = datetime.now().isoformat()
-            run_id = run_id or f"local_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        timestamp = datetime.now().isoformat()
+        run_id = run_id or f"local_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-            # ニューストピックを抽出
-            news_topics = self._extract_news_topics(news_items) if news_items else ""
+        # ニューストピックを抽出
+        news_topics = self._extract_news_topics(news_items) if news_items else ""
 
-            # CSV用データ
-            csv_row = {
-                "timestamp": timestamp,
-                "run_id": run_id,
-                "mode": mode,
-                "title": metadata.get("title", ""),
-                "description": metadata.get("description", "")[:500],  # 短縮版
-                "tags": json.dumps(metadata.get("tags", []), ensure_ascii=False),
-                "category": metadata.get("category", ""),
-                "thumbnail_text": metadata.get("thumbnail_text", ""),
-                "seo_keywords": json.dumps(metadata.get("seo_keywords", []), ensure_ascii=False),
-                "target_audience": metadata.get("target_audience", ""),
-                "estimated_watch_time": metadata.get("estimated_watch_time", ""),
-                "news_count": metadata.get("news_count", 0),
-                "news_topics": news_topics,
-                "video_url": "",  # 後で更新
-                "view_count": "",
-                "like_count": "",
-                "comment_count": "",
-                "ctr": "",
-                "avg_view_duration": "",
-            }
+        # CSV用データ
+        csv_row = {
+            "timestamp": timestamp,
+            "run_id": run_id,
+            "mode": mode,
+            "title": metadata.get("title", ""),
+            "description": metadata.get("description", "")[:500],  # 短縮版
+            "tags": json.dumps(metadata.get("tags", []), ensure_ascii=False),
+            "category": metadata.get("category", ""),
+            "thumbnail_text": metadata.get("thumbnail_text", ""),
+            "seo_keywords": json.dumps(metadata.get("seo_keywords", []), ensure_ascii=False),
+            "target_audience": metadata.get("target_audience", ""),
+            "estimated_watch_time": metadata.get("estimated_watch_time", ""),
+            "news_count": metadata.get("news_count", 0),
+            "news_topics": news_topics,
+            "video_url": "",  # 後で更新
+            "view_count": "",
+            "like_count": "",
+            "comment_count": "",
+            "ctr": "",
+            "avg_view_duration": "",
+        }
 
-            # ローカルCSVに保存
-            self._save_to_csv(csv_row)
+        # ローカルCSVに保存
+        self._save_to_csv(csv_row)
 
-            # Google Sheetsに保存
-            if self.sheets_manager:
-                self._save_to_sheets(metadata, run_id, mode, news_topics)
+        # Google Sheetsに保存
+        if self.sheets_manager:
+            self._save_to_sheets(metadata, run_id, mode, news_topics)
 
-            logger.info(f"Saved metadata for run {run_id}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to save metadata: {e}")
-            return False
+        logger.info(f"Saved metadata for run {run_id}")
+        return True
 
     def _save_to_csv(self, row: Dict[str, Any]):
         """CSVに行を追加."""
@@ -174,40 +174,36 @@ class MetadataStorage:
         if not self.sheets_manager or not self.sheets_manager.service:
             return
 
-        try:
-            timestamp = datetime.now().isoformat()
+        timestamp = datetime.now().isoformat()
 
-            values = [
-                [
-                    timestamp,
-                    run_id,
-                    mode,
-                    metadata.get("title", ""),
-                    metadata.get("description", "")[:1000],  # Sheets用は長め
-                    json.dumps(metadata.get("tags", []), ensure_ascii=False),
-                    metadata.get("category", ""),
-                    metadata.get("thumbnail_text", ""),
-                    json.dumps(metadata.get("seo_keywords", []), ensure_ascii=False),
-                    metadata.get("target_audience", ""),
-                    metadata.get("estimated_watch_time", ""),
-                    metadata.get("news_count", 0),
-                    news_topics,
-                ]
+        values = [
+            [
+                timestamp,
+                run_id,
+                mode,
+                metadata.get("title", ""),
+                metadata.get("description", "")[:1000],  # Sheets用は長め
+                json.dumps(metadata.get("tags", []), ensure_ascii=False),
+                metadata.get("category", ""),
+                metadata.get("thumbnail_text", ""),
+                json.dumps(metadata.get("seo_keywords", []), ensure_ascii=False),
+                metadata.get("target_audience", ""),
+                metadata.get("estimated_watch_time", ""),
+                metadata.get("news_count", 0),
+                news_topics,
             ]
+        ]
 
-            # metadataシートに追加（シートが存在しない場合は後で作成）
-            self.sheets_manager._rate_limit_retry(
-                self.sheets_manager.service.spreadsheets().values().append,
-                spreadsheetId=self.sheets_manager.sheet_id,
-                range="metadata!A:M",
-                valueInputOption="RAW",
-                body={"values": values},
-            ).execute()
+        # metadataシートに追加（シートが存在しない場合は後で作成）
+        self.sheets_manager._rate_limit_retry(
+            self.sheets_manager.service.spreadsheets().values().append,
+            spreadsheetId=self.sheets_manager.sheet_id,
+            range="metadata!A:M",
+            valueInputOption="RAW",
+            body={"values": values},
+        ).execute()
 
-            logger.info(f"Saved metadata to Google Sheets for run {run_id}")
-
-        except Exception as e:
-            logger.warning(f"Failed to save to Sheets (continuing with CSV): {e}")
+        logger.info(f"Saved metadata to Google Sheets for run {run_id}")
 
     def _extract_news_topics(self, news_items: List[Dict]) -> str:
         """ニュース項目からトピックを抽出."""
@@ -268,9 +264,6 @@ class MetadataStorage:
 
         except FileNotFoundError:
             logger.warning(f"Metadata history file not found: {self.csv_path}")
-            return []
-        except Exception as e:
-            logger.error(f"Failed to load metadata history: {e}")
             return []
 
     def get_successful_titles(self, min_views: int = 1000, limit: int = 50) -> List[str]:
@@ -372,20 +365,15 @@ class MetadataStorage:
         Returns:
             成功時True
         """
-        try:
-            # 1. JSONLに完全データを保存（分析用）
-            self._save_to_jsonl(workflow_result)
+        # 1. JSONLに完全データを保存（分析用）
+        self._save_to_jsonl(workflow_result)
 
-            # 2. Google Sheetsに人間向けフォーマットで保存
-            if self.sheets_manager and self.sheets_manager.service:
-                self._sync_to_sheets(workflow_result)
+        # 2. Google Sheetsに人間向けフォーマットで保存
+        if self.sheets_manager and self.sheets_manager.service:
+            self._sync_to_sheets(workflow_result)
 
-            logger.info(f"Logged execution for run {workflow_result.run_id}")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to log execution: {e}")
-            return False
+        logger.info(f"Logged execution for run {workflow_result.run_id}")
+        return True
 
     def _save_to_jsonl(self, result: "WorkflowResult"):
         """JSONLに追加（append-only log）."""
@@ -398,23 +386,19 @@ class MetadataStorage:
         if not self.sheets_manager or not self.sheets_manager.service:
             return
 
-        try:
-            # Tab 1: Performance Dashboard（人間向けサマリー）
-            dashboard_row = self._format_dashboard_row(result)
-            self._append_to_sheet("performance_dashboard", dashboard_row)
+        # Tab 1: Performance Dashboard（人間向けサマリー）
+        dashboard_row = self._format_dashboard_row(result)
+        self._append_to_sheet("performance_dashboard", dashboard_row)
 
-            # Tab 2: Quality Metrics（品質詳細）
-            quality_row = self._format_quality_row(result)
-            self._append_to_sheet("quality_metrics", quality_row)
+        # Tab 2: Quality Metrics（品質詳細）
+        quality_row = self._format_quality_row(result)
+        self._append_to_sheet("quality_metrics", quality_row)
 
-            # Tab 3: Production Insights（実行詳細）
-            production_row = self._format_production_row(result)
-            self._append_to_sheet("production_insights", production_row)
+        # Tab 3: Production Insights（実行詳細）
+        production_row = self._format_production_row(result)
+        self._append_to_sheet("production_insights", production_row)
 
-            logger.info(f"Synced to Sheets: {result.run_id}")
-
-        except Exception as e:
-            logger.warning(f"Failed to sync to Sheets: {e}")
+        logger.info(f"Synced to Sheets: {result.run_id}")
 
     def _format_dashboard_row(self, result: "WorkflowResult") -> List[Any]:
         """Tab 1: Performance Dashboard用にフォーマット."""
@@ -519,17 +503,14 @@ class MetadataStorage:
 
     def _append_to_sheet(self, sheet_name: str, row: List[Any]):
         """指定シートに行を追加."""
-        try:
-            range_name = f"{sheet_name}!A:Z"
-            self.sheets_manager._rate_limit_retry(
-                self.sheets_manager.service.spreadsheets().values().append,
-                spreadsheetId=self.sheets_manager.sheet_id,
-                range=range_name,
-                valueInputOption="RAW",
-                body={"values": [row]},
-            ).execute()
-        except Exception as e:
-            logger.warning(f"Failed to append to {sheet_name}: {e}")
+        range_name = f"{sheet_name}!A:Z"
+        self.sheets_manager._rate_limit_retry(
+            self.sheets_manager.service.spreadsheets().values().append,
+            spreadsheetId=self.sheets_manager.sheet_id,
+            range=range_name,
+            valueInputOption="RAW",
+            body={"values": [row]},
+        ).execute()
 
     def update_video_stats(
         self,
@@ -552,45 +533,41 @@ class MetadataStorage:
             ctr: クリック率
             avg_view_duration: 平均視聴時間
         """
-        try:
-            # CSVを読み込み
-            rows = []
-            updated = False
+        # CSVを読み込み
+        rows = []
+        updated = False
 
-            with open(self.csv_path, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                headers = reader.fieldnames
+        with open(self.csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            headers = reader.fieldnames
 
-                for row in reader:
-                    if row["run_id"] == run_id:
-                        # 更新
-                        if video_url is not None:
-                            row["video_url"] = video_url
-                        if view_count is not None:
-                            row["view_count"] = str(view_count)
-                        if like_count is not None:
-                            row["like_count"] = str(like_count)
-                        if comment_count is not None:
-                            row["comment_count"] = str(comment_count)
-                        if ctr is not None:
-                            row["ctr"] = f"{ctr:.2f}%"
-                        if avg_view_duration is not None:
-                            row["avg_view_duration"] = f"{avg_view_duration:.1f}s"
+            for row in reader:
+                if row["run_id"] == run_id:
+                    # 更新
+                    if video_url is not None:
+                        row["video_url"] = video_url
+                    if view_count is not None:
+                        row["view_count"] = str(view_count)
+                    if like_count is not None:
+                        row["like_count"] = str(like_count)
+                    if comment_count is not None:
+                        row["comment_count"] = str(comment_count)
+                    if ctr is not None:
+                        row["ctr"] = f"{ctr:.2f}%"
+                    if avg_view_duration is not None:
+                        row["avg_view_duration"] = f"{avg_view_duration:.1f}s"
 
-                        updated = True
-                        logger.info(f"Updated stats for run {run_id}")
+                    updated = True
+                    logger.info(f"Updated stats for run {run_id}")
 
-                    rows.append(row)
+                rows.append(row)
 
-            if updated:
-                # CSVに書き戻し
-                with open(self.csv_path, "w", encoding="utf-8", newline="") as f:
-                    writer = csv.DictWriter(f, fieldnames=headers)
-                    writer.writeheader()
-                    writer.writerows(rows)
-
-        except Exception as e:
-            logger.error(f"Failed to update video stats: {e}")
+        if updated:
+            # CSVに書き戻し
+            with open(self.csv_path, "w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
+                writer.writerows(rows)
 
 
 # グローバルインスタンス

@@ -6,9 +6,11 @@ FFmpegを使用して高品質な動画出力を実現します。
 ストックビデオAPIを使用した無料のプロフェッショナルB-roll映像にも対応。
 """
 
+import importlib.util
 import logging
 import math
 import os
+import textwrap
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -22,6 +24,12 @@ from app.utils import FileUtils
 from app.services.media.ffmpeg_support import ensure_ffmpeg_tooling
 
 from .background_theme import BackgroundTheme, get_theme_manager
+
+_PIL_SPEC = importlib.util.find_spec("PIL")
+if _PIL_SPEC:
+    from PIL import Image, ImageDraw, ImageFont
+else:  # pragma: no cover - optional dependency
+    Image = ImageDraw = ImageFont = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -238,11 +246,10 @@ class VideoGenerator:
 
     def _create_default_background(self, title: str) -> str:
         """プロ品質の動的背景を作成（テーマベース）with robot icon"""
+        if Image is None or ImageDraw is None:
+            logger.error("PIL is required to generate default backgrounds")
+            return self._create_simple_background()
         try:
-            import textwrap
-
-            from PIL import Image, ImageDraw
-
             width, height = 1920, 1080
 
             # テーマが設定されていない場合はデフォルト値を使用
@@ -410,8 +417,9 @@ class VideoGenerator:
 
     def _get_japanese_font_for_background(self, size: int):
         """背景用の日本語フォントを取得"""
-        from PIL import ImageFont
-
+        if ImageFont is None:
+            logger.warning("PIL ImageFont is unavailable; cannot load Japanese fonts")
+            return None
         # 日本語フォントの候補
         japanese_font_paths = [
             "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",  # IPA ゴシック
@@ -437,9 +445,10 @@ class VideoGenerator:
             return None
 
     def _create_simple_background(self) -> str:
+        if Image is None:
+            logger.error("PIL is required to generate backgrounds")
+            return None
         try:
-            from PIL import Image
-
             image = Image.new("RGB", (1920, 1080), color=(25, 35, 45))
             temp_path = FileUtils.get_temp_file(prefix="bg_", suffix=".png")
             image.save(temp_path, "PNG")

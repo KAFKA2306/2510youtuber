@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import inspect
 import json
 import logging
@@ -86,11 +88,11 @@ def _extract_message_text(response: Any) -> str:
 
 
 def _resolve_original_completion() -> Optional[Any]:
-    try:
-        from app.crew import flows as _flows  # noqa: WPS433 (runtime import to avoid cycle)
-    except Exception:  # pragma: no cover - best effort lookup
+    module_name = "app.crew.flows"
+    if importlib.util.find_spec(module_name) is None:
         return None
-    return getattr(_flows, "original_completion", None)
+    flows = importlib.import_module(module_name)
+    return getattr(flows, "original_completion", None)
 
 
 class CrewAIGeminiLLM(BaseLLM):
