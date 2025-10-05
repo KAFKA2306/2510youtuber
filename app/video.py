@@ -41,6 +41,7 @@ class VideoGenerator:
         self._broll_generator = None
         self.last_used_stock_footage = False
         self.last_generation_method = "static"
+        self.last_broll_metadata: Dict[str, Any] = {}
         self.motion_fps = 30
 
         # Initialize file archival manager
@@ -61,6 +62,7 @@ class VideoGenerator:
         script_content: str = "",
         news_items: List[Dict] = None,
         use_stock_footage: bool = None,
+        broll_path: Optional[str] = None,
     ) -> str:
         """動画を生成
 
@@ -75,6 +77,7 @@ class VideoGenerator:
             script_content: スクリプト内容（キーワード抽出用）
             news_items: ニュースアイテムリスト（キーワード抽出用）
             use_stock_footage: ストック映像を使用するか（Noneの場合は設定から取得）
+            broll_path: 事前生成済みB-roll動画のパス
         """
         try:
             self._validate_input_files(audio_path, subtitle_path, background_image)
@@ -83,6 +86,29 @@ class VideoGenerator:
                 output_path = f"video_{timestamp}.{self.output_format}"
 
             audio_duration = self._get_audio_duration(audio_path)
+
+            # Use pre-generated B-roll if provided
+            if broll_path:
+                if os.path.exists(broll_path):
+                    logger.info(f"Using pre-generated B-roll: {broll_path}")
+                    rendered_path = self._render_final_video(
+                        video_source_path=broll_path,
+                        audio_path=audio_path,
+                        subtitle_path=subtitle_path,
+                        output_path=output_path,
+                        source_label="precomputed B-roll",
+                    )
+                    if rendered_path:
+                        self.last_used_stock_footage = True
+                        self.last_generation_method = "stock_footage"
+                        return rendered_path
+                    logger.warning(
+                        "Failed to render final video from provided B-roll, falling back to static background"
+                    )
+                else:
+                    logger.warning(f"Provided B-roll path not found: {broll_path}")
+                if use_stock_footage is None:
+                    use_stock_footage = False
 
             # Determine if using stock footage
             if use_stock_footage is None:
@@ -107,6 +133,7 @@ class VideoGenerator:
             logger.info("Generating video with static background...")
             self.last_used_stock_footage = False
             self.last_generation_method = "static"
+            self.last_broll_metadata = {}
 
             # テーマ選択（A/Bテストまたは指定）
             if theme_name:
@@ -159,6 +186,38 @@ class VideoGenerator:
                     os.remove(bg_image_path)
                 except (OSError, FileNotFoundError) as e:
                     logger.debug(f"Could not remove background image {bg_image_path}: {e}")
+
+    def prepare_broll_assets(
+        self,
+        *,
+        audio_path: str,
+        script_content: str = "",
+        news_items: Optional[List[Dict]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Generate B-roll assets ahead of video rendering."""
+
+        if not audio_path or not os.path.exists(audio_path):
+            logger.warning("Audio path missing for B-roll preparation")
+            self.last_broll_metadata = {}
+            return None
+
+        try:
+            audio_duration = self._get_audio_duration(audio_path)
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logger.error(f"Failed to measure audio duration for B-roll: {exc}")
+            self.last_broll_metadata = {}
+            return None
+
+        if audio_duration <= 0:
+            logger.warning("Audio duration is zero, skipping B-roll generation")
+            self.last_broll_metadata = {}
+            return None
+
+        return self._build_broll_from_stock(
+            audio_duration=audio_duration,
+            script_content=script_content,
+            news_items=news_items or [],
+        )
 
     def _validate_input_files(self, audio_path: str, subtitle_path: str, background_image: str = None):
         if not os.path.exists(audio_path):
@@ -573,9 +632,48 @@ class VideoGenerator:
         Returns:
             Output path if successful, None otherwise
         """
+        broll_assets = self._build_broll_from_stock(
+            audio_duration=audio_duration,
+            script_content=script_content,
+            news_items=news_items or [],
+        )
+
+        if not broll_assets:
+            return None
+
+        broll_path = broll_assets.get("broll_path")
+
+        rendered_path = self._render_final_video(
+            video_source_path=broll_path,
+            audio_path=audio_path,
+            subtitle_path=subtitle_path,
+            output_path=output_path,
+            source_label="stock footage B-roll",
+        )
+
+        if rendered_path:
+            self.last_used_stock_footage = True
+            self.last_generation_method = "stock_footage"
+            return rendered_path
+
+        return None
+
+    def _build_broll_from_stock(
+        self,
+        *,
+        audio_duration: float,
+        script_content: str,
+        news_items: Optional[List[Dict]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Create a B-roll sequence from stock footage and return metadata."""
+
+        if not self._can_use_stock_footage():
+            logger.info("Stock footage disabled or missing API keys; skipping B-roll generation")
+            self.last_broll_metadata = {}
+            return None
+
         self._ensure_stock_services()
 
-        # Extract visual keywords from script
         keywords = self._visual_matcher.extract_keywords(
             script_content=script_content,
             news_items=news_items or [],
@@ -584,11 +682,11 @@ class VideoGenerator:
 
         if not keywords:
             logger.warning("No keywords extracted for stock footage search")
+            self.last_broll_metadata = {}
             return None
 
         logger.info(f"Stock footage keywords: {keywords}")
 
-        # Search for stock footage
         footage_results = self._stock_manager.search_footage(
             keywords=keywords,
             duration_target=audio_duration,
@@ -597,20 +695,20 @@ class VideoGenerator:
 
         if not footage_results:
             logger.warning("No stock footage found")
+            self.last_broll_metadata = {}
             return None
 
         logger.info(f"Found {len(footage_results)} stock clips")
 
-        # Download clips
         clip_paths = self._stock_manager.download_clips(footage_results)
 
         if not clip_paths:
             logger.warning("Failed to download stock clips")
+            self.last_broll_metadata = {}
             return None
 
         logger.info(f"Downloaded {len(clip_paths)} clips successfully")
 
-        # Generate B-roll sequence
         broll_path = self._broll_generator.create_broll_sequence(
             clip_paths=clip_paths,
             target_duration=audio_duration,
@@ -620,16 +718,42 @@ class VideoGenerator:
 
         if not broll_path or not os.path.exists(broll_path):
             logger.warning("Failed to create B-roll sequence")
+            self.last_broll_metadata = {}
             return None
 
         logger.info(f"Created B-roll sequence: {broll_path}")
 
-        # Combine B-roll + audio + subtitles
+        metadata = {
+            "broll_path": broll_path,
+            "clip_paths": clip_paths,
+            "keywords": keywords,
+            "footage_results": footage_results,
+            "audio_duration": audio_duration,
+            "transition_duration": 1.0,
+            "source": "stock_footage",
+        }
+        self.last_broll_metadata = metadata
+        return metadata
+
+    def _render_final_video(
+        self,
+        *,
+        video_source_path: str,
+        audio_path: str,
+        subtitle_path: str,
+        output_path: str,
+        source_label: str = "video",
+    ) -> Optional[str]:
+        """Combine a prepared video source with audio and subtitles."""
+
+        if not video_source_path or not os.path.exists(video_source_path):
+            logger.warning(f"Video source not found for rendering: {video_source_path}")
+            return None
+
         try:
-            video_stream = ffmpeg.input(broll_path)
+            video_stream = ffmpeg.input(video_source_path)
             audio_stream = ffmpeg.input(audio_path)
 
-            # Apply subtitle overlay
             subtitle_style = self._build_subtitle_style()
             sanitized_subtitle_path = self._normalize_subtitle_path(subtitle_path)
 
@@ -639,7 +763,6 @@ class VideoGenerator:
                 force_style=subtitle_style,
             )
 
-            # Combine video + audio
             output = ffmpeg.output(
                 video_with_subs,
                 audio_stream,
@@ -651,11 +774,11 @@ class VideoGenerator:
 
             if os.path.exists(output_path):
                 video_info = self._get_video_info(output_path)
-                logger.info(f"Stock footage video complete: {video_info}")
+                logger.info(f"Rendered final video from {source_label}: {video_info}")
                 return output_path
 
         except Exception as e:
-            logger.error(f"Failed to combine B-roll with audio: {e}")
+            logger.error(f"Failed to render final video from {source_label}: {e}")
 
         return None
 

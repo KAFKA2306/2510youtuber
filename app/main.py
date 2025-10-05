@@ -71,7 +71,18 @@ class YouTubeWorkflow:
         "audio_synthesis": {"audio_path"},
         "audio_transcription": {"stt_words"},
         "subtitle_alignment": {"subtitle_path", "aligned_subtitles"},
-        "video_generation": {"video_path", "archived_audio_path", "archived_subtitle_path"},
+        "video_generation": {
+            "video_path",
+            "archived_audio_path",
+            "archived_subtitle_path",
+            "broll_path",
+            "broll_metadata",
+            "broll_keywords",
+            "broll_clip_paths",
+            "broll_source",
+            "use_stock_footage",
+            "archived_broll_path",
+        },
         "media_quality_assurance": {"qa_report", "qa_report_path", "qa_passed", "qa_retry_request"},
         "drive_upload": {"drive_result"},
         "youtube_upload": {"youtube_result", "video_id", "video_url"},
@@ -95,10 +106,10 @@ class YouTubeWorkflow:
             TranscribeAudioStep(),  # Step 6: 音声認識
             AlignSubtitlesStep(),  # Step 7: 字幕整合
             GenerateVideoStep(),  # Step 8: 動画生成 (統一デザインを使用)
-            QualityAssuranceStep(),  # Step 8.5: 自動QAゲート
-            UploadToDriveStep(),  # Step 9: Drive アップロード
-            UploadToYouTubeStep(),  # Step 10: YouTube アップロード
-            ReviewVideoStep(),  # Step 11: AIレビューで改善ログ生成
+            QualityAssuranceStep(),  # Step 9: 自動QAゲート
+            UploadToDriveStep(),  # Step 10: Drive アップロード
+            UploadToYouTubeStep(),  # Step 11: YouTube アップロード
+            ReviewVideoStep(),  # Step 12: AIレビューで改善ログ生成
         ]
 
     async def execute_full_workflow(self, mode: str = "daily") -> Dict[str, Any]:

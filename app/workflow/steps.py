@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from app.align_subtitles import align_script_with_stt, export_srt
 from app.config import cfg
+from app.config.settings import settings
 from app.drive import upload_video_package
 from app.metadata import generate_youtube_metadata
 from app.search_news import collect_news
@@ -25,7 +26,7 @@ from app.stt import transcribe_long_audio
 from app.thumbnail import generate_thumbnail
 from app.tts import synthesize_script
 from app.utils import FileUtils
-from app.video import generate_video
+from app.video import generate_video, video_generator
 from app.youtube import upload_video as youtube_upload
 
 from .base import StepResult, WorkflowContext, WorkflowStep
@@ -483,11 +484,66 @@ class GenerateVideoStep(WorkflowStep):
         script_content = context.get("script_content", "")
         news_items = context.get("news_items", [])
         metadata = context.get("metadata", {})
+        broll_path = context.get("broll_path")
+        use_stock_override = context.get("use_stock_footage")
 
         if not audio_path or not subtitle_path:
             return self._failure("Missing audio_path or subtitle_path in context")
 
         try:
+            broll_metadata = None
+            generated_files: List[str] = []
+
+            should_attempt_broll = (
+                settings.enable_stock_footage
+                and use_stock_override is not False
+                and not broll_path
+            )
+
+            if should_attempt_broll:
+                if not (settings.pexels_api_key or settings.pixabay_api_key):
+                    logger.info("No stock footage API keys configured; continuing without B-roll")
+                    context.set("use_stock_footage", False)
+                    use_stock_override = False
+                else:
+                    try:
+                        broll_result = video_generator.prepare_broll_assets(
+                            audio_path=audio_path,
+                            script_content=script_content,
+                            news_items=news_items,
+                        )
+                    except Exception as exc:  # pragma: no cover - network/FFmpeg failures
+                        logger.warning(
+                            "B-roll preparation failed but workflow will continue: %s",
+                            exc,
+                        )
+                        context.set("use_stock_footage", False)
+                        use_stock_override = False
+                    else:
+                        if broll_result and broll_result.get("broll_path"):
+                            candidate_path = broll_result.get("broll_path")
+                            if candidate_path and os.path.exists(candidate_path):
+                                broll_path = candidate_path
+                                broll_metadata = broll_result
+                                context.set("broll_path", broll_path)
+                                context.set("broll_metadata", broll_result)
+                                context.set("broll_keywords", broll_result.get("keywords", []))
+                                context.set("broll_clip_paths", broll_result.get("clip_paths", []))
+                                context.set("broll_source", broll_result.get("source"))
+                                context.set("use_stock_footage", True)
+                                use_stock_override = True
+                                logger.info(f"Prepared B-roll sequence: {broll_path}")
+                            else:
+                                logger.info(
+                                    "B-roll assets were returned without a valid path; using static background",
+                                )
+                                context.set("use_stock_footage", False)
+                                use_stock_override = False
+                        else:
+                            logger.info("B-roll assets unavailable; continuing with static background")
+                            context.set("use_stock_footage", False)
+                            use_stock_override = False
+
             # Generate video (creates temp file)
             video_path = generate_video(
                 audio_path=audio_path,
@@ -495,6 +551,8 @@ class GenerateVideoStep(WorkflowStep):
                 title=metadata.get("title", "Economic News Analysis"),
                 script_content=script_content,
                 news_items=news_items,
+                use_stock_footage=use_stock_override,
+                broll_path=broll_path,
             )
 
             if not video_path or not os.path.exists(video_path):
@@ -515,6 +573,8 @@ class GenerateVideoStep(WorkflowStep):
             }
             if thumbnail_path and os.path.exists(thumbnail_path):
                 files_to_archive["thumbnail"] = thumbnail_path
+            if broll_path and os.path.exists(broll_path):
+                files_to_archive["broll"] = broll_path
 
             archived_files = archival_manager.archive_workflow_files(
                 run_id=context.run_id, timestamp=timestamp, title=title, files=files_to_archive
@@ -525,6 +585,8 @@ class GenerateVideoStep(WorkflowStep):
             context.set("video_path", archived_video)
             context.set("archived_audio_path", archived_files.get("audio"))
             context.set("archived_subtitle_path", archived_files.get("subtitle"))
+            if "broll" in archived_files:
+                context.set("archived_broll_path", archived_files["broll"])
 
             # Update thumbnail_path to archived location if it was archived
             if "thumbnail" in archived_files:
@@ -538,6 +600,9 @@ class GenerateVideoStep(WorkflowStep):
             generation_method = video_generator.last_generation_method
 
             logger.info(f"Generated and archived video: {archived_video} ({video_size} bytes)")
+            generated_files.append(video_path)
+            if broll_path and os.path.exists(broll_path):
+                generated_files.append(broll_path)
             return self._success(
                 data={
                     "video_path": archived_video,
@@ -545,8 +610,11 @@ class GenerateVideoStep(WorkflowStep):
                     "generation_method": generation_method,
                     "used_stock_footage": video_generator.last_used_stock_footage,
                     "archived_files": archived_files,
+                    "archived_broll_path": archived_files.get("broll"),
+                    "broll_metadata": broll_metadata or video_generator.last_broll_metadata,
+                    "broll_path": broll_path,
                 },
-                files=[video_path],
+                files=generated_files,
             )
 
         except Exception as e:
@@ -555,14 +623,14 @@ class GenerateVideoStep(WorkflowStep):
 
 
 class QualityAssuranceStep(WorkflowStep):
-    """Step 8.5: Run automated QA before publication."""
+    """Step 9: Run automated QA before publication."""
 
     @property
     def step_name(self) -> str:
         return "media_quality_assurance"
 
     async def execute(self, context: WorkflowContext) -> StepResult:
-        logger.info(f"Step 8.5: Starting {self.step_name}...")
+        logger.info(f"Step 9: Starting {self.step_name}...")
 
         qa_config = getattr(cfg, "media_quality", None)
         if not qa_config or not qa_config.enabled:
@@ -749,7 +817,7 @@ class GenerateThumbnailStep(WorkflowStep):
                 )
 
         except Exception as e:
-            logger.warning(f"Step 8 warning: {e}")
+            logger.warning(f"Step 4 warning: {e}")
             return self._success(
                 data={
                     "thumbnail_path": None,
@@ -759,14 +827,14 @@ class GenerateThumbnailStep(WorkflowStep):
 
 
 class UploadToDriveStep(WorkflowStep):
-    """Step 9: Upload video package to Google Drive."""
+    """Step 10: Upload video package to Google Drive."""
 
     @property
     def step_name(self) -> str:
         return "drive_upload"
 
     async def execute(self, context: WorkflowContext) -> StepResult:
-        logger.info(f"Step 9: Starting {self.step_name}...")
+        logger.info(f"Step 10: Starting {self.step_name}...")
 
         video_path = context.get("video_path")
         thumbnail_path = context.get("thumbnail_path")
@@ -803,19 +871,19 @@ class UploadToDriveStep(WorkflowStep):
             )
 
         except Exception as e:
-            logger.warning(f"Step 9 warning: {e}")
+            logger.warning(f"Step 10 warning: {e}")
             return self._success(data={"drive_result": {"error": str(e)}, "error": str(e)})
 
 
 class UploadToYouTubeStep(WorkflowStep):
-    """Step 10: Upload video to YouTube."""
+    """Step 11: Upload video to YouTube."""
 
     @property
     def step_name(self) -> str:
         return "youtube_upload"
 
     async def execute(self, context: WorkflowContext) -> StepResult:
-        logger.info(f"Step 10: Starting {self.step_name}...")
+        logger.info(f"Step 11: Starting {self.step_name}...")
 
         video_path = context.get("video_path")
         metadata = context.get("metadata")
@@ -860,19 +928,19 @@ class UploadToYouTubeStep(WorkflowStep):
             )
 
         except Exception as e:
-            logger.warning(f"Step 10 warning: {e}")
+            logger.warning(f"Step 11 warning: {e}")
             return self._success(data={"youtube_result": {"error": str(e)}, "error": str(e)})
 
 
 class ReviewVideoStep(WorkflowStep):
-    """Step 11: Generate AI feedback from rendered video and screenshots."""
+    """Step 12: Generate AI feedback from rendered video and screenshots."""
 
     @property
     def step_name(self) -> str:
         return "video_review"
 
     async def execute(self, context: WorkflowContext) -> StepResult:
-        logger.info(f"Step 11: Starting {self.step_name}...")
+        logger.info(f"Step 12: Starting {self.step_name}...")
 
         review_config = getattr(cfg, "video_review", None)
         if not review_config or not getattr(review_config, "enabled", False):
