@@ -177,7 +177,7 @@ class VideoGenerator:
                 **self._get_quality_settings(),
             ).overwrite_output()
 
-            ffmpeg.run(output, quiet=True)
+            self._run_ffmpeg(output, description="rendering primary video")
 
             video_info = self._get_video_info(output_path)
             logger.info(f"Video generated successfully: {output_path}")
@@ -779,7 +779,7 @@ class VideoGenerator:
                 **self._get_quality_settings(),
             ).overwrite_output()
 
-            ffmpeg.run(output, quiet=True)
+            self._run_ffmpeg(output, description=f"rendering final video from {source_label}")
 
             if os.path.exists(output_path):
                 video_info = self._get_video_info(output_path)
@@ -797,6 +797,33 @@ class VideoGenerator:
         except Exception as e:
             logger.warning(f"Failed to retrieve subtitle style: {e}")
             return ""
+
+    @staticmethod
+    def _decode_ffmpeg_output(data: Optional[bytes]) -> str:
+        if not data:
+            return ""
+        return data.decode("utf-8", errors="replace").strip()
+
+    def _run_ffmpeg(self, stream, *, description: str) -> None:
+        """Execute an ffmpeg stream and emit detailed diagnostics on failure."""
+        try:
+            ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
+        except ffmpeg.Error as error:
+            stdout = self._decode_ffmpeg_output(error.stdout)
+            stderr = self._decode_ffmpeg_output(error.stderr)
+
+            if stdout:
+                logger.debug("ffmpeg %s stdout:%s%s", description, os.linesep, stdout)
+
+            if stderr:
+                logger.error("ffmpeg %s stderr:%s%s", description, os.linesep, stderr)
+            else:
+                logger.error("ffmpeg %s failed without stderr output: %s", description, error)
+
+            raise
+        except Exception:
+            logger.exception("Unexpected ffmpeg failure while %s", description)
+            raise
 
     def _generate_fallback_video(self, audio_path: str, subtitle_path: str, title: str) -> str:
         try:
@@ -830,7 +857,7 @@ class VideoGenerator:
             quality_settings = self._get_quality_settings()
             stream = ffmpeg.output(video_stream, audio_stream, output_path, **quality_settings).overwrite_output()
 
-            ffmpeg.run(stream, quiet=True)
+            self._run_ffmpeg(stream, description="generating fallback video")
             logger.info(f"Fallback video generated: {output_path}")
             return output_path
         except Exception as e:
