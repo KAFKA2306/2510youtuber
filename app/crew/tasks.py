@@ -32,6 +32,7 @@ class TaskFactory:
         context_tasks: Optional[List[Task]] = None,
         task_id: Optional[str] = None,
         task_config: Optional[Dict[str, Any]] = None,
+        prompt_task: Optional[str] = None,
         **override_params,
     ) -> Task:
         """単一タスクを生成
@@ -47,20 +48,39 @@ class TaskFactory:
             Taskインスタンス
         """
         try:
-            # タスクテンプレートを取得
-            task_template_content = self.prompt_manager.get_prompt_template(task_name)
+            # YAMLタスク定義を取得
+            template_task_key = prompt_task
+            if template_task_key is None and task_config and "prompt_task" in task_config:
+                template_task_key = task_config["prompt_task"]
 
-            # プロンプトをレンダリング
-            description = task_template_content
+            task_definition: Dict[str, Any] = {}
+            description_template = ""
+
+            if template_task_key:
+                try:
+                    task_definition = self.prompt_manager.get_task_definition(task_name, template_task_key)
+                except KeyError as exc:
+                    logger.error(str(exc))
+                    raise
+            else:
+                try:
+                    task_definition = self.prompt_manager.get_task_definition(task_name, task_name)
+                except KeyError:
+                    logger.debug("Falling back to raw template for %s", task_name)
+                    description_template = self.prompt_manager.get_prompt_template(task_name)
+
+            if not description_template:
+                description_template = str(task_definition.get("description", ""))
+
             context_payload = dict(context_data or {})
             context_payload.setdefault("agent_improvement_notes", "")
-            if context_payload:
-                # Jinja2でプレースホルダーを置換
-                description = self.prompt_manager.render_prompt(task_name, context_payload)
+            description = self.prompt_manager.render_text(description_template, context_payload)
 
-            # expected_outputは別途定義が必要な場合があるため、ここでは空とするか、テンプレートから取得するロジックを追加
-            # 現状のYAML構造ではexpected_outputが直接テンプレートに含まれていないため、一旦空とする
-            expected_output = override_params.pop("expected_output", "")  # override_paramsから取得
+            default_expected_output = str(task_definition.get("expected_output", "")) if task_definition else ""
+            expected_output_override = override_params.pop("expected_output", None)
+            expected_output = (
+                default_expected_output if expected_output_override is None else expected_output_override
+            )
 
             combined_config: Dict[str, Any] = {}
             override_config = override_params.pop("config", None)
@@ -127,7 +147,7 @@ def create_wow_tasks(
 
     # Task 1: Deep News Analysis
     tasks["task1_deep_analysis"] = factory.create_task(
-        task_name="analysis",  # agents.yamlのキーに合わせる
+        task_name="analysis",
         agent=agents["deep_news_analyzer"],
         context_data={
             "news_items": news_summary,
@@ -136,12 +156,13 @@ def create_wow_tasks(
         },
         task_id="task1_deep_analysis",
         task_config={"agent_key": "deep_news_analyzer"},
+        prompt_task="deep_news_analysis",
         expected_output="詳細なニュース分析結果",  # expected_outputを明示的に渡す
     )
 
     # Task 2: Curiosity Gap Design
     tasks["task2_curiosity_gaps"] = factory.create_task(
-        task_name="analysis",  # agents.yamlのキーに合わせる
+        task_name="analysis",
         agent=agents["curiosity_gap_researcher"],
         context_data={
             "deep_analysis_result": "{{ task1_deep_analysis.output }}",  # CrewAIのタスク出力参照形式
@@ -151,12 +172,13 @@ def create_wow_tasks(
         context_tasks=[tasks["task1_deep_analysis"]],
         task_id="task2_curiosity_gaps",
         task_config={"agent_key": "curiosity_gap_researcher"},
+        prompt_task="curiosity_gap_design",
         expected_output="視聴者の好奇心を刺激するギャップのリスト",
     )
 
     # Task 3: Emotional Story Arc Design
     tasks["task3_story_arc"] = factory.create_task(
-        task_name="analysis",  # agents.yamlのキーに合わせる
+        task_name="analysis",
         agent=agents["emotional_story_architect"],
         context_data={
             "deep_analysis_result": "{{ task1_deep_analysis.output }}",
@@ -167,12 +189,13 @@ def create_wow_tasks(
         context_tasks=[tasks["task1_deep_analysis"], tasks["task2_curiosity_gaps"]],
         task_id="task3_story_arc",
         task_config={"agent_key": "emotional_story_architect"},
+        prompt_task="emotional_story_arc_design",
         expected_output="感情的なストーリーアークの設計",
     )
 
     # Task 4: Script Writing
     tasks["task4_script_writing"] = factory.create_task(
-        task_name="script_generation",  # script_generation.yamlのキーに合わせる
+        task_name="script_generation",
         agent=agents["script_writer"],
         context_data={
             "surprise_points": "{{ task1_deep_analysis.output }}",  # 適切な出力に修正
@@ -184,13 +207,14 @@ def create_wow_tasks(
         context_tasks=[tasks["task1_deep_analysis"], tasks["task2_curiosity_gaps"], tasks["task3_story_arc"]],
         task_id="task4_script_writing",
         task_config={"agent_key": "script_writer"},
+        prompt_task="script_writing",
         expected_output="Pydantic Scriptモデルに準拠したJSON形式の動画スクリプト",
         output_pydantic=Script,  # Pydantic Scriptモデルを期待
     )
 
     # Task 5: Engagement Optimization
     tasks["task5_engagement"] = factory.create_task(
-        task_name="quality_check",  # quality_check.yamlのキーに合わせる
+        task_name="quality_check",
         agent=agents["engagement_optimizer"],
         context_data={
             "first_draft_script": "{{ task4_script_writing.output }}",
@@ -200,12 +224,13 @@ def create_wow_tasks(
         context_tasks=[tasks["task4_script_writing"]],
         task_id="task5_engagement",
         task_config={"agent_key": "engagement_optimizer"},
+        prompt_task="engagement_optimization",
         expected_output="エンゲージメント最適化されたスクリプト",
     )
 
     # Task 6: Quality Evaluation
     tasks["task6_quality"] = factory.create_task(
-        task_name="quality_check",  # quality_check.yamlのキーに合わせる
+        task_name="quality_check",
         agent=agents["quality_guardian"],
         context_data={
             "optimized_script": "{{ task5_engagement.output }}",
@@ -215,22 +240,24 @@ def create_wow_tasks(
         context_tasks=[tasks["task5_engagement"]],
         task_id="task6_quality",
         task_config={"agent_key": "quality_guardian"},
+        prompt_task="quality_evaluation",
         expected_output="スクリプトの品質評価レポート",
     )
 
     # Task 7: Japanese Purity Check
     tasks["task7_japanese"] = factory.create_task(
-        task_name="quality_check",  # quality_check.yamlのキーに合わせる
+        task_name="quality_check",
         agent=agents["japanese_purity_polisher"],
         context_data={
-            "quality_approved_script": "{{ task6_quality.output }}",  # 適切な出力に修正
-            "quality_evaluation_result": "{{ task6_quality.output }}",  # 適切な出力に修正
+            "quality_approved_script": "{{ task5_engagement.output }}",
+            "quality_evaluation_result": "{{ task6_quality.output }}",
             "continuity_prompt": continuity_prompt,
             "agent_improvement_notes": improvement_notes.get("japanese_purity_polisher", ""),
         },
         context_tasks=[tasks["task6_quality"]],
         task_id="task7_japanese",
         task_config={"agent_key": "japanese_purity_polisher"},
+        prompt_task="japanese_purity_check",
         expected_output="日本語純度チェック結果と修正案",
     )
 

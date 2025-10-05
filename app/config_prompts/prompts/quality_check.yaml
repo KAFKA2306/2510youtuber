@@ -2,9 +2,57 @@
 # Agent 6-7のタスク定義
 
 # ==========================
-# Task 6: Quality Evaluation
+# Task 5: Engagement Optimization
 # ==========================
 tasks:
+  engagement_optimization:
+    description: |
+      ファーストドラフトの台本を解析し、視聴維持率50%以上を目指すエンゲージメント施策を組み込んだ改訂版を作成してください。
+
+      【入力台本】
+      {{ first_draft_script }}
+
+      {% if continuity_prompt %}
+      【前回の学びと継続視点】
+      {{ continuity_prompt }}
+      {% endif %}
+
+      {% if agent_improvement_notes %}
+      【今回の改善フォーカス】
+      {{ agent_improvement_notes }}
+      {% endif %}
+
+      【実行ルール】
+      1. 0:00-0:08で視聴者を引きつける強烈なフックを挿入する。
+      2. 30秒ごとにパターン・インタラプト（視覚指示・音・驚きの数字）を最低1つ追加する。
+      3. 3箇所以上のオープンループを設置し、後半で必ず解消する。
+      4. 視聴者参加型の質問・アンケート・コメント促進を最低3回入れる。
+      5. ストーリーの流れを崩さず、PREP法と感情の波を維持する。
+
+      【出力形式】（JSONのみ）
+      {"title": "動画タイトル",
+       "dialogues": [
+         {"speaker": "武宏", "line": "セリフ"},
+         {"speaker": "つむぎ", "line": "セリフ"}
+       ],
+       "engagement_plan": {
+         "pattern_interrupts": ["0:30 グラフ提示", "1:00 視聴者アンケート"],
+         "open_loops": ["なぜ今が転換点なのか？"],
+         "viewer_prompts": ["コメントで予想を教えてください"],
+         "predicted_retention": 52.5
+       }
+      }
+
+      - JSON以外のテキスト、Markdown装飾、説明文は出力しないこと。
+      - dialogues配列は50行以上、話者は最低2名で交互に発話すること。
+      - engagement_planのpredicted_retentionは小数点1桁で記載すること。
+
+    expected_output: |
+      エンゲージメント施策を組み込んだ対談スクリプトと施策概要のJSON
+
+# ==========================
+# Task 6: Quality Evaluation
+# ==========================
   quality_evaluation:
     description: |
       エンゲージメント最適化台本を8軸で厳格に評価し、WOWスコア8.0以上を保証してください。
