@@ -102,7 +102,10 @@ class CrewAIGeminiLLM(BaseLLM):
         **kwargs: Any,
     ) -> None:
         target_model = model or settings.llm_model
-        super().__init__(model=target_model, temperature=temperature, stop=stop)
+        super().__init__()
+        self.model = target_model
+        self.temperature = temperature
+        self.stop = stop
 
         generation_defaults: Dict[str, Any] = {
             key: value for key, value in kwargs.items() if key in _ALLOWED_GEN_ARGS and value is not None

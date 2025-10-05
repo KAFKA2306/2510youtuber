@@ -327,6 +327,7 @@ def setup_logging(log_level: int = logging.INFO, log_dir: str = "logs", session_
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     root_logger.handlers.clear()
+    root_logger.filters.clear()
 
     console_handler = logging.StreamHandler()
     console_handler.setLevel(log_level)

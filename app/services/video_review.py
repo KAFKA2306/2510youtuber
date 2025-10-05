@@ -10,6 +10,8 @@ import json
 import logging
 import math
 import os
+import re
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -113,9 +115,34 @@ class VideoScreenshotExtractor:
                 if stream.get("codec_type") == "video" and stream.get("duration"):
                     return float(stream["duration"])
             return float(probe.get("format", {}).get("duration", 0.0))
+        except FileNotFoundError:
+            return self._probe_duration_with_ffmpeg(video_path)
         except ffmpeg.Error as exc:  # type: ignore[attr-defined]
             logger.warning("Failed to probe video duration: %s", exc)
+            return self._probe_duration_with_ffmpeg(video_path)
+
+    def _probe_duration_with_ffmpeg(self, video_path: str) -> float:
+        try:
+            result = subprocess.run(
+                [self.ffmpeg_path, "-i", video_path],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except FileNotFoundError:
+            logger.warning("FFmpeg binary not available to probe duration")
             return 0.0
+
+        output = result.stderr or result.stdout
+        match = re.search(r"Duration: (?P<h>\d+):(?P<m>\d+):(?P<s>\d+(?:\.\d+)?)", output)
+        if not match:
+            return 0.0
+
+        hours = int(match.group("h"))
+        minutes = int(match.group("m"))
+        seconds = float(match.group("s"))
+        return hours * 3600 + minutes * 60 + seconds
 
     def _build_metadata(
         self,
