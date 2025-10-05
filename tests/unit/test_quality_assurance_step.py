@@ -27,7 +27,7 @@ async def test_quality_assurance_step_skips_when_disabled(monkeypatch):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_quality_assurance_step_blocks_on_failure(monkeypatch):
+async def test_quality_assurance_step_reports_failures_without_blocking(monkeypatch):
     config = cfg.media_quality.copy(deep=True)
     config.enabled = True
     config.gating.enforce = True
@@ -39,6 +39,7 @@ async def test_quality_assurance_step_blocks_on_failure(monkeypatch):
             name="video_compliance",
             status=CheckStatus.FAILED,
             message="resolution mismatch",
+            blocking=False,
         )
     )
     report.report_path = "qa.json"
@@ -51,7 +52,7 @@ async def test_quality_assurance_step_blocks_on_failure(monkeypatch):
             return report
 
         def should_block(self, report, mode):
-            return True
+            return False
 
     monkeypatch.setattr("app.workflow.steps.cfg", SimpleNamespace(media_quality=config))
     monkeypatch.setattr("app.workflow.steps.MediaQAPipeline", DummyPipeline)
@@ -60,7 +61,7 @@ async def test_quality_assurance_step_blocks_on_failure(monkeypatch):
     context = WorkflowContext(run_id="block-run", mode="daily")
     result = await step.execute(context)
 
-    assert result.success is False
-    assert context.get("qa_passed") is False
-    retry_request = context.get("qa_retry_request")
-    assert retry_request["start_step"] == "script_generation"
+    assert result.success is True
+    assert context.get("qa_passed") is True
+    assert context.get("qa_retry_request") is None
+    assert result.data["qa_blocking"] is False

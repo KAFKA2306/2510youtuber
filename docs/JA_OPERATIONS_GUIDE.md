@@ -107,7 +107,7 @@ uv run python3 -m app.main test
    - `uv run python -m app.verify` を実行して API キー、FFmpeg、フォントなどの依存を検証。
 2. **ワークフロー実行**
    - 通常運用は `uv run python3 -m app.main daily`。
-   - 検証目的で品質ゲートを緩めたい場合は `test` モード、特集用のプロンプトを使う場合は `special` モードを指定します。
+   - 検証目的でアップロードを抑止したい場合は `test` モード、特集用のプロンプトを使う場合は `special` モードを指定します。QA レポートは全モード共通で通知のみです。
 3. **成果物の確認**
    - 台本・音声・字幕・動画は `output/` 配下に保存され、`WorkflowContext.generated_files` に一覧化されます。
    - Gemini Vision によるレビュー結果は `output/video_reviews/`、QA レポートは `data/qa_reports/` に格納されます。
@@ -117,7 +117,7 @@ uv run python3 -m app.main test
 
 ## 4. 品質保証と監視ポイント
 
-- **QA ゲート**: `config.yaml` の `media_quality` セクションで字幕同期・音量レベル・日本語純度などの閾値を制御します。ブロックされた場合は `retry_attempts` を一時的に調整するか、該当ステップを手動で修正して再実行します。
+- **QA レポート**: `config.yaml` の `media_quality` セクションで字幕同期・音量レベル・日本語純度などの閾値を調整します。既定では `gating.enforce=false` のためレポートはブロックを伴わず、指摘内容を参考に該当ステップを手動で修正して再実行します。必要であれば `enforce=true` に戻して自動差し戻しを再開できます。
 - **ローテーション管理**: Gemini / Perplexity のキーは自動ローテーションされますが、429 エラーが続いた場合は `.env` のキー数や失敗回数を確認してください。
 - **TTS 設定**: VOICEVOX の話者 ID は `config.yaml.speakers` で管理します。新しい話者を追加する際は placeholder が自動補完されるため、設定漏れがあれば QA ログで検知できます。
 - **メタデータ調整**: `GenerateMetadataStep` が出力する JSON（例: `metadata.json`）を基に、YouTube Studio でタイトルや説明文を微調整可能です。
@@ -132,7 +132,7 @@ uv run python3 -m app.main test
 | 台本が短すぎる／空になる | QA ログの `Generated script too short` | 収集ニュース件数と `config.yaml.crew` の設定を確認し、CrewAI の再試行回数を増やす。 |
 | 字幕と音声がずれる | `data/qa_reports` の `subtitle_alignment` セクション | `TranscribeAudioStep` を再実行し、音量レベルや `media_quality.subtitles` の閾値を調整。 |
 | 動画生成が失敗する | FFmpeg のエラーログ / `Failed to create B-roll sequence` | 一時的に `stock_footage.enabled=false` にして再実行し、FFmpeg パスとテンプレート画像の有無を確認。 |
-| QA でブロックされる | レポートの `blocking_failures` | 閾値を見直すか、該当ステップ（字幕・音量など）を手動で修正して再実行。 |
+| QA レポートに赤字が多い | レポートの `metrics` や `message` | 閾値を見直すか、該当ステップ（字幕・音量など）を手動で修正して再実行。 |
 | CrewAI Gemini 起動時に `BaseLLM.__init__() missing 1 required positional argument: 'model'` | `uv run python -m app.verify` のログで CrewAI バージョンが 0.74 以降か確認 | CrewAI 側の `BaseLLM` が `model` 引数を必須化したことが原因。`settings.llm_model` を設定し、`app.adapters.llm.CrewAIGeminiLLM` を最新コミットに更新してから `uv sync` → `app.verify` を再実行。 |
 
 ### 5.2 VideoGenerator で頻発する根本原因

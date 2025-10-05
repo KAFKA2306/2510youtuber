@@ -18,14 +18,14 @@
 
 ### 2.3 品質・公開フェーズ
 1. **メディアQA**: `MediaQAPipeline.run` が音声のRMS/ピーク、字幕行数比、動画解像度を検査し、`QualityGateReport` に結果を記録する。しきい値は `config.media_quality` によって調整可能。【F:app/services/media/qa_pipeline.py†L1-L142】【F:config.yaml†L45-L94】
-2. **再試行判定**: QAの失敗が発生すると `QualityAssuranceStep` が `qa_retry_request` を `WorkflowContext` に書き込み、`YouTubeWorkflow` が指定ステップからの再開を準備する。【F:app/workflow/steps.py†L937-L1015】【F:app/main.py†L104-L205】
+2. **レビュー記録**: QAの結果は `QualityAssuranceStep` が `WorkflowContext` とレポートファイルに保存し、オペレーターが手動で改善点を判断できるようにする。ワークフロー自体はQA結果で停止しない。【F:app/workflow/steps.py†L585-L633】
 3. **アップロード**: `UploadToDriveStep` と `UploadToYouTubeStep` がそれぞれDriveとYouTube APIへファイルを送信。成功時は共有URL・動画IDを `WorkflowContext` に格納する。【F:app/workflow/steps.py†L1017-L1167】
 4. **AIレビュー**: `ReviewVideoStep` が生成動画から一定間隔でスクリーンショットを抽出し、Geminiモデルによる内容評価を保存する。【F:app/workflow/steps.py†L1169-L1254】
 
 ## 3. 主要技術要素の分析
 - **APIキー管理**: `initialize_api_infrastructure` および `get_rotation_manager` がAPIキーのローテーションを統括。これによりPerplexity/Geminiのレート制限に耐性がある。【F:app/main.py†L24-L37】【F:app/search_news.py†L13-L78】
 - **設定駆動性**: `settings` オブジェクトが `.env` と `config.yaml` を統合し、話者の音声IDは環境変数から自動取得されるバリデータで補完される。【F:app/config/settings.py†L1-L49】
-- **品質ゲート**: `MediaQAPipeline.should_block` がモード別のスキップや失敗時のブロック判定を行い、動画品質の最低ラインを保証する。【F:app/services/media/qa_pipeline.py†L40-L83】
+- **品質レポート**: `MediaQAPipeline.should_block` は設定 `config.media_quality.gating.enforce` が `true` のときだけブロック判定を返す。既定の `false` 設定ではレポートは助言目的となり、必要に応じて設定で自動停止を復活させられる。【F:app/services/media/qa_pipeline.py†L40-L83】【F:config.yaml†L59-L94】
 - **フォールトトレランス**: 各ステップが例外を捕捉してフォールバックを返し、システム全体が止まることを避ける設計となっている。例: ニュース収集のダミーデータ、スクリプト再生成、字幕推定など。【F:app/search_news.py†L39-L118】【F:app/services/script/generator.py†L110-L148】【F:app/align_subtitles.py†L73-L120】
 
 ## 4. 技術リスクと改善提案
@@ -40,4 +40,4 @@
 - **品質指標**: `quality_thresholds` に基づくWOWスコア等は、CrewAIから取得したメタデータを用いてモニタリングできる設計であり、日々の改善サイクルを回しやすい。【F:config.yaml†L69-L122】【F:app/workflow/steps.py†L120-L216】
 
 ## 6. まとめ
-本システムは、設定駆動・フォールバック重視のアーキテクチャで自動動画生成を実現している。API依存への冗長化、字幕品質向上、QA拡張が今後の重点改善項目である。ワークフロー分割と品質ゲートにより、初見でも各ステップの役割を追跡しやすい実装となっている。
+本システムは、設定駆動・フォールバック重視のアーキテクチャで自動動画生成を実現している。API依存への冗長化、字幕品質向上、QA拡張が今後の重点改善項目である。ワークフロー分割と品質レポートの蓄積により、初見でも各ステップの役割と改善余地を追跡しやすい実装となっている。

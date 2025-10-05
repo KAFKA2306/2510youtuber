@@ -76,7 +76,7 @@ media_quality:
   enabled: true
   report_dir: "data/qa_reports"
   gating:
-    enforce: true
+    enforce: false
     skip_modes:
       - test
     fail_on_missing_inputs: true

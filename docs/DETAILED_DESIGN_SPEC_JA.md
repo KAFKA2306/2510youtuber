@@ -26,7 +26,7 @@
 | TranscribeAudioStep | 音声からSTT結果を作成し、単語タイムスタンプを提供。【F:app/workflow/steps.py†L640-L714】 | 字幕整合が `stt_words` を必要とするため、`context` 保持が暗黙的契約。 |
 | AlignSubtitlesStep | 台本とSTTを付き合わせて字幕を整列し、SRTを書き出す。【F:app/workflow/steps.py†L716-L817】【F:app/align_subtitles.py†L1-L120】 | 日本語品質チェックは存在すれば自動適用される（依存モジュールの存在チェックによる暗黙機能）。【F:app/align_subtitles.py†L13-L24】 |
 | GenerateVideoStep | 音声・字幕・背景デザインを合成して動画を作成。ストック映像の使用可否を判断し、FFmpeg設定を適用。【F:app/workflow/steps.py†L819-L935】【F:app/video.py†L1-L129】 | テーマA/Bテストやストック映像切替は設定値から暗黙的に決定され、ファイルアーカイブ管理が副作用として働く。【F:app/video.py†L30-L124】 |
-| QualityAssuranceStep | MediaQAPipelineで音声・字幕・動画の品質検査を実施し、ブロック条件を判定。【F:app/workflow/steps.py†L937-L1015】【F:app/services/media/qa_pipeline.py†L1-L142】 | QAレポートの永続化は例外非同期にも失敗しないよう警告に留める暗黙設計。再試行要求は `context` に `qa_retry_request` を設定する。 |
+| QualityAssuranceStep | MediaQAPipelineで音声・字幕・動画の品質検査を実施し、レポートとして共有する。既定では`config.media_quality.gating.enforce=false`のためワークフローは停止しないが、設定を切り替えれば自動ブロックを再有効化できる。【F:app/workflow/steps.py†L585-L633】【F:app/services/media/qa_pipeline.py†L1-L176】【F:config.yaml†L59-L94】 | QAレポートの永続化は例外非同期にも失敗しないよう警告に留める暗黙設計。必要に応じて手動で該当ステップを再実行する。 |
 | UploadToDriveStep | 生成物をDriveへアップロードし、共有リンクを返す。【F:app/workflow/steps.py†L1017-L1077】 | `FileArchivalManager` が暗黙的にアーカイブを生成し、失敗時はローカル保持のみで進行する。 |
 | UploadToYouTubeStep | YouTube Data APIで動画を公開し、動画IDとURLを記録。【F:app/workflow/steps.py†L1079-L1167】 | メタデータやサムネイルが `context` から暗黙参照される設計。 |
 | ReviewVideoStep | 生成動画をAIレビューにかけ、フィードバックを生成して保存。【F:app/workflow/steps.py†L1169-L1254】 | フィードバックは次回改善のための記録として暗黙に扱われる。 |
@@ -54,7 +54,7 @@
 
 ### 4.6 メディアQA (`MediaQAPipeline`)
 - **定義**: 音声レベル、字幕カバレッジ、動画ビットレートなどを検査し、結果を `QualityGateReport` にまとめる。【F:app/services/media/qa_pipeline.py†L1-L142】【F:app/services/media/qa_pipeline.py†L144-L246】
-- **直観的説明**: 生成物を受け取り「音が割れていないか」「字幕が追いついているか」「動画が高解像度か」をチェックする検品担当。基準を満たさなければ再実行を要求する。
+- **直観的説明**: 生成物を受け取り「音が割れていないか」「字幕が追いついているか」「動画が高解像度か」をチェックする検品担当。基準を満たさなければレポートで改善点を提示し、必要に応じて設定で自動再実行を要求できる。
 
 ### 4.7 ビジュアルデザイン (`UnifiedVisualDesign`)
 - **定義**: ニュースの感情解析からテーマ色と背景テーマを選び、サムネイル・動画双方に渡す。【F:app/services/visual_design.py†L1-L104】
@@ -67,8 +67,8 @@
 
 ## 6. エラーハンドリング戦略
 - **ニュース取得失敗**: 例外を捕捉しつつ段階的フォールバック。最終的にダミーデータを返し、ワークフロー継続を優先。【F:app/search_news.py†L39-L118】
-- **スクリプト生成失敗**: JSON解析失敗時はテキスト整形へフォールバックし、品質ゲートが有効なら再試行する。【F:app/services/script/generator.py†L89-L148】
-- **QA失敗**: `MediaQAPipeline.should_block` が `config.media_quality.gating` を参照し、再試行許可モード以外では即停止する。【F:app/services/media/qa_pipeline.py†L40-L83】
+- **スクリプト生成失敗**: JSON解析失敗時はテキスト整形へフォールバックし、結果はQAレポートと共に手動レビューへ委ねる。【F:app/services/script/generator.py†L89-L148】
+- **QA結果**: `MediaQAPipeline` は失敗を検知するとレポート化し、既定設定ではブロックせずに `QualityAssuranceStep` から共有する。`config.media_quality.gating.enforce` を `true` に戻せば自動ブロックを再開できる。【F:app/services/media/qa_pipeline.py†L40-L176】【F:config.yaml†L59-L94】
 - **アップロード失敗**: 例外はログ出力しつつ `StepResult` で失敗を返す。`YouTubeWorkflow` 側でエラーを拾い、Discord通知やクリーンアップを行う暗黙設計（`execute_full_workflow` 内でハンドリング）。【F:app/main.py†L104-L205】
 
 ## 7. データ永続化とアーカイブ
@@ -80,4 +80,4 @@
 - **動画レビュー**: `ReviewVideoStep` が AI モデルにスクリーンショットを解析させ、フィードバックを `context` に保存することで次回改修の材料を残す。【F:app/workflow/steps.py†L1169-L1254】
 
 ## 9. まとめ
-本システムは戦略パターンで分解されたワークフローを、設定駆動・品質ゲート付きで統合する。各ステップは明示的なインターフェース (`WorkflowStep`) に従う一方、`WorkflowContext` に値を格納する暗黙契約で連携し、エラーフォールバックと再試行により信頼性を確保する。
+本システムは戦略パターンで分解されたワークフローを、設定駆動・品質レポート付きで統合する。各ステップは明示的なインターフェース (`WorkflowStep`) に従う一方、`WorkflowContext` に値を格納する暗黙契約で連携し、エラーフォールバックと再試行により信頼性を確保する。
