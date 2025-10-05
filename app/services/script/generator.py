@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.adapters.llm import LLMClient
 from app.adapters.llm import _extract_message_text as adapter_extract_message_text
 from app.config.settings import settings
+from app.services.script.speakers import get_speaker_registry
 from app.services.script.validator import (
     DialogueEntry,
     Script,
@@ -152,6 +153,8 @@ class StructuredScriptGenerator:
             SpeakerRoster(allowed_speakers) if allowed_speakers is not None else SpeakerRoster.from_settings()
         )
         self._allowed_speakers = self._speaker_roster.names
+        self._allowed_speaker_set = {name for name in self._allowed_speakers if name}
+        self._alias_lookup = get_speaker_registry().alias_map
         self._quality_gate_enabled = settings.script_generation.quality_gate_llm_enabled
 
         if self._speaker_roster.was_augmented:
@@ -391,9 +394,14 @@ class StructuredScriptGenerator:
             if not stripped or ":" not in stripped:
                 continue
             speaker, content = stripped.split(":", 1)
-            speaker = speaker.strip()
+            speaker = self._canonicalize_speaker(speaker)
             content = content.strip() or "(内容未設定)"
-            dialogues.append(DialogueEntry(speaker=speaker, line=content))
+            dialogues.append(
+                DialogueEntry(
+                    speaker=speaker or self._allowed_speakers[len(dialogues) % len(self._allowed_speakers)],
+                    line=content,
+                )
+            )
 
         return dialogues
 
@@ -413,7 +421,7 @@ class StructuredScriptGenerator:
                 normalized_speaker = potential.strip()
                 remainder = remainder.strip()
                 if remainder:
-                    speaker = normalized_speaker
+                    speaker = self._canonicalize_speaker(normalized_speaker)
                     content = remainder
 
             if speaker is None:
@@ -457,6 +465,17 @@ class StructuredScriptGenerator:
 
         normalized.append(DialogueEntry(speaker=fallback_speaker, line="(補完台詞)"))
         return normalized
+
+    def _canonicalize_speaker(self, label: Optional[str]) -> Optional[str]:
+        if not label:
+            return None
+        normalized = label.strip()
+        if not normalized:
+            return None
+        mapped = self._alias_lookup.get(normalized, normalized)
+        if mapped in self._allowed_speaker_set:
+            return mapped
+        return None
 
     def _infer_title(self, response_text: str) -> str:
         for line in response_text.splitlines():
