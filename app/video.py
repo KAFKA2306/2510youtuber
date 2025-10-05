@@ -152,7 +152,7 @@ class VideoGenerator:
         except Exception as e:
             logger.error(f"Video generation failed: {e}")
             self.last_generation_method = "fallback"
-            return self._generate_fallback_video(audio_path, title)
+            return self._generate_fallback_video(audio_path, subtitle_path, title)
         finally:
             if "bg_image_path" in locals() and bg_image_path != background_image:
                 try:
@@ -666,18 +666,37 @@ class VideoGenerator:
             logger.warning(f"Failed to retrieve subtitle style: {e}")
             return ""
 
-    def _generate_fallback_video(self, audio_path: str, title: str) -> str:
+    def _generate_fallback_video(self, audio_path: str, subtitle_path: str, title: str) -> str:
         try:
             logger.warning("Generating fallback video...")
             duration = self._get_audio_duration(audio_path)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_path = f"fallback_video_{timestamp}.{self.output_format}"
 
-            stream = ffmpeg.input(f"color=c=0x193d5a:size=1920x1080:duration={duration}", f="lavfi")
+            video_stream = ffmpeg.input(f"color=c=0x193d5a:size=1920x1080:duration={duration}", f="lavfi")
+
+            if subtitle_path and os.path.exists(subtitle_path):
+                try:
+                    sanitized_subtitle_path = self._normalize_subtitle_path(subtitle_path)
+                    subtitle_style = self._build_subtitle_style()
+                    video_stream = video_stream.filter(
+                        "subtitles",
+                        sanitized_subtitle_path,
+                        force_style=subtitle_style,
+                    )
+                except Exception as subtitle_error:
+                    logger.warning(
+                        "Failed to render subtitles in fallback video %s: %s",
+                        subtitle_path,
+                        subtitle_error,
+                    )
+            else:
+                logger.warning("Subtitle file missing for fallback video: %s", subtitle_path)
+
             audio_stream = ffmpeg.input(audio_path)
 
             quality_settings = self._get_quality_settings()
-            stream = ffmpeg.output(stream, audio_stream, output_path, **quality_settings).overwrite_output()
+            stream = ffmpeg.output(video_stream, audio_stream, output_path, **quality_settings).overwrite_output()
 
             ffmpeg.run(stream, quiet=True)
             logger.info(f"Fallback video generated: {output_path}")
