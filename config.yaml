@@ -58,8 +58,8 @@ video:
     width: 1920
     height: 1080
   quality_preset: high  # low/medium/high/ultra
-  max_duration_minutes: 40
-  target_duration_minutes: 8  # デフォルト目標
+  max_duration_minutes: 10
+  target_duration_minutes: 5  # デフォルト目標
 
 # ============================================
 # ストック映像設定
@@ -285,9 +285,9 @@ tts:
 # デバッグ・ロギング
 # ============================================
 debug:
-  enabled: false
+  enabled: true
   log_level: INFO  # DEBUG/INFO/WARNING/ERROR
-  save_intermediate_files: false
+  save_intermediate_files: true
   save_prompts: true
 
 # ============================================
