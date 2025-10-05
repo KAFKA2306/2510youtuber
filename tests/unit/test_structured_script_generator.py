@@ -117,6 +117,38 @@ def test_generator_uses_fallback_when_quality_gate_disabled(monkeypatch):
     assert result.metadata.quality_report.errors
 
 
+def test_generator_repairs_single_dialogue_payload():
+    payload = {
+        "title": "市場速報: クイックアップデート",
+        "dialogues": [
+            {"speaker": "武宏", "line": "急激な円高が進行しています。"},
+        ],
+    }
+
+    response = _build_response(payload)
+    generator = StructuredScriptGenerator(
+        client=DummyClient([response]),
+        allowed_speakers=["武宏", "つむぎ"],
+        max_attempts=1,
+    )
+
+    result = generator.generate(
+        news_items=[
+            {
+                "title": "円相場の急変",
+                "summary": "主要通貨に対して円が全面高となっている。",
+                "source": "ロイター",
+            }
+        ]
+    )
+
+    assert len(result.script.dialogues) == 2
+    assert result.script.dialogues[0].speaker == "武宏"
+    assert result.script.dialogues[1].speaker == "つむぎ"
+    assert result.script.dialogues[1].line == "(補完台詞)"
+    assert result.metadata.quality_report.dialogue_lines >= 2
+
+
 def test_generator_returns_fallback_when_quality_gate_enabled(monkeypatch):
     raw_script = "武宏: リスクイベントを振り返りましょう。\n解析: 補助テキストのみ。"
     response = {"choices": [{"message": {"content": raw_script}}]}
