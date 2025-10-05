@@ -74,13 +74,24 @@ def test_quality_improvement():
     # 改善
     if not result["is_pure_japanese"] and japanese_quality_checker:
         improved = improve_japanese_quality(bad_script)
-        if improved["success"] and improved.get("changes_made"):
+        assert improved["success"], "Improvement should return success"
+        assert (
+            improved["new_score"] >= improved["original_score"]
+        ), "Final script must not reduce purity"
+
+        if improved.get("regression_prevented"):
+            print("\nRegression detected and prevented; original script retained")
+            print(
+                f"Attempted score: {improved.get('attempted_score', 0):.1f}/100,"
+                f" Final score: {improved['new_score']:.1f}/100"
+            )
+        elif improved.get("changes_made"):
             print(f"\nImproved purity score: {improved['new_score']:.1f}/100")
             print(f"Issues fixed: {improved.get('issues_fixed', 0)}")
             print("\nImproved script (first 150 chars):")
             print(improved["improved_script"][:150])
         else:
-            print("\nImprovement not successful or no changes needed")
+            print("\nNo changes were required to maintain purity")
     else:
         print("\nNo improvement needed or checker not available")
 
@@ -177,9 +188,9 @@ def test_end_to_end():
     # 結果サマリー
     print("\n5. Summary:")
     print("   ✓ Script generation completed")
-    print(f"   ✓ Quality check: {purity_result['purity_score']:.1f}/100")
+    print(f"   ✓ Purity assessment (no regression): {purity_result['purity_score']:.1f}/100")
     if japanese_quality_checker and not purity_result["is_pure_japanese"]:
-        print("   ✓ Auto-improvement applied")
+        print("   ✓ Auto-improvement ensured the script did not regress")
     print(f"   ✓ Subtitle validation: {valid_count}/{len(sample_subtitles)} passed")
     print("\n   Final script (first 200 chars):")
     print(f"   {final_script[:200]}...")

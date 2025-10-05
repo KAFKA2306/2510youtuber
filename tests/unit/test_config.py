@@ -40,12 +40,13 @@ def test_video_configuration():
 
 @pytest.mark.unit
 def test_quality_thresholds():
-    """品質閾値が正しく設定されているか確認"""
+    """品質基準が正しく設定されているか確認"""
     from app.config.settings import settings
 
     assert hasattr(settings.quality, "wow_score_min")  # Changed from quality_thresholds to quality
     assert settings.quality.wow_score_min > 0
     assert settings.quality.wow_score_min <= 10
+    assert not hasattr(settings.quality, "japanese_purity_min"), "Japanese purity no longer uses a fixed threshold"
 
 
 @pytest.mark.unit

@@ -153,7 +153,7 @@ agents:
     role: Japanese Purity Polisher
     goal: |
       Deliver a script in pure, beautiful Japanese that flows naturally and sounds professional.
-      Achieve 95%+ Japanese purity score by eliminating English words and ensuring natural speech.
+      Remove English loanwords and ensure the final draft is at least as pure as the input script.
 
     backstory: |
       あなたは日本語の美しさを追求する言語学者です。

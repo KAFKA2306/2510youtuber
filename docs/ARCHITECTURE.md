@@ -166,7 +166,7 @@ START
 [2] Script Generation (crew/flows.py)
   ├─ CrewAI 7エージェント
   ├─ WOW Script Creation
-  ├─ Japanese Purity Check (95%+)
+  ├─ Japanese Purity Guard (no regression)
   ↓
 [3] Audio Synthesis (tts.py)
   ├─ ElevenLabs → VOICEVOX → OpenAI → gTTS → Coqui → pyttsx3
@@ -211,7 +211,7 @@ END
 **処理**:
 1. CrewAI Flow起動
 2. 7エージェントによる台本生成
-3. 日本語純度チェック（95%+）
+3. 日本語純度ガード（原稿より悪化しないことを保証）
 4. WOWスコア検証（8.0+）
 **出力**: `Script` (Pydantic model)
 
@@ -323,7 +323,7 @@ News Items
     ↓
 ┌────────────────────────────────┐
 │ Agent 7: Japanese Purity Polisher│
-│ - 日本語純度95%+保証           │
+│ - 日本語純度のリグレッション防止 │
 │ - 英語混入除去                 │
 └────────────────────────────────┘
     ↓
@@ -510,7 +510,7 @@ stock_footage:
 
 quality_thresholds:
   wow_score_min: 8.0
-  japanese_purity_min: 95.0
+  # 日本語純度は原稿より悪化しないことのみ保証（閾値なし）
 ```
 
 **secret/.env** (APIキー):

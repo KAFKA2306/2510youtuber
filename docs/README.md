@@ -17,7 +17,7 @@ AI駆動の高品質YouTube動画自動生成システム
 - ✅ **CrewAI エージェント**: 7つの専門AIが協力して視聴維持率50%+を目指す台本を生成
 - ✅ **Stock Footage**: プロフェッショナルなB-roll自動生成（Pexels/Pixabay）
 - ✅ **TTS 6段階フォールバック**: 高品質音声（ElevenLabs → VOICEVOX → ...）
-- ✅ **日本語純度保証**: 95%+の日本語純度を自動検証
+- ✅ **日本語純度ガード**: 改善処理で元の原稿より日本語純度が低下しないことを自動保証
 - ✅ **品質検証**: 音声・動画・字幕の品質を自動チェック
 - ✅ **Feedback Loop**: 実行ログ→Google Sheets→分析→改善
 - ✅ **動画レビューAI**: Gemini Visionで生成動画を分析し改善提案
@@ -162,7 +162,7 @@ stock_footage:
 
 quality_thresholds:
   wow_score_min: 8.0
-  japanese_purity_min: 95.0
+  # 日本語純度は改善時に原稿より悪化しないことのみを保証（閾値なし）
   retention_prediction_min: 50.0
 
 video:

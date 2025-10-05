@@ -76,7 +76,7 @@
 - **アーカイブ**: 動画生成時に `FileArchivalManager` が原稿・音声・字幕をコピーし、再利用に備える暗黙機能。【F:app/video.py†L30-L60】
 
 ## 8. 品質・改善ループ
-- **WOW/日本語純度閾値**: `config.yaml` の `quality_thresholds` がスクリプト品質指標の目標を定義し、CrewAIメタデータ経由で検査する暗黙仕様。【F:config.yaml†L69-L122】
+- **WOW閾値/日本語純度ガード**: `config.yaml` の `quality_thresholds` でWOWスコア等の目標を定義し、日本語純度は固定閾値ではなく改善後に原稿より悪化しないことを検査する暗黙仕様。【F:config.yaml†L69-L122】【F:app/japanese_quality.py†L198-L258】
 - **動画レビュー**: `ReviewVideoStep` が AI モデルにスクリーンショットを解析させ、フィードバックを `context` に保存することで次回改修の材料を残す。【F:app/workflow/steps.py†L1169-L1254】
 
 ## 9. まとめ
