@@ -452,8 +452,8 @@ def create_tts_chain(
     """Create the TTS provider chain.
 
     Chain order (highest to lowest quality):
-    1. ElevenLabs (premium)
-    2. VOICEVOX (free, high quality Japanese)
+    1. VOICEVOX (free, high quality Japanese)
+    2. ElevenLabs (premium)
     3. OpenAI (paid, good quality)
     4. gTTS (free, decent quality)
     5. Coqui (free, local)
@@ -468,12 +468,18 @@ def create_tts_chain(
     Returns:
         Head of the provider chain
     """
-    # Build chain from end to start
-    chain = Pyttsx3Provider()  # Final fallback
-    chain = CoquiProvider(next_provider=chain)
-    chain = GTTSProvider(next_provider=chain)
-    chain = OpenAIProvider(client=openai_client, next_provider=chain)
-    chain = VoicevoxProvider(port=voicevox_port, speaker=voicevox_speaker, next_provider=chain)
-    chain = ElevenLabsProvider(client=elevenlabs_client, next_provider=chain)
 
-    return chain
+    # Define providers in explicit priority order for readability.
+    providers: list[TTSProvider] = [
+        VoicevoxProvider(port=voicevox_port, speaker=voicevox_speaker),
+        ElevenLabsProvider(client=elevenlabs_client),
+        OpenAIProvider(client=openai_client),
+        GTTSProvider(),
+        CoquiProvider(),
+        Pyttsx3Provider(),
+    ]
+
+    for current, next_provider in zip(providers, providers[1:]):
+        current.next_provider = next_provider
+
+    return providers[0]
