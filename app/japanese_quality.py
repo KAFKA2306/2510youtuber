@@ -12,7 +12,13 @@ import google.generativeai as genai
 
 from app.config.settings import settings
 from app.llm_logging import llm_logging_context, record_llm_interaction
-from app.constants.prompts import JAPANESE_ALLOWED_ECONOMIC_ACRONYMS, JAPANESE_ALLOWED_PATTERNS
+from app.constants.prompts import (
+    JAPANESE_ALLOWED_ECONOMIC_ACRONYMS,
+    JAPANESE_ALLOWED_PATTERNS,
+    JAPANESE_PURITY_IMPROVEMENT_STEPS,
+    bullet_lines,
+    numbered_lines,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -160,20 +166,18 @@ class JapaneseQualityChecker:
             # 改善が必要な場合
             logger.info(f"Improving script with {len(quality_result['issues'])} issues")
 
+            improvement_steps = numbered_lines(JAPANESE_PURITY_IMPROVEMENT_STEPS)
+            issues_summary = self._format_issues(quality_result["issues"])
+
             improvement_prompt = f"""
 以下の台本には英語が混じっていて視聴者が理解しにくいという問題があります。
 すべての英語を自然な日本語に置き換えて、明瞭で面白い日本語の台本に修正してください。
 
 【重要な指示】
-1. すべての英語単語を適切な日本語に翻訳または言い換える
-2. 専門用語は理解しやすい日本語で説明を加える
-3. 会話の自然さを保つ
-4. 話者名（田中:、鈴木:）のフォーマットは維持する
-5. 数字、パーセント、単位（円、ドルなど）はそのまま使用可能
-6. AI、GDP、ITなどの一般的な略語は使用可能
+{improvement_steps}
 
 【検出された問題点】
-{self._format_issues(quality_result['issues'])}
+{issues_summary}
 
 【原稿】
 {script}
@@ -246,16 +250,17 @@ class JapaneseQualityChecker:
     def _format_issues(self, issues: List[Dict[str, Any]]) -> str:
         """問題点をフォーマット"""
         if not issues:
-            return "なし"
+            return "- 問題なし"
 
-        formatted = []
-        for issue in issues[:10]:  # 最大10個
-            formatted.append(f"- 行{issue['line']}: 英語「{issue['text']}」を日本語に変更してください")
+        formatted = [
+            f"行{issue['line']}: 英語「{issue['text']}」を日本語に変更してください"
+            for issue in issues[:10]
+        ]
 
         if len(issues) > 10:
             formatted.append(f"...他{len(issues) - 10}件")
 
-        return "\n".join(formatted)
+        return bullet_lines(formatted)
 
     def validate_subtitle_text(self, subtitle_text: str) -> bool:
         """字幕テキストが純粋な日本語かを検証
