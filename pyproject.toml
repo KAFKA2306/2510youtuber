@@ -26,12 +26,16 @@ dependencies = [
     "psutil",
     "gunicorn",
     "flask",
+    "fastapi",
+    "uvicorn",
+    "sqlmodel",
     "SpeechRecognition",
     "pyttsx3",
     "openai-whisper",
     "gtts",
     "coqui-tts",
     "openai",
+    "PyYAML",
 ]
 
 [tool.ruff]

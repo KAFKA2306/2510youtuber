@@ -1,0 +1,30 @@
+commands:
+  - id: daily_workflow
+    name: デイリー自動生成
+    description: 既存のapp.mainワークフローを実行する
+    runner: python_module
+    module: app.main
+    args:
+      - daily
+  - id: verify_configuration
+    name: 設定検証
+    description: APIキーや依存関係を検証する
+    runner: process
+    command:
+      - uv
+      - run
+      - python
+      - -m
+      - app.verify
+  - id: analytics_weekly
+    name: 週次レポート生成
+    description: 直近のフィードバック分析を表示する
+    runner: python_module
+    module: app.analytics
+    args:
+      - --limit={limit}
+    parameters:
+      - name: limit
+        label: 分析対象数
+        required: false
+        default: "5"
