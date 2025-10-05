@@ -141,3 +141,36 @@ def test_generator_returns_fallback_when_quality_gate_enabled(monkeypatch):
     assert result.metadata.quality_report is not None
     assert result.metadata.quality_report.dialogue_lines >= 1
     assert result.metadata.quality_report.errors
+
+
+def test_generator_returns_backup_script_when_all_attempts_fail(monkeypatch):
+    responses = [
+        {"choices": [{"message": {"content": ""}}]},
+        {"choices": [{"message": {"content": ""}}]},
+    ]
+
+    monkeypatch.setattr(
+        settings.script_generation,
+        "quality_gate_llm_enabled",
+        True,
+        raising=False,
+    )
+
+    generator = StructuredScriptGenerator(client=DummyClient(responses), max_attempts=2)
+
+    result = generator.generate(
+        news_items=[
+            {
+                "title": "円相場が急伸",
+                "summary": "安全通貨への買いが強まり、一時1ドル=145円台まで円高が進行。",
+                "source": "ロイター",
+                "impact_level": "high",
+            }
+        ],
+        target_duration_minutes=5,
+    )
+
+    assert result.raw_response == ""
+    assert result.script.title.startswith("バックアップ台本")
+    assert len(result.script.dialogues) >= 24
+    assert result.metadata.quality_report.dialogue_lines >= 24

@@ -6,6 +6,7 @@ Each provider tries to synthesize audio and passes to the next provider on failu
 import logging
 import os
 import subprocess
+import time
 from abc import ABC, abstractmethod
 from io import BytesIO
 from typing import Optional
@@ -13,6 +14,7 @@ from typing import Optional
 import pyttsx3
 import requests
 from gtts import gTTS
+from requests import RequestException
 
 logger = logging.getLogger(__name__)
 
@@ -111,10 +113,18 @@ class ElevenLabsProvider(TTSProvider):
 class VoicevoxProvider(TTSProvider):
     """VOICEVOX Nemo TTS provider (free, local, high quality Japanese)."""
 
-    def __init__(self, port: int = 50121, speaker: int = 3, next_provider: Optional[TTSProvider] = None):
+    def __init__(
+        self,
+        port: int = 50121,
+        speaker: int = 3,
+        next_provider: Optional[TTSProvider] = None,
+        health_cooldown_seconds: int = 300,
+    ):
         super().__init__(next_provider)
         self.port = port
         self.speaker = speaker
+        self._health_cooldown_seconds = max(1, health_cooldown_seconds)
+        self._unhealthy_since: Optional[float] = None
 
     async def _try_synthesize(self, text: str, output_path: str, **kwargs) -> bool:
         # voice_configからvoicevox_speakerを取得（話者ごとに異なる声）
@@ -123,31 +133,81 @@ class VoicevoxProvider(TTSProvider):
 
         logger.debug(f"VOICEVOX synthesis: speaker_id={speaker_id}, text_length={len(text)}")
 
+        if self._is_in_cooldown():
+            logger.debug("Skipping VOICEVOX synthesis because server is marked unhealthy")
+            return False
+
         # Health check
-        health_response = requests.get(f"http://localhost:{self.port}/health", timeout=3)
-        if health_response.status_code != 200:
-            raise Exception("VOICEVOX server not healthy")
+        if not self._server_is_healthy():
+            return False
 
         # Generate audio query
         query_params = {"text": text, "speaker": speaker_id}
-        query_response = requests.post(f"http://localhost:{self.port}/audio_query", params=query_params, timeout=10)
+        try:
+            query_response = requests.post(
+                f"http://localhost:{self.port}/audio_query", params=query_params, timeout=10
+            )
+        except RequestException as exc:
+            self._mark_unhealthy(f"Audio query request failed: {exc}")
+            return False
 
         if query_response.status_code != 200:
-            raise Exception(f"Audio query failed: {query_response.status_code}")
+            self._mark_unhealthy(f"Audio query failed: {query_response.status_code}")
+            return False
 
         # Synthesize audio
         synthesis_params = {"speaker": speaker_id}
-        synthesis_response = requests.post(
-            f"http://localhost:{self.port}/synthesis", params=synthesis_params, json=query_response.json(), timeout=30
-        )
+        try:
+            synthesis_response = requests.post(
+                f"http://localhost:{self.port}/synthesis",
+                params=synthesis_params,
+                json=query_response.json(),
+                timeout=30,
+            )
+        except RequestException as exc:
+            self._mark_unhealthy(f"Synthesis request failed: {exc}")
+            return False
 
         if synthesis_response.status_code != 200:
-            raise Exception(f"Synthesis failed: {synthesis_response.status_code}")
+            self._mark_unhealthy(f"Synthesis failed: {synthesis_response.status_code}")
+            return False
 
         with open(output_path, "wb") as f:
             f.write(synthesis_response.content)
 
+        self._unhealthy_since = None
         return True
+
+    def _server_is_healthy(self) -> bool:
+        try:
+            health_response = requests.get(f"http://localhost:{self.port}/health", timeout=3)
+        except RequestException as exc:
+            self._mark_unhealthy(f"VOICEVOX health check failed: {exc}")
+            return False
+
+        if health_response.status_code != 200:
+            self._mark_unhealthy("VOICEVOX server not healthy")
+            return False
+
+        return True
+
+    def _is_in_cooldown(self) -> bool:
+        if self._unhealthy_since is None:
+            return False
+
+        elapsed = time.monotonic() - self._unhealthy_since
+        if elapsed < self._health_cooldown_seconds:
+            return True
+
+        self._unhealthy_since = None
+        return False
+
+    def _mark_unhealthy(self, reason: str) -> None:
+        if self._unhealthy_since is None:
+            logger.warning(f"✗ VOICEVOX unavailable: {reason}")
+        else:
+            logger.debug("VOICEVOX remains unavailable: %s", reason)
+        self._unhealthy_since = time.monotonic()
 
 
 class OpenAIProvider(TTSProvider):
