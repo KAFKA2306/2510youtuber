@@ -136,9 +136,8 @@ class RunContextFilter(logging.Filter):
         self.context.update({k: v for k, v in context.items() if v is not None})
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if not hasattr(record, "session_id"):
-            record.session_id = self.session_id
-        if self.run_id and not hasattr(record, "run_id"):
+        record.session_id = self.session_id
+        if self.run_id is not None:
             record.run_id = self.run_id
         for key, value in self.context.items():
             if not hasattr(record, key):
