@@ -258,6 +258,7 @@ prompts:
     analysis: analysis.yaml
     script_generation: script_generation.yaml
     quality_check: quality_check.yaml
+    prompt_defaults: prompt_defaults.yaml
 
 # ============================================
 # API設定

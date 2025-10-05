@@ -15,6 +15,7 @@ import httpx
 from .api_rotation import get_rotation_manager
 from .config import cfg
 from .llm_logging import llm_logging_context, record_llm_interaction
+from app.prompts import build_news_collection_prompt, get_news_collection_system_message
 
 logger = logging.getLogger(__name__)
 
@@ -92,57 +93,7 @@ class NewsCollector:
 
     def _adjust_prompt_for_mode(self, base_prompt: str, mode: str) -> str:
         """モードに応じてプロンプトを調整"""
-        mode_adjustments = {
-            "daily": """
-今日（{date}）の経済ニュースを中心に、以下の基準で選択してください：
-- 市場への影響度が高い
-- 投資家が注目している
-- 日本経済との関連性がある
-""",
-            "special": """
-特集記事として、より深掘りした分析を含めてください：
-- 背景情報を詳細に
-- 専門家の見解を含める
-- 将来的な影響を分析
-""",
-            "test": """
-テスト実行のため、簡潔で検証しやすい内容にしてください：
-- 項目数は2-3件
-- 確実に存在する情報源
-- 短時間で処理可能な内容
-""",
-        }
-
-        adjustment = mode_adjustments.get(mode, "")
-        current_date = datetime.now().strftime("%Y年%m月%d日")
-
-        full_prompt = f"""
-{base_prompt}
-
-{adjustment.format(date=current_date)}
-
-以下のJSON形式で厳密に回答してください：
-```json
-[
-  {{
-    "title": "ニュースのタイトル",
-    "url": "https://実在する出典URL",
-    "summary": "要約（200-300文字）",
-    "key_points": ["重要ポイント1", "重要ポイント2", "重要ポイント3"],
-    "source": "情報源名（例：日本経済新聞、Reuters、Bloomberg）",
-    "impact_level": "high/medium/low",
-    "category": "経済/金融/企業/国際/政策"
-  }}
-]
-```
-
-注意事項：
-- 必ず有効なJSONフォーマットで回答
-- URLは実在するものを使用
-- 信頼性の高いメディアからの情報を優先
-- 日付は{current_date}に近い最新情報
-"""
-        return full_prompt
+        return build_news_collection_prompt(base_prompt, mode)
 
     def _call_perplexity_with_rotation(self, prompt: str, max_attempts: int = 3) -> str:
         """キーローテーション対応Perplexity API呼び出し"""
@@ -159,7 +110,7 @@ class NewsCollector:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are an expert financial news analyst. Provide answers in JSON format as requested.",
+                        "content": get_news_collection_system_message(),
                     },
                     {"role": "user", "content": prompt},
                 ],

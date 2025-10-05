@@ -12,6 +12,10 @@ from app.align_subtitles import align_script_with_stt, export_srt
 from app.config import cfg
 from app.drive import upload_video_package
 from app.metadata import generate_youtube_metadata
+from app.prompts import (
+    get_default_news_collection_prompt,
+    get_default_script_generation_prompt,
+)
 from app.search_news import collect_news
 from app.services.file_archival import FileArchivalManager
 from app.services.media import MediaQAPipeline
@@ -80,16 +84,7 @@ class CollectNewsStep(WorkflowStep):
         return self._default_prompt()
 
     def _default_prompt(self) -> str:
-        return """
-今日の重要な経済ニュースを3-5件収集してください。以下の基準で選択してください：
-
-1. 市場への影響度が高い
-2. 投資家が注目している
-3. 日本経済との関連性がある
-4. 信頼性の高い情報源からの情報
-
-各ニュースについて、タイトル、要約、出典、重要ポイントを含めてください。
-"""
+        return get_default_news_collection_prompt()
 
 
 class GenerateScriptStep(WorkflowStep):
@@ -255,16 +250,7 @@ class GenerateScriptStep(WorkflowStep):
         return self._default_prompt()
 
     def _default_prompt(self) -> str:
-        return """
-提供されたニュース情報をもとに、経済専門家による対談形式の台本を作成してください。
-
-要件:
-- 田中氏（経済専門家）と鈴木氏（金融アナリスト）の対談形式
-- 専門的だが理解しやすい内容
-- 自然な会話の流れ
-- 出典情報を適切に言及
-- 視聴者にとって価値のある分析を含める
-"""
+        return get_default_script_generation_prompt()
 
 
 class GenerateVisualDesignStep(WorkflowStep):
