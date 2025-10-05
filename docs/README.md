@@ -80,24 +80,25 @@ uv run python3 -m app.main daily
 
 ## ドキュメント
 
-### コア
+### 運用ハンドブック
 
-- **[SETUP.md](SETUP.md)** - 環境構築（API keys, VOICEVOX, Google認証等）
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - システム構成・データフロー
-- **[FEATURES.md](FEATURES.md)** - 全機能の詳細ドキュメント
+- **[JA_OPERATIONS_GUIDE.md](JA_OPERATIONS_GUIDE.md)** - 環境構築、日次運用、障害対応を統合した日本語ガイド。
+- **[SETUP.md](SETUP.md)** / **[USER_MANUAL_JA.md](USER_MANUAL_JA.md)** / **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - 旧ドキュメント。現在は上記ハンドブックへのリダイレクト兼補足です。
 
-### API・設定
+### アーキテクチャ & 設計
 
-- **[API_REFERENCE.md](API_REFERENCE.md)** - API管理・レート制限・ローテーション
-- **[VOICEVOX.md](VOICEVOX.md)** - VOICEVOX設定・話者ID
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - システム構成・データフロー。
+- **[DETAILED_DESIGN_SPEC_JA.md](DETAILED_DESIGN_SPEC_JA.md)** - ユースケースとコンポーネント仕様。
+- **[TECHNICAL_REPORT_JA.md](TECHNICAL_REPORT_JA.md)** - 技術検証とパフォーマンス計測。
+- **[agent_requirement_review.md](agent_requirement_review.md)** - CrewAI エージェント要件レビュー。
 
-### その他
+### 機能・API・運用データ
 
-- **[README_CREWAI.md](README_CREWAI.md)** - CrewAI エージェント詳細
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - トラブルシューティング
-- **[FILE_ARCHIVAL.md](FILE_ARCHIVAL.md)** - ファイル管理システム
-- **[GOOGLE_SHEETS_SETUP.md](GOOGLE_SHEETS_SETUP.md)** - Google Sheets連携
-- **[README_METADATA_STORAGE.md](README_METADATA_STORAGE.md)** - メタデータストレージ
+- **[FEATURES.md](FEATURES.md)** - B-roll、フィードバックループなど機能別解説。
+- **[API_REFERENCE.md](API_REFERENCE.md)** - API 管理・レート制限・ローテーション。
+- **[DATA_MANAGEMENT.md](DATA_MANAGEMENT.md)** - ログやアーカイブの取り扱い方針。
+- **[README_CREWAI.md](README_CREWAI.md)** - CrewAI エージェント詳細と品質メトリクス。
+- **[VOICEVOX.md](VOICEVOX.md)** - VOICEVOX 設定・話者 ID 一覧。
 
 ## 使い方
 
