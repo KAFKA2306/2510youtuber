@@ -5,10 +5,13 @@ Each provider tries to synthesize audio and passes to the next provider on failu
 
 import logging
 import os
+import shutil
 import subprocess
+import sys
 import time
 from abc import ABC, abstractmethod
 from io import BytesIO
+from pathlib import Path
 from typing import Optional
 
 import pyttsx3
@@ -17,6 +20,84 @@ from gtts import gTTS
 from requests import RequestException
 
 logger = logging.getLogger(__name__)
+
+
+VOICEVOX_MANAGER_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "voicevox_manager.sh"
+_VOICEVOX_BOOTSTRAP_ATTEMPTED = False
+
+
+def _voicevox_auto_start_disabled() -> bool:
+    flag = os.getenv("VOICEVOX_AUTO_START", "").strip().lower()
+    return flag in {"0", "false", "no", "off"}
+
+
+def _maybe_bootstrap_voicevox() -> None:
+    global _VOICEVOX_BOOTSTRAP_ATTEMPTED
+
+    if _VOICEVOX_BOOTSTRAP_ATTEMPTED:
+        return
+
+    if _voicevox_auto_start_disabled():
+        _VOICEVOX_BOOTSTRAP_ATTEMPTED = True
+        logger.debug("VOICEVOX auto-start disabled via VOICEVOX_AUTO_START")
+        return
+
+    if "pytest" in sys.modules or os.getenv("PYTEST_CURRENT_TEST"):
+        _VOICEVOX_BOOTSTRAP_ATTEMPTED = True
+        logger.debug("Skipping VOICEVOX auto-start during pytest runs")
+        return
+
+    if not VOICEVOX_MANAGER_SCRIPT.exists():
+        _VOICEVOX_BOOTSTRAP_ATTEMPTED = True
+        logger.debug("VOICEVOX manager script not found at %s", VOICEVOX_MANAGER_SCRIPT)
+        return
+
+    if shutil.which("docker") is None:
+        _VOICEVOX_BOOTSTRAP_ATTEMPTED = True
+        logger.debug("Docker binary not available; skipping VOICEVOX auto-start")
+        return
+
+    _VOICEVOX_BOOTSTRAP_ATTEMPTED = True
+
+    try:
+        status = subprocess.run(
+            [str(VOICEVOX_MANAGER_SCRIPT), "status"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.debug("Failed to check VOICEVOX status via manager script: %s", exc)
+        return
+
+    if status.returncode == 0:
+        logger.debug("VOICEVOX Nemo already running (manager status succeeded)")
+        return
+
+    logger.info("VOICEVOX Nemo not running; attempting to start via manager script")
+
+    try:
+        start = subprocess.run(
+            [str(VOICEVOX_MANAGER_SCRIPT), "start"],
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning("Failed to start VOICEVOX Nemo via manager script: %s", exc)
+        return
+
+    if start.returncode != 0:
+        stderr = (start.stderr or "").strip()
+        stdout = (start.stdout or "").strip()
+        logger.warning(
+            "VOICEVOX Nemo start command exited with %s: %s",
+            start.returncode,
+            stderr or stdout,
+        )
+        return
+
+    logger.info("VOICEVOX Nemo start command executed successfully")
 
 
 class TTSProvider(ABC):
@@ -183,10 +264,12 @@ class VoicevoxProvider(TTSProvider):
             health_response = requests.get(f"http://localhost:{self.port}/health", timeout=3)
         except RequestException as exc:
             self._mark_unhealthy(f"VOICEVOX health check failed: {exc}")
+            _maybe_bootstrap_voicevox()
             return False
 
         if health_response.status_code != 200:
             self._mark_unhealthy("VOICEVOX server not healthy")
+            _maybe_bootstrap_voicevox()
             return False
 
         return True
