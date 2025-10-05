@@ -364,6 +364,12 @@ class StructuredScriptGenerator:
 
         dialogues = self._dialogues_from_validation(validation)
 
+        if dialogues:
+            try:
+                dialogues = self._ensure_min_dialogues(dialogues)
+            except ValueError:
+                dialogues = []
+
         if not dialogues:
             dialogues = self._fabricate_dialogues(response_text)
 
@@ -484,6 +490,18 @@ class StructuredScriptGenerator:
             distinct_speakers=sum(1 for count in validation.speaker_counts.values() if count > 0),
             warnings=[issue.message for issue in validation.warnings],
             errors=[issue.message for issue in validation.errors],
+        )
+
+        actual_dialogues = len(script.dialogues)
+        actual_nonempty = sum(1 for entry in script.dialogues if entry.line.strip())
+        actual_speakers = len({entry.speaker for entry in script.dialogues if entry.speaker})
+
+        report = report.copy(
+            update={
+                "dialogue_lines": max(report.dialogue_lines, actual_dialogues),
+                "total_nonempty_lines": max(report.total_nonempty_lines, actual_nonempty),
+                "distinct_speakers": max(report.distinct_speakers, actual_speakers),
+            }
         )
 
         return self._apply_roster_warnings(report)
