@@ -806,8 +806,11 @@ class VideoGenerator:
 
     def _run_ffmpeg(self, stream, *, description: str) -> None:
         """Execute an ffmpeg stream and emit detailed diagnostics on failure."""
+
+        cmd = self.ffmpeg_path or "ffmpeg"
+
         try:
-            ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
+            ffmpeg.run(stream, cmd=cmd, capture_stdout=True, capture_stderr=True)
         except ffmpeg.Error as error:
             stdout = self._decode_ffmpeg_output(error.stdout)
             stderr = self._decode_ffmpeg_output(error.stderr)
@@ -818,11 +821,11 @@ class VideoGenerator:
             if stderr:
                 logger.error("ffmpeg %s stderr:%s%s", description, os.linesep, stderr)
             else:
-                logger.error("ffmpeg %s failed without stderr output: %s", description, error)
+                logger.error("ffmpeg %s failed without stderr output using %s: %s", description, cmd, error)
 
             raise
         except Exception:
-            logger.exception("Unexpected ffmpeg failure while %s", description)
+            logger.exception("Unexpected ffmpeg failure while %s using %s", description, cmd)
             raise
 
     def _generate_fallback_video(self, audio_path: str, subtitle_path: str, title: str) -> str:

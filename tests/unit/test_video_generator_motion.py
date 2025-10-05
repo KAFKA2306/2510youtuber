@@ -88,3 +88,24 @@ def test_motion_background_stream_builds_filter(video_components):
     finally:
         if background_path and os.path.exists(background_path):
             os.remove(background_path)
+
+
+def test_run_ffmpeg_uses_resolved_binary(video_components, monkeypatch):
+    module, VideoGenerator = video_components
+    generator = VideoGenerator()
+    generator.ffmpeg_path = "/opt/tools/custom-ffmpeg"
+
+    captured = {}
+
+    def fake_run(stream, *, cmd=None, capture_stdout=None, capture_stderr=None):
+        captured["cmd"] = cmd
+        raise module.ffmpeg.Error("ffmpeg", b"", b"")
+
+    monkeypatch.setattr(module.ffmpeg, "run", fake_run)
+
+    stream = module.ffmpeg.input("color=c=black:size=16x16:duration=1", f="lavfi").output("out.mp4")
+
+    with pytest.raises(module.ffmpeg.Error):
+        generator._run_ffmpeg(stream, description="unit-test")
+
+    assert captured["cmd"] == generator.ffmpeg_path
