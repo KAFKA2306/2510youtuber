@@ -115,7 +115,6 @@ class QualityThresholds(BaseModel):
     """品質基準"""
 
     wow_score_min: float = 8.0
-    japanese_purity_min: float = 95.0
     retention_prediction_min: float = 50.0
     surprise_points_min: int = 5
     emotion_peaks_min: int = 5

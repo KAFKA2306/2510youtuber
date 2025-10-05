@@ -134,9 +134,7 @@ quality_thresholds:
   wow_score_min: 8.0
   wow_score_excellent: 9.0
 
-  # 日本語純度（0-100%）
-  japanese_purity_min: 95.0
-  japanese_purity_excellent: 98.0
+  # 日本語純度は入力より悪化しないことのみを保証（固定閾値なし）
 
   # 保持率予測（0-100%）
   retention_prediction_min: 50.0

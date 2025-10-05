@@ -423,15 +423,14 @@ python scripts/sync_to_sheets.py
 
 ### 概要
 
-生成されたスクリプトが95%以上日本語であることを保証します。
+生成過程で日本語純度が低下しないよう、自動的に改善・リグレッション防止を行います。
 
 ### 品質基準
 
 **config.yaml**:
 ```yaml
 quality_thresholds:
-  japanese_purity_min: 95.0        # 最低95%
-  japanese_purity_excellent: 98.0  # 優秀98%+
+  # 日本語純度は改善処理で元のスクリプトより悪化しないことのみ保証
 ```
 
 ### チェックポイント
@@ -466,7 +465,7 @@ cleaned = clean_subtitle_text(text)  # "これはテスト"
 **Agent 7: Japanese Purity Polisher**:
 - 英語メタデータ（"wow_score", "json"等）を除去
 - 自然な日本語に置換
-- 95%未満の場合はエラーとして処理
+- 改善結果が元の純度を下回る場合は自動的に元の原稿へロールバック
 
 ### 字幕統合
 

@@ -59,7 +59,7 @@ The main workflow in `app/main.py` executes these steps sequentially:
 
 1. **News Collection** (`search_news.py`) - Perplexity AI → NewsAPI → fallback dummy news
 2. **Script Generation** (`crew/flows.py`) - 7 CrewAI agents generate dialogue script
-3. **Script Quality Check** (`japanese_quality.py`) - Validates Japanese purity 95%+
+3. **Script Quality Check** (`japanese_quality.py`) - Prevents Japanese purity regression during polishing
 4. **Audio Synthesis** (`tts.py`) - ElevenLabs → VOICEVOX → OpenAI → gTTS → Coqui → pyttsx3
 5. **STT for Alignment** (`stt.py`) - Whisper transcription of generated audio
 6. **Subtitle Alignment** (`align_subtitles.py`) - Match script to actual audio timing
@@ -78,7 +78,7 @@ Located in `app/crew/`:
 4. **Script Writer** - Generates initial dialogue (3 speakers: 田中, 鈴木, ナレーター)
 5. **Engagement Optimizer** - Maximizes retention with pattern interrupts
 6. **Quality Guardian** - Validates WOW score 8.0+, metrics, pacing
-7. **Japanese Purity Polisher** - Removes English artifacts, ensures 95%+ Japanese
+7. **Japanese Purity Polisher** - Removes English artifacts while ensuring purity never degrades
 
 Agents run in sequence, with parallel execution for agents 1-3 when `crew.parallel_analysis: true`.
 
@@ -167,7 +167,7 @@ archived = manager.archive_workflow_files(
 ### Japanese Purity Check
 `app/japanese_quality.py` enforces Japanese-only output:
 
-- **Target**: 95%+ Japanese characters (configurable in `config.yaml`)
+- **Policy**: Automatically prevents the polishing step from producing text with lower Japanese purity than the input
 - **Phase 3 fix**: Agent 6-7 prompts modified to prevent output contamination with English metadata ("json", "wow_score", "Task", etc.)
 - **Enforcement point**: After Agent 7 (Japanese Purity Polisher) completes
 
@@ -206,7 +206,6 @@ Edit `config.yaml`:
 ```yaml
 quality_thresholds:
   wow_score_min: 8.0              # Decrease if too strict
-  japanese_purity_min: 95.0       # Minimum Japanese %
   retention_prediction_min: 50.0  # Target viewer retention
 ```
 

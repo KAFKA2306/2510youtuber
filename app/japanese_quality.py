@@ -239,14 +239,39 @@ class JapaneseQualityChecker:
             # 改善後の品質を再チェック
             new_quality = self.check_script_japanese_purity(improved_script)
 
-            logger.info(f"Script improved: {quality_result['purity_score']:.1f} -> {new_quality['purity_score']:.1f}")
+            original_score = quality_result["purity_score"]
+            attempted_score = new_quality["purity_score"]
+
+            # 元の文章より悪化した場合はリグレッションを防ぐ
+            if attempted_score + 1e-6 < original_score:
+                logger.warning(
+                    "Script improvement lowered purity (%.1f -> %.1f). Reverting to original script.",
+                    original_score,
+                    attempted_score,
+                )
+                return {
+                    "success": True,
+                    "improved_script": script,
+                    "changes_made": False,
+                    "original_score": original_score,
+                    "new_score": original_score,
+                    "issues_fixed": 0,
+                    "regression_prevented": True,
+                    "attempted_score": attempted_score,
+                }
+
+            logger.info(
+                "Script improved: %.1f -> %.1f",
+                original_score,
+                attempted_score,
+            )
 
             return {
                 "success": True,
                 "improved_script": improved_script,
                 "changes_made": True,
-                "original_score": quality_result["purity_score"],
-                "new_score": new_quality["purity_score"],
+                "original_score": original_score,
+                "new_score": attempted_score,
                 "issues_fixed": len(quality_result["issues"]) - len(new_quality["issues"]),
             }
 
