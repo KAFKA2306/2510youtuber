@@ -72,6 +72,34 @@
         params = { ...params, [key]: value };
     }
 
+    function handleEnumChange(event: Event, key: string): void {
+        const target = event.currentTarget as HTMLSelectElement | null;
+        if (target) {
+            updateParam(key, target.value);
+        }
+    }
+
+    function handleBooleanChange(event: Event, key: string): void {
+        const target = event.currentTarget as HTMLInputElement | null;
+        if (target) {
+            updateParam(key, target.checked);
+        }
+    }
+
+    function handleNumberInput(event: Event, key: string): void {
+        const target = event.currentTarget as HTMLInputElement | null;
+        if (target) {
+            updateParam(key, parseNumber(target.value));
+        }
+    }
+
+    function handleTextInput(event: Event, key: string): void {
+        const target = event.currentTarget as HTMLInputElement | HTMLTextAreaElement | null;
+        if (target) {
+            updateParam(key, target.value);
+        }
+    }
+
     function asString(value: unknown): string {
         if (value === null || value === undefined) {
             return '';
@@ -141,7 +169,7 @@
                                 <select
                                     id={`param-${key}`}
                                     value={asString(params[key])}
-                                    on:change={(event) => updateParam(key, (event.target as HTMLSelectElement).value)}
+                                    on:change={(event) => handleEnumChange(event, key)}
                                 >
                                     {#each schema.enum as choice}
                                         <option value={choice}>{choice}</option>
@@ -153,7 +181,7 @@
                                         id={`param-${key}`}
                                         type="checkbox"
                                         checked={Boolean(params[key])}
-                                        on:change={(event) => updateParam(key, (event.target as HTMLInputElement).checked)}
+                                        on:change={(event) => handleBooleanChange(event, key)}
                                     />
                                     <span>有効にする</span>
                                 </label>
@@ -162,14 +190,14 @@
                                     id={`param-${key}`}
                                     type="number"
                                     value={asString(params[key])}
-                                    on:input={(event) => updateParam(key, parseNumber((event.target as HTMLInputElement).value))}
+                                    on:input={(event) => handleNumberInput(event, key)}
                                 />
                             {:else}
                                 <input
                                     id={`param-${key}`}
                                     type="text"
                                     value={asString(params[key])}
-                                    on:input={(event) => updateParam(key, (event.target as HTMLInputElement).value)}
+                                    on:input={(event) => handleTextInput(event, key)}
                                 />
                             {/if}
                         </li>
