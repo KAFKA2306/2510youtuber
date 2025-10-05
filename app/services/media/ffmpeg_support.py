@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
+from imageio_ffmpeg import get_ffmpeg_exe
 from pydub import AudioSegment
 
 logger = logging.getLogger(__name__)
@@ -83,7 +84,20 @@ def _configure_pydub(binary: str) -> None:
 def ensure_ffmpeg_tooling(requested_path: Optional[str] = None) -> str:
     """Validate FFmpeg availability and align AudioSegment with the binary."""
 
-    resolved = _resolve_ffmpeg_path(requested_path)
+    try:
+        resolved = _resolve_ffmpeg_path(requested_path)
+    except FileNotFoundError:
+        candidate = (requested_path or "").strip()
+        if candidate and candidate.lower() != "ffmpeg":
+            raise
+
+        try:
+            resolved = get_ffmpeg_exe()
+        except Exception as exc:  # pragma: no cover - defensive guard
+            raise FileNotFoundError("FFmpeg binary could not be resolved via imageio-ffmpeg") from exc
+
+        logger.info("FFmpeg binary resolved via imageio-ffmpeg at %s", resolved)
+
     _verify_ffmpeg_binary(resolved)
     _configure_pydub(resolved)
     logger.debug("FFmpeg configured for AudioSegment at %s", resolved)
