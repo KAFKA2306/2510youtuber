@@ -88,6 +88,7 @@ uv run python3 -m app.main daily
 ### アーキテクチャ & 設計
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - システム構成・データフロー。
+- **[GUI_SETUP.md](GUI_SETUP.md)** - GUIバックエンドのセットアップとAPIエンドポイントの使い方。
 - **[agent_requirement_review.md](agent_requirement_review.md)** - CrewAI エージェント要件レビュー。
 
 ### 機能・API・運用データ
