@@ -334,13 +334,36 @@ class StructuredScriptGenerator:
     @staticmethod
     def _find_matching_brace(text: str) -> Optional[int]:
         depth = 0
+        in_string = False
+        escape = False
+
         for idx, char in enumerate(text):
+            if in_string:
+                if escape:
+                    escape = False
+                    continue
+
+                if char == "\\":
+                    escape = True
+                    continue
+
+                if char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+                continue
+
             if char == "{":
                 depth += 1
-            elif char == "}":
+                continue
+
+            if char == "}":
                 depth -= 1
                 if depth == 0:
                     return idx
+
         return None
 
     @staticmethod
