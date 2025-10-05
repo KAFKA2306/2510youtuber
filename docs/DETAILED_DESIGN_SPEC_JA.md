@@ -62,7 +62,7 @@
 
 ## 5. 設定と外部依存
 - **設定読み込み**: `app/config/settings.py` が `config.yaml` と `.env` を統合し、Pydanticモデルで構造化する。話者・動画・QA設定などが明示的フィールドとして定義され、バリデーションで環境変数から音声IDを補完する。【F:app/config/settings.py†L1-L120】
-- **暗黙的依存**: Geminiモデル名や話者数など、設定が成立していることを `StructuredScriptGenerator` が前提としており、2人以上の話者がいなければ初期化時にエラーを投げる。【F:app/services/script/generator.py†L55-L88】
+- **暗黙的依存**: Geminiモデル名や話者数など、設定が成立していることを `StructuredScriptGenerator` が前提とする点は変わらないが、話者が不足しても `SpeakerRoster` がプレースホルダーを補完しつつ警告を出すため、初期化エラーではなく品質警告として扱われる。【F:app/services/script/generator.py†L55-L151】
 - **外部サービス**: Perplexity/Gemini/YouTube/Google Drive/VOICEVOX/FFmpeg/Pydub 等を利用。APIキーは `initialize_api_infrastructure` でローテーション管理を初期化する。【F:app/main.py†L24-L37】【F:app/search_news.py†L13-L78】
 
 ## 6. エラーハンドリング戦略
