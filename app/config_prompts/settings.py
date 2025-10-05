@@ -140,9 +140,9 @@ class AppSettings(BaseModel):
             config = yaml.safe_load(f)
 
         api_keys = {
-            "gemini": os.getenv("GEMINI_API_KEY"),
-            "elevenlabs": os.getenv("ELEVENLABS_API_KEY"),
-            "youtube": os.getenv("YOUTUBE_CLIENT_SECRET"),
+            "gemini": os.getenv("GEMINI_API_KEY") or "",
+            "elevenlabs": os.getenv("ELEVENLABS_API_KEY") or "",
+            "youtube": os.getenv("YOUTUBE_CLIENT_SECRET") or "",
         }
 
         config["api_keys"] = api_keys

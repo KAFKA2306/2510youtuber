@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from typing import Any, Dict, List, Optional
 
 import yaml
@@ -345,6 +346,15 @@ class AppSettings(BaseModel):
             config["enable_stock_footage"] = config["stock_footage"].get("enabled", False)
             config["stock_footage_clips_per_video"] = config["stock_footage"].get("clips_per_video", 5)
             config["ffmpeg_path"] = config["stock_footage"].get("ffmpeg_path", "ffmpeg")
+
+        ffmpeg_candidate = config.get("ffmpeg_path", "ffmpeg")
+        if not shutil.which(ffmpeg_candidate):
+            try:
+                import imageio_ffmpeg
+            except ImportError:
+                pass
+            else:
+                config["ffmpeg_path"] = imageio_ffmpeg.get_ffmpeg_exe()
 
         enable_stock_env = os.getenv("ENABLE_STOCK_FOOTAGE")
         if enable_stock_env is not None:

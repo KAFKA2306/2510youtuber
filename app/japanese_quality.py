@@ -419,14 +419,27 @@ def check_script_japanese_purity(script: str) -> Dict[str, Any]:
     """原稿の日本語純度チェック（簡易関数）"""
     if japanese_quality_checker:
         return japanese_quality_checker.check_script_japanese_purity(script)
-    return {"is_pure_japanese": True, "issues": [], "purity_score": 100.0}
+    return {
+        "is_pure_japanese": True,
+        "issues": [],
+        "purity_score": 100.0,
+        "english_ratio": 0.0,
+        "total_issues": 0,
+    }
 
 
 def improve_japanese_quality(script: str) -> Dict[str, Any]:
     """日本語品質改善（簡易関数）"""
     if japanese_quality_checker:
         return japanese_quality_checker.improve_japanese_quality(script)
-    return {"success": True, "improved_script": script, "changes_made": False}
+    return {
+        "success": True,
+        "improved_script": script,
+        "changes_made": False,
+        "original_score": 100.0,
+        "new_score": 100.0,
+        "issues_fixed": 0,
+    }
 
 
 def validate_subtitle_text(subtitle_text: str) -> bool:
