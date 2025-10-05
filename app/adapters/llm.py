@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from app.api_rotation import get_rotation_manager
 from app.config.settings import settings
+from app.llm_logging import record_llm_interaction
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -191,7 +192,26 @@ class CrewAIGeminiLLM(BaseLLM):
             generation_args["stop_sequences"] = self.stop
 
         response = self._client.completion(messages=payload, **generation_args)
-        return _extract_message_text(response)
+        text = _extract_message_text(response)
+
+        try:
+            record_llm_interaction(
+                provider="gemini",
+                model=self.model,
+                prompt=payload,
+                response={
+                    "raw": response,
+                    "text": text,
+                },
+                metadata={
+                    "generation_args": generation_args or None,
+                    "client": "CrewAIGeminiLLM",
+                },
+            )
+        except Exception:  # pragma: no cover - logging failures must not break completion
+            _LOGGER.debug("Failed to record CrewAI Gemini interaction", exc_info=True)
+
+        return text
 
     def supports_stop_words(self) -> bool:  # pragma: no cover - simple delegation
         return True
