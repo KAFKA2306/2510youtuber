@@ -49,11 +49,8 @@ from .workflow import (
 logger = logging.getLogger(__name__)
 
 # Initialize API infrastructure once at module import
-try:
-    initialize_api_infrastructure()
-    logger.info("API infrastructure initialized at startup")
-except Exception as e:
-    logger.warning(f"Failed to initialize API infrastructure: {e}")
+initialize_api_infrastructure()
+logger.info("API infrastructure initialized at startup")
 
 
 class YouTubeWorkflow:
@@ -180,11 +177,8 @@ class YouTubeWorkflow:
 
                 video_url = self.context.get("video_url")
                 if video_url:
-                    try:
-                        metadata_storage.update_video_stats(run_id=self.run_id, video_url=video_url)
-                        logger.info("Updated metadata storage with video URL")
-                    except Exception as e:
-                        logger.warning(f"Failed to update video URL in storage: {e}")
+                    metadata_storage.update_video_stats(run_id=self.run_id, video_url=video_url)
+                    logger.info("Updated metadata storage with video URL")
 
                 execution_time = (datetime.now() - start_time).total_seconds()
                 result = self._compile_final_result(final_results, execution_time)
@@ -262,25 +256,18 @@ class YouTubeWorkflow:
 
     def _initialize_run(self, mode: str) -> str:
         """ワークフロー実行IDを初期化"""
-        try:
-            if sheets_manager:
-                run_id = sheets_manager.create_run(mode)
-                logger.info(f"Initialized workflow run: {run_id}")
-                if self._log_session:
-                    self._log_session.bind_workflow_run(run_id, mode=mode)
-                return run_id
-            else:
-                run_id = f"local_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                logger.warning(f"Sheets not available, using local run ID: {run_id}")
-                if self._log_session:
-                    self._log_session.bind_workflow_run(run_id, mode=mode)
-                return run_id
-        except Exception as e:
-            logger.error(f"Failed to initialize run: {e}")
-            fallback_run_id = f"fallback_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if sheets_manager:
+            run_id = sheets_manager.create_run(mode)
+            logger.info(f"Initialized workflow run: {run_id}")
             if self._log_session:
-                self._log_session.bind_workflow_run(fallback_run_id, mode=mode)
-            return fallback_run_id
+                self._log_session.bind_workflow_run(run_id, mode=mode)
+            return run_id
+
+        run_id = f"local_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        logger.warning(f"Sheets not available, using local run ID: {run_id}")
+        if self._log_session:
+            self._log_session.bind_workflow_run(run_id, mode=mode)
+        return run_id
 
     async def _handle_workflow_failure(self, step_name: str, result: Any) -> Dict[str, Any]:
         """ステップ失敗時の処理"""
@@ -364,10 +351,7 @@ class YouTubeWorkflow:
         )
 
         # Log to feedback system
-        try:
-            metadata_storage.log_execution(workflow_result)
-        except Exception as e:
-            logger.warning(f"Failed to log execution to feedback system: {e}")
+        metadata_storage.log_execution(workflow_result)
 
         # Return dict for backward compatibility
         result = {
@@ -532,8 +516,6 @@ class YouTubeWorkflow:
         cleaned_count = 0
         for file_path in self.context.generated_files:
             try:
-                import os
-
                 if os.path.exists(file_path):
                     os.remove(file_path)
                     cleaned_count += 1

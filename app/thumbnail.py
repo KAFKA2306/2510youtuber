@@ -10,6 +10,7 @@ YouTube動画用の魅力的なサムネイル画像を自動生成します。
 - 自動切り替え機能
 """
 
+import importlib.util
 import logging
 import os
 import re
@@ -20,12 +21,13 @@ from typing import Any, Dict, List
 
 from app.config.paths import ProjectPaths
 
-try:
+_PIL_SPEC = importlib.util.find_spec("PIL")
+if _PIL_SPEC:
     from PIL import Image, ImageDraw, ImageEnhance, ImageFont
+else:  # pragma: no cover - optional dependency
+    Image = ImageDraw = ImageEnhance = ImageFont = None  # type: ignore[assignment]
 
-    HAS_PIL = True
-except ImportError:
-    HAS_PIL = False
+HAS_PIL = _PIL_SPEC is not None
 
 logger = logging.getLogger(__name__)
 

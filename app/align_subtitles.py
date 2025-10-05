@@ -4,6 +4,7 @@
 これにより字幕の精度を大幅に向上させます。
 """
 
+import importlib.util
 import logging
 import re
 from datetime import timedelta
@@ -13,13 +14,13 @@ from rapidfuzz import fuzz
 
 logger = logging.getLogger(__name__)
 
-# 日本語品質チェックのインポート
-try:
-    from .japanese_quality import clean_subtitle_text, validate_subtitle_text
+_JAPANESE_QUALITY_SPEC = importlib.util.find_spec("app.japanese_quality")
+if _JAPANESE_QUALITY_SPEC:
+    from app.japanese_quality import clean_subtitle_text, validate_subtitle_text
 
     HAS_JAPANESE_QUALITY_CHECK = True
     logger.info("Japanese quality check available for subtitles")
-except ImportError:
+else:  # pragma: no cover - optional dependency
     HAS_JAPANESE_QUALITY_CHECK = False
     logger.warning("Japanese quality check not available for subtitles")
 

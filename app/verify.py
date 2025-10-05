@@ -20,6 +20,8 @@ import logging
 
 from dotenv import load_dotenv
 
+from app.adapters.llm import get_crewai_gemini_llm
+
 # ロギング設定
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -214,8 +216,6 @@ class SystemVerifier:
         logger.info("8. Checking CrewAI LLM capabilities...")
 
         try:
-            from app.adapters.llm import get_crewai_gemini_llm
-
             llm = get_crewai_gemini_llm()
         except Exception as exc:  # pragma: no cover - defensive diagnostics
             message = f"Failed to instantiate CrewAI Gemini LLM: {exc}"

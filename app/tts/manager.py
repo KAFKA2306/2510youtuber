@@ -4,6 +4,7 @@ VOICEVOXを最優先とした複数のTTSプロバイダーで台本テキスト
 並列処理とチャンク分割により高速化を実現します。
 """
 
+import importlib.util
 import logging
 import os
 import re
@@ -21,11 +22,11 @@ from app.services.script.validator import DialogueEntry
 
 from .providers import create_tts_chain
 
-# Conditional import for openai
-try:
+_OPENAI_SPEC = importlib.util.find_spec("openai")
+if _OPENAI_SPEC:
     from openai import OpenAI
-except ImportError:
-    OpenAI = None
+else:  # pragma: no cover - optional dependency
+    OpenAI = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
