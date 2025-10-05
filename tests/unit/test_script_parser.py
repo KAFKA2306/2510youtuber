@@ -34,6 +34,27 @@ def test_tts_speaker_extraction(sample_script):
 
 
 @pytest.mark.unit
+def test_tts_text_splitting_with_annotations(sample_script_with_annotations):
+    """字幕やセクション見出し付きスクリプトの分割を確認"""
+    from app.tts import tts_manager
+
+    chunks = tts_manager.split_text_for_tts(sample_script_with_annotations)
+
+    assert len(chunks) >= 6, "チャンク数が想定より少ない"
+
+    speakers = [chunk["speaker"] for chunk in chunks]
+    assert speakers[0] == "ナレーター"
+    assert speakers.count("ナレーター") == 2
+    assert {"武宏", "つむぎ"}.issubset(set(speakers))
+
+    assert any(
+        chunk["speaker"] == "武宏" and "政策金利引き上げ" in chunk["text"] and chunk["text"].endswith(")")
+        for chunk in chunks
+    ), "字幕行が武宏のチャンクとして扱われていません"
+    assert any("## 本編" in chunk["text"] for chunk in chunks), "セクション見出しがチャンクに含まれていません"
+
+
+@pytest.mark.unit
 def test_tts_empty_script():
     """空のスクリプトを処理できるか確認"""
     from app.tts import tts_manager
