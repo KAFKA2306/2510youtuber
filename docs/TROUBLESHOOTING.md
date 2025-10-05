@@ -1,11 +1,11 @@
 # トラブルシューティングガイド（統合版へのリダイレクト）
 
-> **更新:** 障害対応フローと既知のエラーは [JA_OPERATIONS_GUIDE.md](JA_OPERATIONS_GUIDE.md) の **5. トラブルシューティング** に統合しました。
+> **更新:** 障害対応フローと既知のエラーは [JAPANESE_MASTER_GUIDE.md](JAPANESE_MASTER_GUIDE.md) の **4. 品質保証とトラブルシューティング** に統合しました。
 >
-> - 典型的な症状と対処表 → **5.1 典型的な症状**
-> - VideoGenerator の根本原因分析 → **5.2 VideoGenerator で頻発する根本原因**
-> - QA ゲート／API リトライの運用ノウハウ → **4. 品質保証と監視ポイント**
+> - 典型的な症状と対処表 → **4.2 典型的な症状と対処**
+> - VideoGenerator の根本原因分析 → **4.3 VideoGenerator の根本原因**
+> - QA ゲート／API リトライの運用ノウハウ → **4.1 監視ポイント** および **4.4 リトライ戦略**
 >
 > Anthropic や Gemini API への一時的なワークアラウンドなど、過去のメモは Git 履歴（`docs/TROUBLESHOOTING.md`）で参照できます。
 
-アップデート後は JA_OPERATIONS_GUIDE.md を障害対応の基準ドキュメントとして活用してください。
+アップデート後は JAPANESE_MASTER_GUIDE.md を障害対応の基準ドキュメントとして活用してください。

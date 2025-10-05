@@ -82,14 +82,12 @@ uv run python3 -m app.main daily
 
 ### 運用ハンドブック
 
-- **[JA_OPERATIONS_GUIDE.md](JA_OPERATIONS_GUIDE.md)** - 環境構築、日次運用、障害対応を統合した日本語ガイド。
-- **[SETUP.md](SETUP.md)** / **[USER_MANUAL_JA.md](USER_MANUAL_JA.md)** / **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - 旧ドキュメント。現在は上記ハンドブックへのリダイレクト兼補足です。
+- **[JAPANESE_MASTER_GUIDE.md](JAPANESE_MASTER_GUIDE.md)** - 環境構築・日次運用・詳細設計・障害対応を統合した日本語ガイド。
+- **[SETUP.md](SETUP.md)** / **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - 旧ドキュメント。現在は統合ガイドへのリダイレクト兼補足です。
 
 ### アーキテクチャ & 設計
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - システム構成・データフロー。
-- **[DETAILED_DESIGN_SPEC_JA.md](DETAILED_DESIGN_SPEC_JA.md)** - ユースケースとコンポーネント仕様。
-- **[TECHNICAL_REPORT_JA.md](TECHNICAL_REPORT_JA.md)** - 技術検証とパフォーマンス計測。
 - **[agent_requirement_review.md](agent_requirement_review.md)** - CrewAI エージェント要件レビュー。
 
 ### 機能・API・運用データ
