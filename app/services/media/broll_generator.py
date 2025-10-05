@@ -11,6 +11,8 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional
 
+from app.services.media.ffmpeg_support import ensure_ffmpeg_tooling
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,21 +25,7 @@ class BRollGenerator:
         Args:
             ffmpeg_path: Path to ffmpeg executable
         """
-        self.ffmpeg_path = ffmpeg_path
-        self._verify_ffmpeg()
-
-    def _verify_ffmpeg(self):
-        """Verify ffmpeg is available."""
-        try:
-            subprocess.run(
-                [self.ffmpeg_path, "-version"],
-                capture_output=True,
-                check=True,
-                timeout=5,
-            )
-            logger.info("FFmpeg verified successfully")
-        except Exception as e:
-            logger.warning(f"FFmpeg verification failed: {e}")
+        self.ffmpeg_path = ensure_ffmpeg_tooling(ffmpeg_path)
 
     def create_broll_sequence(
         self,

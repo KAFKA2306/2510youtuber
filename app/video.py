@@ -19,6 +19,7 @@ from app.config.paths import ProjectPaths
 from app.config.settings import settings
 from app.services.file_archival import FileArchivalManager
 from app.utils import FileUtils
+from app.services.media.ffmpeg_support import ensure_ffmpeg_tooling
 
 from .background_theme import BackgroundTheme, get_theme_manager
 
@@ -44,6 +45,7 @@ class VideoGenerator:
 
         # Initialize file archival manager
         self.archival_manager = FileArchivalManager()
+        self.ffmpeg_path = ensure_ffmpeg_tooling(settings.ffmpeg_path)
 
         logger.info("Video generator initialized with theme management and stock footage support")
 
@@ -547,7 +549,7 @@ class VideoGenerator:
                 pixabay_api_key=settings.pixabay_api_key,
             )
             self._visual_matcher = VisualMatcher()
-            self._broll_generator = BRollGenerator(ffmpeg_path=settings.ffmpeg_path)
+            self._broll_generator = BRollGenerator(ffmpeg_path=self.ffmpeg_path)
 
     def _generate_with_stock_footage(
         self,
