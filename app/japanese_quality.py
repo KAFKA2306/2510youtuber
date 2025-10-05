@@ -11,6 +11,8 @@ from typing import Any, Dict, List
 import google.generativeai as genai
 
 from app.config.settings import settings
+from app.llm_logging import llm_logging_context, record_llm_interaction
+from app.constants.prompts import JAPANESE_ALLOWED_ECONOMIC_ACRONYMS, JAPANESE_ALLOWED_PATTERNS
 
 logger = logging.getLogger(__name__)
 
@@ -23,66 +25,10 @@ class JapaneseQualityChecker:
         self._setup_client()
 
         # 許可される英数字パターン（数値、パーセント、単位など）
-        self.allowed_patterns = [
-            r"\d+",  # 数字
-            r"\d+%",  # パーセント
-            r"\d+円",  # 円
-            r"\d+ドル",  # ドル
-            r"\d+年",  # 年
-            r"\d+月",  # 月
-            r"\d+日",  # 日
-            r"GDP",  # 許可される略語
-            r"AI",
-            r"IT",
-            r"IoT",
-            r"DX",
-        ]
+        self.allowed_patterns = list(JAPANESE_ALLOWED_PATTERNS)
 
         # 経済ニュースで許容される英語アクロニム
-        self.allowed_economic_acronyms = {
-            "Fed",
-            "QE",
-            "GDP",
-            "CPI",
-            "PPI",
-            "ECB",
-            "BOJ",
-            "IMF",
-            "OECD",
-            "WTO",
-            "OPEC",
-            "G7",
-            "G20",
-            "BRICS",
-            "ASEAN",
-            "ETF",
-            "REIT",
-            "ESG",
-            "IPO",
-            "M&A",
-            "CEO",
-            "CFO",
-            "CTO",
-            "AI",
-            "IT",
-            "DX",
-            "IoT",
-            "API",
-            "SaaS",
-            "FinTech",
-            "VC",
-            "PE",
-            "ROE",
-            "ROI",
-            "PER",
-            "PBR",
-            "EPS",
-            "FOMC",
-            "RBNZ",
-            "SNB",
-            "BOE",
-            "RBA",
-        }
+        self.allowed_economic_acronyms = set(JAPANESE_ALLOWED_ECONOMIC_ACRONYMS)
 
     def _setup_client(self):
         """Gemini APIクライアントを初期化"""
@@ -94,6 +40,9 @@ class JapaneseQualityChecker:
                 logger.info("Japanese quality checker initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize quality checker: {e}")
+
+    def _model_identifier(self) -> str:
+        return getattr(self.client, "model_name", None) or getattr(self.client, "_model", None) or "gemini"
 
     def check_script_japanese_purity(self, script: str) -> Dict[str, Any]:
         """原稿の日本語純度をチェック
@@ -233,8 +182,19 @@ class JapaneseQualityChecker:
 修正後の台本のみを出力してください（説明文は不要）。
 """
 
-            response = self.client.generate_content(improvement_prompt)
-            improved_script = response.text.strip()
+            with llm_logging_context(component="japanese_quality", action="improve"):
+                response = self.client.generate_content(improvement_prompt)
+                improved_script = response.text.strip()
+                try:
+                    record_llm_interaction(
+                        provider="gemini",
+                        model=self._model_identifier(),
+                        prompt=improvement_prompt,
+                        response={"text": improved_script},
+                        metadata={"action": "improve"},
+                    )
+                except Exception:  # pragma: no cover - diagnostics only
+                    logger.debug("Failed to log Japanese quality improvement interaction", exc_info=True)
 
             # 改善後の品質を再チェック
             new_quality = self.check_script_japanese_purity(improved_script)
@@ -400,8 +360,19 @@ class JapaneseQualityChecker:
 3. [具体的な改善提案3]
 """
 
-            response = self.client.generate_content(evaluation_prompt)
-            result_text = response.text.strip()
+            with llm_logging_context(component="japanese_quality", action="evaluate"):
+                response = self.client.generate_content(evaluation_prompt)
+                result_text = response.text.strip()
+                try:
+                    record_llm_interaction(
+                        provider="gemini",
+                        model=self._model_identifier(),
+                        prompt=evaluation_prompt,
+                        response={"text": result_text},
+                        metadata={"action": "evaluate"},
+                    )
+                except Exception:  # pragma: no cover - diagnostics only
+                    logger.debug("Failed to log Japanese quality evaluation interaction", exc_info=True)
 
             # スコアを抽出
             clarity_match = re.search(r"明瞭性[：:]\s*(\d+)", result_text)

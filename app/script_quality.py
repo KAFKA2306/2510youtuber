@@ -14,6 +14,12 @@ from typing import Any, Dict, List
 import google.generativeai as genai
 
 from .config import cfg
+from .llm_logging import llm_logging_context, record_llm_interaction
+from app.constants.prompts import (
+    JAPANESE_DIALOGUE_FORMAT,
+    JAPANESE_LANGUAGE_RULES,
+    PURE_JAPANESE_DIRECTIVE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +31,9 @@ class ThreeStageScriptGenerator:
         self.client = None
         self._setup_client()
         self.quality_threshold = 7.0  # 10点満点で7点以上を合格とする
+
+    def _model_identifier(self) -> str:
+        return getattr(self.client, "model_name", None) or getattr(self.client, "_model", None) or "gemini"
 
     def _setup_client(self):
         """Gemini APIクライアントを初期化"""
@@ -115,6 +124,7 @@ class ThreeStageScriptGenerator:
 
         try:
             news_summary = self._format_news_for_script(news_items)
+            language_rules = "\n".join(f"- {rule}" for rule in JAPANESE_LANGUAGE_RULES)
 
             draft_prompt = f"""
 {base_prompt}
@@ -136,22 +146,29 @@ class ThreeStageScriptGenerator:
 - 自然で楽しい会話の流れを保つ
 
 【言語に関する重要な指示】
-- すべての内容を純粋な日本語で記述してください
-- 英語の単語や表現を使用しないでください
-- 専門用語は理解しやすい日本語で説明してください
-- AI、GDP、ITなどの一般的な略語のみ使用可能
+{language_rules}
 
 【台本フォーマット】
-田中: [発言内容]
-鈴木: [発言内容]
+{JAPANESE_DIALOGUE_FORMAT}
 
 現在の日時: {datetime.now().strftime("%Y年%m月%d日")}
 
 視聴者が最後まで楽しく見られる、価値ある台本を作成してください。
 """
 
-            response = self.client.generate_content(draft_prompt)
-            draft_script = response.text.strip()
+            with llm_logging_context(component="script_generation", stage="stage1"):
+                response = self.client.generate_content(draft_prompt)
+                draft_script = response.text.strip()
+                try:
+                    record_llm_interaction(
+                        provider="gemini",
+                        model=self._model_identifier(),
+                        prompt=draft_prompt,
+                        response={"text": draft_script},
+                        metadata={"stage": "stage1", "target_duration": target_duration},
+                    )
+                except Exception:  # pragma: no cover - diagnostics only
+                    logger.debug("Failed to log stage1 script generation interaction", exc_info=True)
 
             logger.info(f"Stage 1 completed: {len(draft_script)} characters")
             return {"success": True, "draft": draft_script, "length": len(draft_script)}
@@ -204,8 +221,19 @@ class ThreeStageScriptGenerator:
 2. [優れている点2]
 """
 
-            response = self.client.generate_content(review_prompt)
-            review_text = response.text.strip()
+            with llm_logging_context(component="script_generation", stage="stage2"):
+                response = self.client.generate_content(review_prompt)
+                review_text = response.text.strip()
+                try:
+                    record_llm_interaction(
+                        provider="gemini",
+                        model=self._model_identifier(),
+                        prompt=review_prompt,
+                        response={"text": review_text},
+                        metadata={"stage": "stage2"},
+                    )
+                except Exception:  # pragma: no cover - diagnostics only
+                    logger.debug("Failed to log stage2 review interaction", exc_info=True)
 
             # レビュー結果から品質スコアを抽出
             quality_score = self._extract_quality_score(review_text)
@@ -264,17 +292,27 @@ class ThreeStageScriptGenerator:
 3. 視聴者がより楽しめる内容にする
 4. 自然な会話の流れを保つ
 5. 目標時間: {target_duration}分（約{target_duration * 300}文字）
-6. すべて純粋な日本語で記述し、英語を使用しない
+6. {PURE_JAPANESE_DIRECTIVE}
 
 【台本フォーマット】
-田中: [発言内容]
-鈴木: [発言内容]
+{JAPANESE_DIALOGUE_FORMAT}
 
 改善された最終稿を作成してください。
 """
 
-            response = self.client.generate_content(final_prompt)
-            final_script = response.text.strip()
+            with llm_logging_context(component="script_generation", stage="stage3"):
+                response = self.client.generate_content(final_prompt)
+                final_script = response.text.strip()
+                try:
+                    record_llm_interaction(
+                        provider="gemini",
+                        model=self._model_identifier(),
+                        prompt=final_prompt,
+                        response={"text": final_script},
+                        metadata={"stage": "stage3"},
+                    )
+                except Exception:  # pragma: no cover - diagnostics only
+                    logger.debug("Failed to log stage3 script generation interaction", exc_info=True)
 
             logger.info(f"Stage 3 completed: {len(final_script)} characters")
 

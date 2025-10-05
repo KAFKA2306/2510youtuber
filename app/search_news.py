@@ -14,6 +14,7 @@ import httpx
 
 from .api_rotation import get_rotation_manager
 from .config import cfg
+from .llm_logging import llm_logging_context, record_llm_interaction
 
 logger = logging.getLogger(__name__)
 
@@ -56,19 +57,20 @@ class NewsCollector:
 
         """
         try:
-            adjusted_prompt = self._adjust_prompt_for_mode(prompt_a, mode)
+            with llm_logging_context(component="news_collection", mode=mode):
+                adjusted_prompt = self._adjust_prompt_for_mode(prompt_a, mode)
 
-            # Perplexityで収集を試みる（ローテーション対応）
-            try:
-                response_text = self._call_perplexity_with_rotation(adjusted_prompt)
-                news_items = self._parse_news_response(response_text)
-                validated_news = self._validate_news_items(news_items)
+                # Perplexityで収集を試みる（ローテーション対応）
+                try:
+                    response_text = self._call_perplexity_with_rotation(adjusted_prompt)
+                    news_items = self._parse_news_response(response_text)
+                    validated_news = self._validate_news_items(news_items)
 
-                if validated_news:
-                    logger.info(f"Collected {len(validated_news)} news items via Perplexity (mode: {mode})")
-                    return validated_news
-            except Exception as e:
-                logger.warning(f"Perplexity collection failed: {e}, trying NewsAPI fallback...")
+                    if validated_news:
+                        logger.info(f"Collected {len(validated_news)} news items via Perplexity (mode: {mode})")
+                        return validated_news
+                except Exception as e:
+                    logger.warning(f"Perplexity collection failed: {e}, trying NewsAPI fallback...")
 
             # NewsAPIフォールバック
             if cfg.newsapi_key:
@@ -170,6 +172,21 @@ class NewsCollector:
                     data = response.json()
                     content = data["choices"][0]["message"]["content"]
                     logger.debug(f"Perplexity response length: {len(content)}")
+
+                    try:
+                        record_llm_interaction(
+                            provider="perplexity",
+                            model=payload.get("model"),
+                            prompt=payload["messages"],
+                            response={
+                                "text": content,
+                                "raw": data,
+                            },
+                            metadata={"component": "news_collection"},
+                        )
+                    except Exception:  # pragma: no cover - diagnostics only
+                        logger.debug("Failed to log Perplexity interaction", exc_info=True)
+
                     return content
 
             except httpx.HTTPStatusError as e:

@@ -20,6 +20,7 @@ import google.generativeai as genai
 
 from app.api_rotation import get_rotation_manager
 from app.config.settings import settings
+from app.llm_logging import llm_logging_context, record_llm_interaction
 from app.models.video_review import (
     ScreenshotEvidence,
     VideoReviewFeedback,
@@ -192,6 +193,8 @@ class GeminiVisionReviewer:
             with open(shot.path, "rb") as img_file:
                 image_parts.append({"mime_type": "image/png", "data": img_file.read()})
 
+        image_paths = [shot.path for shot in screenshots]
+
         def api_call(api_key_value: str) -> str:
             genai.configure(api_key=api_key_value)
             model = genai.GenerativeModel(f"models/{self.model_name}")
@@ -204,14 +207,35 @@ class GeminiVisionReviewer:
                 [prompt, *image_parts],
                 generation_config=generation_config,
             )
-            return response.text
+            text = response.text
+
+            try:
+                record_llm_interaction(
+                    provider="gemini",
+                    model=f"models/{self.model_name}",
+                    prompt={
+                        "text": prompt,
+                        "image_paths": image_paths,
+                        "generation_config": {
+                            "temperature": self.temperature,
+                            "max_output_tokens": self.max_output_tokens,
+                        },
+                    },
+                    response={"text": text},
+                    metadata={"component": "video_review"},
+                )
+            except Exception:  # pragma: no cover - diagnostics only
+                logger.debug("Failed to log video review interaction", exc_info=True)
+
+            return text
 
         try:
-            raw_response = self.rotation_manager.execute_with_rotation(
-                provider="gemini",
-                api_call=api_call,
-                max_attempts=3,
-            )
+            with llm_logging_context(component="video_review", video=os.path.basename(video_path)):
+                raw_response = self.rotation_manager.execute_with_rotation(
+                    provider="gemini",
+                    api_call=api_call,
+                    max_attempts=3,
+                )
         except Exception as exc:
             logger.error("Gemini review failed: %s", exc)
             raise

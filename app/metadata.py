@@ -15,6 +15,18 @@ import google.generativeai as genai
 
 from .api_rotation import get_rotation_manager  # 追加
 from .config import cfg
+from .llm_logging import llm_logging_context, record_llm_interaction
+from app.constants.prompts import (
+    DEFAULT_VIDEO_MODE_CONTEXT,
+    METADATA_MODE_CONTEXT,
+    METADATA_OTHER_POLICIES_LINES,
+    METADATA_REQUIREMENTS_LINES,
+    METADATA_TITLE_AVOID_EXAMPLES,
+    METADATA_TITLE_POLICY_LINES,
+    METADATA_TITLE_SUCCESS_EXAMPLES,
+    indent_lines,
+    join_lines,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +57,13 @@ class MetadataGenerator:
     ) -> Dict[str, Any]:
         """YouTube動画用メタデータを生成"""
         try:
-            prompt = self._build_metadata_prompt(news_items, script_content, mode)
-            response = self._call_gemini_for_metadata(prompt)
-            metadata = self._parse_metadata_response(response)
-            validated_metadata = self._validate_metadata(metadata, news_items)
-            logger.info(f"Generated metadata for {mode} video")
-            return validated_metadata
+            with llm_logging_context(component="metadata_generation", mode=mode):
+                prompt = self._build_metadata_prompt(news_items, script_content, mode)
+                response = self._call_gemini_for_metadata(prompt)
+                metadata = self._parse_metadata_response(response)
+                validated_metadata = self._validate_metadata(metadata, news_items)
+                logger.info(f"Generated metadata for {mode} video")
+                return validated_metadata
         except Exception as e:
             logger.error(f"Failed to generate metadata: {e}")
             return self._get_fallback_metadata(news_items, mode)
@@ -59,15 +72,16 @@ class MetadataGenerator:
         """メタデータ生成用プロンプトを構築"""
         current_date = datetime.now().strftime("%Y年%m月%d日")
         news_summary = self._create_news_summary(news_items)
-        mode_context = {
-            "daily": "日次の経済ニュース解説動画",
-            "special": "特集・深堀り解説動画",
-            "breaking": "速報・緊急ニュース動画",
-        }
+        mode_description = METADATA_MODE_CONTEXT.get(mode, DEFAULT_VIDEO_MODE_CONTEXT)
+        requirements = join_lines(METADATA_REQUIREMENTS_LINES)
+        title_policy = join_lines(METADATA_TITLE_POLICY_LINES)
+        success_examples = indent_lines(METADATA_TITLE_SUCCESS_EXAMPLES, prefix="  - ")
+        avoid_examples = indent_lines(METADATA_TITLE_AVOID_EXAMPLES, prefix="  - ")
+        other_policies = join_lines(METADATA_OTHER_POLICIES_LINES)
         prompt = f"""
 以下の経済ニュース内容から、YouTube動画用のメタデータを生成してください。
 
-【動画タイプ】{mode_context.get(mode, "経済ニュース解説動画")}
+【動画タイプ】{mode_description}
 【配信日】{current_date}
 
 【ニュース内容】
@@ -77,36 +91,19 @@ class MetadataGenerator:
 {script_content[:500] if script_content else "台本データなし"}...
 
 【要件】
-1. タイトル: 50文字以内、**キャッチーでWOW感のあるタイトル**
-2. 説明文: 1000-3000文字、SEO最適化
-3. タグ: 15-20個、検索性向上
-4. カテゴリ: YouTube標準カテゴリ
-5. サムネイル文言: 大きく表示するテキスト
+{requirements}
 
 【タイトル作成の重要方針】
-✅ **クリック率を最大化する要素を含める:**
-  - 数字・パーセンテージ（例: "10%急騰"、"3日連続"）
-  - 緊急性・時事性（例: "速報"、"緊急"、"今日の"）
-  - 感情を刺激する言葉（例: "衝撃"、"注目"、"警告"、"チャンス"）
-  - 疑問形・問いかけ（例: "なぜ？"、"どうなる？"）
-  - 具体的な固有名詞（例: "日経平均"、"日銀"、"NVIDIA"）
+{title_policy}
 
 ✅ **成功例:**
-  - "【速報】日経平均10%急騰！その理由と今後の展開"
-  - "日銀緊急利上げ！株価暴落のシナリオとは？"
-  - "NVIDIA決算で市場激変！今注目すべき3銘柄"
-  - "円安150円突破！あなたの資産への影響は？"
+{success_examples}
 
 ❌ **避けるべき例:**
-  - "今日の経済ニュース解説"（平凡すぎ）
-  - "市場動向について"（抽象的）
-  - "経済情報まとめ"（興味を引かない）
+{avoid_examples}
 
 【その他の方針】
-- 正確性と信頼性を最優先（誇張しすぎない）
-- 検索されやすいキーワードを含める
-- 視聴者価値を明確に示す
-- 時事性を強調
+{other_policies}
 
 以下のJSON形式で厳密に回答してください：
 ```json
@@ -166,6 +163,28 @@ class MetadataGenerator:
                 response = client.generate_content(prompt, generation_config=generation_config)
                 content = response.text
                 logger.debug(f"Generated metadata response length: {len(content)}")
+
+                try:
+                    record_llm_interaction(
+                        provider="gemini",
+                        model=f"models/{model_name}",
+                        prompt={
+                            "text": prompt,
+                            "generation_config": {
+                                "temperature": getattr(generation_config, "temperature", None),
+                                "top_p": getattr(generation_config, "top_p", None),
+                                "top_k": getattr(generation_config, "top_k", None),
+                                "max_output_tokens": getattr(generation_config, "max_output_tokens", None),
+                            },
+                        },
+                        response={
+                            "text": content,
+                        },
+                        metadata={"component": "metadata_generation"},
+                    )
+                except Exception:  # pragma: no cover - logging should never interrupt flow
+                    logger.debug("Failed to log metadata generation interaction", exc_info=True)
+
                 return content
 
             except Exception as e:
