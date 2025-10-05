@@ -133,6 +133,7 @@ uv run python3 -m app.main test
 | 字幕と音声がずれる | `data/qa_reports` の `subtitle_alignment` セクション | `TranscribeAudioStep` を再実行し、音量レベルや `media_quality.subtitles` の閾値を調整。 |
 | 動画生成が失敗する | FFmpeg のエラーログ / `Failed to create B-roll sequence` | 一時的に `stock_footage.enabled=false` にして再実行し、FFmpeg パスとテンプレート画像の有無を確認。 |
 | QA でブロックされる | レポートの `blocking_failures` | 閾値を見直すか、該当ステップ（字幕・音量など）を手動で修正して再実行。 |
+| CrewAI Gemini 起動時に `BaseLLM.__init__() missing 1 required positional argument: 'model'` | `uv run python -m app.verify` のログで CrewAI バージョンが 0.74 以降か確認 | CrewAI 側の `BaseLLM` が `model` 引数を必須化したことが原因。`settings.llm_model` を設定し、`app.adapters.llm.CrewAIGeminiLLM` を最新コミットに更新してから `uv sync` → `app.verify` を再実行。 |
 
 ### 5.2 VideoGenerator で頻発する根本原因
 

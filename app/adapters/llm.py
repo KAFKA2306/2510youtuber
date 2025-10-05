@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import re
@@ -102,7 +103,51 @@ class CrewAIGeminiLLM(BaseLLM):
         **kwargs: Any,
     ) -> None:
         target_model = model or settings.llm_model
-        super().__init__()
+
+        base_init = super().__init__
+        try:
+            init_signature = inspect.signature(base_init)  # type: ignore[arg-type]
+        except (TypeError, ValueError):  # pragma: no cover - built-in or C-extensions
+            init_signature = None
+
+        if init_signature is not None:
+            parameters = init_signature.parameters
+            accepts_var_kw = any(param.kind == inspect.Parameter.VAR_KEYWORD for param in parameters.values())
+
+            base_dict = getattr(BaseLLM, "__dict__", {})
+            declared_init = base_dict.get("__init__") if hasattr(base_dict, "get") else None
+            has_named_params = any(
+                name not in {"self", "args", "kwargs"}
+                for name in parameters
+            )
+
+            if declared_init in (None, object.__init__) and not has_named_params:
+                base_init()
+            else:
+                combined_kwargs: Dict[str, Any] = {
+                    key: value for key, value in kwargs.items() if value is not None
+                }
+                combined_kwargs["model"] = target_model
+                if temperature is not None:
+                    combined_kwargs.setdefault("temperature", temperature)
+                if stop is not None:
+                    combined_kwargs.setdefault("stop", stop)
+
+                init_kwargs: Dict[str, Any] = {}
+                for name, param in parameters.items():
+                    if name == "self":
+                        continue
+                    if name in combined_kwargs:
+                        init_kwargs[name] = combined_kwargs[name]
+
+                if accepts_var_kw:
+                    for name, value in combined_kwargs.items():
+                        if name not in init_kwargs:
+                            init_kwargs[name] = value
+
+                base_init(**init_kwargs)
+        else:  # pragma: no cover - legacy/no-op BaseLLM implementations
+            base_init()
         self.model = target_model
         self.temperature = temperature
         self.stop = stop
