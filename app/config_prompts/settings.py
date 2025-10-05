@@ -73,6 +73,11 @@ class PromptManager:
             return {}
         return loaded
 
+    def load_structured_template(self, template_name: str) -> Dict[str, Any]:
+        """Public wrapper for retrieving structured prompt templates as dictionaries."""
+
+        return self._load_yaml_template(template_name)
+
     def get_task_definition(self, template_name: str, task_key: str) -> Dict[str, Any]:
         """Return the task block for the given key within a template."""
 
