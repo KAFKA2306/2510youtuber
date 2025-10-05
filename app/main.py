@@ -547,7 +547,7 @@ class YouTubeWorkflow:
 # Backward compatibility: expose workflow via container
 def _get_workflow() -> YouTubeWorkflow:
     """Get workflow instance from container (backward compatibility)."""
-    from .container import get_container
+    from app.core.container import get_container
 
     return get_container().workflow
 

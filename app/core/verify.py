@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 # プロジェクトルートをパスに追加
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
 import logging
@@ -32,7 +32,7 @@ class SystemVerifier:
     """システム検証クラス"""
 
     def __init__(self):
-        self.project_root = Path(__file__).parent.parent
+        self.project_root = project_root
         # VOICEVOX設定を settings から取得
         from app.config.settings import settings
 
