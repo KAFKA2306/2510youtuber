@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -172,7 +173,16 @@ def ensure_dialogue_structure(
     normalized_script = "\n".join(normalized_lines)
     errors: List[ScriptValidationIssue] = []
 
-    if dialogue_line_count < max(min_dialogue_lines, int(nonempty_line_count * min_dialogue_ratio)):
+    required_by_ratio = math.ceil(nonempty_line_count * min_dialogue_ratio)
+    if nonempty_line_count:
+        required_by_ratio = max(1, required_by_ratio)
+    required_by_ratio = min(required_by_ratio, nonempty_line_count)
+
+    required_by_count = min(min_dialogue_lines, nonempty_line_count)
+
+    minimum_required = max(required_by_ratio, required_by_count)
+
+    if dialogue_line_count < minimum_required:
         errors.append(
             ScriptValidationIssue(
                 0,
