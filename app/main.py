@@ -24,6 +24,7 @@ _LOG_SESSION = setup_logging(log_level=log_level)
 
 from .api_rotation import initialize_api_infrastructure
 from .config import cfg
+from .services.media import FFmpegConfigurationError, ensure_ffmpeg_tooling
 from .discord import discord_notifier
 from .metadata_storage import metadata_storage
 from .models.workflow import WorkflowResult
@@ -51,6 +52,13 @@ logger = logging.getLogger(__name__)
 # Initialize API infrastructure once at module import
 initialize_api_infrastructure()
 logger.info("API infrastructure initialized at startup")
+
+try:
+    _STARTUP_FFMPEG_PATH = ensure_ffmpeg_tooling(cfg.ffmpeg_path)
+except (FileNotFoundError, FFmpegConfigurationError) as exc:  # pragma: no cover - defensive startup guard
+    raise RuntimeError(f"FFmpeg validation failed during startup: {exc}") from exc
+else:
+    logger.info("FFmpeg binary validated at startup: %s", _STARTUP_FFMPEG_PATH)
 
 
 class YouTubeWorkflow:
