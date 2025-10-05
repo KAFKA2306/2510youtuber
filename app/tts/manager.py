@@ -1,6 +1,6 @@
 """音声合成（TTS）マネージャー（Chain of Responsibilityパターン使用）
 
-ElevenLabs TTSを使用して台本テキストを音声に変換します。
+VOICEVOXを最優先とした複数のTTSプロバイダーで台本テキストを音声に変換します。
 並列処理とチャンク分割により高速化を実現します。
 """
 
@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 class TTSManager:
     """音声合成管理クラス（リファクタリング版）
 
-    Chain of Responsibilityパターンにより、6つのTTSプロバイダーを
-    優先順位順に試行します。
+    Chain of Responsibilityパターンにより、VOICEVOXを先頭とした
+    6つのTTSプロバイダーを優先順位順に試行します。
     """
 
     def __init__(self):
