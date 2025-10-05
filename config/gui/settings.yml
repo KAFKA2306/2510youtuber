@@ -1,0 +1,39 @@
+defaults:
+  execution:
+    mode: local
+    concurrency_limit: 1
+  logging:
+    verbose: false
+    retention_days: 14
+  notifications_enabled: false
+radios:
+  execution.mode:
+    id: execution.mode
+    label: 実行モード
+    default: local
+    options:
+      - id: local
+        label: ローカル(Python)
+        description: マシン上で直接コマンドを実行
+      - id: container
+        label: Dockerコンテナ
+        description: コンテナ経由で実行 (同時実行1件制限)
+  logging.verbose:
+    id: logging.verbose
+    label: ログ詳細出力
+    default: disabled
+    options:
+      - id: disabled
+        label: 簡易ログ
+      - id: enabled
+        label: 詳細ログ
+        description: 追加の--verboseフラグを付与
+  notifications.enabled:
+    id: notifications.enabled
+    label: 完了通知
+    default: disabled
+    options:
+      - id: disabled
+        label: 通知なし
+      - id: enabled
+        label: 完了時に通知
