@@ -112,6 +112,9 @@ class StructuredScriptGenerator:
         news_digest = self._format_news_digest(news_items)
         prompt = self._build_prompt(news_digest, target_duration_minutes)
 
+        fallback_candidate: Optional[ScriptGenerationResult] = None
+        last_error: Optional[str] = None
+
         for attempt in range(1, self.max_attempts + 1):
             logger.info("Structured script generation attempt %s/%s", attempt, self.max_attempts)
 
@@ -128,16 +131,16 @@ class StructuredScriptGenerator:
             response_text = self._extract_message_text(response)
             logger.debug("LLM raw response (first 400 chars): %r", response_text[:400])
 
-            fallback_candidate: Optional[ScriptGenerationResult] = None
-
             try:
                 payload = self._parse_payload(response_text)
             except ValueError as exc:
                 logger.warning("Structured script parse failed: %s", exc)
+                last_error = str(exc)
                 try:
                     script, quality_report = self._build_script_from_text(response_text)
                 except ValueError as fallback_error:
                     logger.warning("Fallback script conversion failed: %s", fallback_error)
+                    last_error = str(fallback_error)
                     continue
 
                 metadata = ScriptGenerationMetadata(quality_report=quality_report)
@@ -161,7 +164,19 @@ class StructuredScriptGenerator:
             logger.warning("Returning fallback script after all attempts failed to parse JSON")
             return fallback_candidate
 
-        raise RuntimeError("Structured script generation failed after all attempts")
+        logger.error(
+            "Structured script generation exhausted all attempts: %s", last_error or "unknown error"
+        )
+
+        backup_script = self._build_backup_script(news_items, target_duration_minutes)
+        backup_report = self._compute_quality_report(backup_script)
+        metadata = ScriptGenerationMetadata(quality_report=backup_report)
+
+        return ScriptGenerationResult(
+            script=backup_script,
+            metadata=metadata,
+            raw_response="",
+        )
 
     def _build_prompt(self, news_digest: str, target_duration_minutes: Optional[int]) -> str:
         speaker_list = ", ".join(self._allowed_speakers)
@@ -383,6 +398,115 @@ class StructuredScriptGenerator:
             validation = exc.result
 
         return self._build_quality_report_from_validation(validation, script)
+
+    def _build_backup_script(
+        self,
+        news_items: List[Dict[str, Any]],
+        target_duration_minutes: Optional[int] = None,
+    ) -> Script:
+        """Return a deterministic emergency script when the LLM fully fails."""
+
+        topics: List[Dict[str, str]] = []
+        for index, item in enumerate(news_items, start=1):
+            topics.append(
+                {
+                    "title": str(item.get("title") or item.get("headline") or f"トピック{index}"),
+                    "summary": str(
+                        item.get("summary")
+                        or item.get("description")
+                        or "市場動向の詳細は追加調査が必要です。"
+                    ),
+                    "impact": str(item.get("impact_level") or item.get("importance") or "medium"),
+                    "source": str(item.get("source") or "情報源不明"),
+                }
+            )
+
+        if not topics:
+            topics = [
+                {
+                    "title": "マーケット最新動向",
+                    "summary": "主要指標とリスクイベントを振り返りながら今後の注意点を共有します。",
+                    "impact": "medium",
+                    "source": "社内調査",
+                }
+            ]
+
+        primary = self._allowed_speakers[0]
+        secondary = self._allowed_speakers[1]
+        narrator = self._allowed_speakers[2] if len(self._allowed_speakers) > 2 else None
+
+        dialogues: List[DialogueEntry] = []
+
+        def add_dialogue(speaker: str, line: str) -> None:
+            dialogues.append(DialogueEntry(speaker=speaker, line=line))
+
+        duration_hint = (
+            f"尺はおよそ{target_duration_minutes}分を想定しています。"
+            if target_duration_minutes
+            else ""
+        )
+
+        add_dialogue(primary, "こんばんは、今日もマーケットの振り返りを始めましょう。")
+        add_dialogue(secondary, "よろしくお願いします。最初の注目トピックから教えてください。")
+        if narrator:
+            add_dialogue(narrator, duration_hint or "番組の流れを整理しながら解説します。")
+
+        for idx, topic in enumerate(topics, start=1):
+            add_dialogue(
+                primary,
+                f"{idx}つ目は『{topic['title']}』です。重要度は{topic['impact']}、情報源は{topic['source']}です。",
+            )
+            add_dialogue(
+                secondary,
+                f"要点をまとめると、{topic['summary']}",
+            )
+            add_dialogue(
+                primary,
+                "投資家として意識したいリスクとチャンスを整理していきましょう。",
+            )
+            if narrator:
+                add_dialogue(
+                    narrator,
+                    "視聴者の皆さんはご自身のポートフォリオでの影響度をチェックしてみてください。",
+                )
+            add_dialogue(
+                secondary,
+                "短期的な値動きだけでなく、中長期の構造変化にも目を向けたいですね。",
+            )
+            add_dialogue(
+                primary,
+                "データポイントや企業コメントが更新されたら、概要欄のリンクでフォローしてください。",
+            )
+
+        add_dialogue(
+            secondary,
+            "他にも気になる指標があればコメントで教えてください。追加解説を検討します。",
+        )
+        add_dialogue(
+            primary,
+            "最後に具体的なアクションプランを3つまとめます。",
+        )
+        add_dialogue(primary, "① ポジションサイズの見直し、② リスクイベント前のヘッジ、③ 指標速報のウォッチです。")
+        if narrator:
+            add_dialogue(
+                narrator,
+                "概要欄には参考リンクと免責事項を記載しています。投資判断はご自身でお願いします。",
+            )
+        add_dialogue(
+            secondary,
+            "引き続き最新のマーケット情報をお届けしますので、チャンネル登録もお忘れなく。",
+        )
+        add_dialogue(primary, "ご視聴ありがとうございました。それではまた次回お会いしましょう。")
+
+        while len(dialogues) < 24:
+            speaker = self._allowed_speakers[len(dialogues) % len(self._allowed_speakers)]
+            add_dialogue(speaker, "補足情報を追記し、マーケットの変化に備えましょう。")
+
+        title_prefix = "バックアップ台本"
+        headline = topics[0]["title"]
+        title = f"{title_prefix}: {headline}"[:80]
+
+        return Script(title=title, dialogues=dialogues)
 
     @staticmethod
     def _format_news_digest(news_items: List[Dict[str, Any]]) -> str:
