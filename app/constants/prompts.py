@@ -60,6 +60,16 @@ JAPANESE_DIALOGUE_FORMAT = "田中: [発言内容]\n鈴木: [発言内容]"
 
 PURE_JAPANESE_DIRECTIVE = "すべて純粋な日本語で記述し、英語を使用しない"
 
+JAPANESE_PURITY_IMPROVEMENT_STEPS: Tuple[str, ...] = (
+    PURE_JAPANESE_DIRECTIVE,
+    "すべての英語単語を適切な日本語に翻訳または言い換える",
+    JAPANESE_LANGUAGE_RULES[2],
+    "会話の自然さを保つ",
+    "話者名（田中:、鈴木:）のフォーマットは維持する",
+    "数字、パーセント、単位（円、ドルなど）はそのまま使用可能",
+    JAPANESE_LANGUAGE_RULES[3],
+)
+
 JAPANESE_ALLOWED_PATTERNS: Tuple[str, ...] = (
     r"\\d+",
     r"\\d+%",
@@ -133,3 +143,15 @@ def indent_lines(lines: Iterable[str], prefix: str = "  ") -> str:
     """Indent each line with *prefix* and return the joined string."""
 
     return "\n".join(f"{prefix}{line}" for line in lines)
+
+
+def bullet_lines(lines: Sequence[str], bullet: str = "- ") -> str:
+    """Render *lines* as a bullet list using *bullet* as the prefix."""
+
+    return "\n".join(f"{bullet}{line}" for line in lines)
+
+
+def numbered_lines(lines: Sequence[str], start: int = 1, delimiter: str = ". ") -> str:
+    """Render *lines* as a numbered list with the provided *delimiter*."""
+
+    return "\n".join(f"{index}{delimiter}{line}" for index, line in enumerate(lines, start))

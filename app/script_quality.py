@@ -19,6 +19,8 @@ from app.constants.prompts import (
     JAPANESE_DIALOGUE_FORMAT,
     JAPANESE_LANGUAGE_RULES,
     PURE_JAPANESE_DIRECTIVE,
+    bullet_lines,
+    numbered_lines,
 )
 
 logger = logging.getLogger(__name__)
@@ -124,7 +126,24 @@ class ThreeStageScriptGenerator:
 
         try:
             news_summary = self._format_news_for_script(news_items)
-            language_rules = "\n".join(f"- {rule}" for rule in JAPANESE_LANGUAGE_RULES)
+            language_rules = bullet_lines(JAPANESE_LANGUAGE_RULES)
+            script_requirements = numbered_lines(
+                [
+                    f"目標時間: {target_duration}分（約{target_duration * 300}文字）",
+                    "構成: オープニング → ニュース解説 → まとめ",
+                    "話者: 田中氏（経済専門家）、鈴木氏（金融アナリスト）",
+                    "トーン: 専門的だが理解しやすい、視聴者が楽しめる内容",
+                ]
+            )
+            critical_constraints = bullet_lines(
+                [
+                    "出典を必ず明記",
+                    "数値やデータは具体的に言及",
+                    "推測と事実を明確に区別",
+                    "視聴者の理解を助ける解説を含める",
+                    "自然で楽しい会話の流れを保つ",
+                ]
+            )
 
             draft_prompt = f"""
 {base_prompt}
@@ -133,17 +152,10 @@ class ThreeStageScriptGenerator:
 {news_summary}
 
 【台本作成要件】
-1. 目標時間: {target_duration}分（約{target_duration * 300}文字）
-2. 構成: オープニング → ニュース解説 → まとめ
-3. 話者: 田中氏（経済専門家）、鈴木氏（金融アナリスト）
-4. トーン: 専門的だが理解しやすい、視聴者が楽しめる内容
+{script_requirements}
 
 【重要な制約】
-- 出典を必ず明記
-- 数値やデータは具体的に言及
-- 推測と事実を明確に区別
-- 視聴者の理解を助ける解説を含める
-- 自然で楽しい会話の流れを保つ
+{critical_constraints}
 
 【言語に関する重要な指示】
 {language_rules}
@@ -267,9 +279,21 @@ class ThreeStageScriptGenerator:
 
         try:
             improvements = review_result.get("improvements", [])
-            improvements_text = "\n".join([f"- {imp}" for imp in improvements])
+            improvements_text = bullet_lines(improvements) if improvements else "- 指摘事項なし"
+            strengths = review_result.get("strengths", [])
+            strengths_text = bullet_lines(strengths) if strengths else "- 強みなし"
 
             news_summary = self._format_news_for_script(news_items)
+            stage3_requirements = numbered_lines(
+                [
+                    "上記の改善点を全て反映する",
+                    "良い点は必ず維持する",
+                    "視聴者がより楽しめる内容にする",
+                    "自然な会話の流れを保つ",
+                    f"目標時間: {target_duration}分（約{target_duration * 300}文字）",
+                    PURE_JAPANESE_DIRECTIVE,
+                ]
+            )
 
             final_prompt = f"""
 以下の初稿台本を、品質レビューの指摘に基づいて改善してください。
@@ -281,18 +305,13 @@ class ThreeStageScriptGenerator:
 {improvements_text}
 
 【品質レビューの良い点（維持すべき）】
-{chr(10).join([f"- {s}" for s in review_result.get("strengths", [])])}
+{strengths_text}
 
 【ニュース情報（参照用）】
 {news_summary}
 
 【改善指示】
-1. 上記の改善点を全て反映する
-2. 良い点は必ず維持する
-3. 視聴者がより楽しめる内容にする
-4. 自然な会話の流れを保つ
-5. 目標時間: {target_duration}分（約{target_duration * 300}文字）
-6. {PURE_JAPANESE_DIRECTIVE}
+{stage3_requirements}
 
 【台本フォーマット】
 {JAPANESE_DIALOGUE_FORMAT}
