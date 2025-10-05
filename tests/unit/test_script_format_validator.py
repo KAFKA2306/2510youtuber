@@ -80,3 +80,18 @@ def test_validator_handles_honorifics_and_aliases():
     assert result.speaker_counts["武宏"] == 1
     assert result.speaker_counts["つむぎ"] == 1
     assert result.speaker_counts["ナレーター"] == 1
+
+
+def test_validator_allows_short_form_scripts_when_all_lines_are_dialogue():
+    script = "\n".join(
+        [
+            "武宏: 速報です。",
+            "つむぎ: 詳細を教えてください。",
+        ]
+    )
+
+    result = ensure_dialogue_structure(script, allowed_speakers=ALLOWED)
+
+    assert result.dialogue_line_count == 2
+    assert result.nonempty_line_count == 2
+    assert result.is_valid
