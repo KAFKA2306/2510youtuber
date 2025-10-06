@@ -4,6 +4,7 @@ Manages structured storage of generated videos, audio, thumbnails, and scripts.
 Ensures files persist after workflow completion with predictable organization.
 """
 
+import json
 import logging
 import os
 import re
@@ -69,6 +70,13 @@ class FileArchivalManager:
         sanitized = sanitized.strip("_")[:50]
         return sanitized
 
+    def _build_directory_name(self, run_id: str, timestamp: str, title: str) -> tuple[str, str]:
+        """Generate the directory name alongside the sanitized title."""
+
+        sanitized_title = self.sanitize_title(title)
+        directory_name = f"{timestamp}_{run_id}_{sanitized_title}"
+        return directory_name, sanitized_title
+
     def _get_directory_name(self, run_id: str, timestamp: str, title: str) -> str:
         """Generate directory name for workflow output.
 
@@ -80,8 +88,8 @@ class FileArchivalManager:
         Returns:
             Directory name string
         """
-        sanitized_title = self.sanitize_title(title)
-        return f"{timestamp}_{run_id}_{sanitized_title}"
+        directory_name, _ = self._build_directory_name(run_id, timestamp, title)
+        return directory_name
 
     def create_output_directory(self, run_id: str, timestamp: str, title: str) -> str:
         """Create output directory for workflow files.
@@ -94,11 +102,42 @@ class FileArchivalManager:
         Returns:
             Absolute path to created directory
         """
-        dir_name = self._get_directory_name(run_id, timestamp, title)
+        dir_name, sanitized_title = self._build_directory_name(run_id, timestamp, title)
         output_dir = self.base_output_dir / dir_name
         output_dir.mkdir(parents=True, exist_ok=True)
+        self._write_directory_metadata(
+            output_dir,
+            run_id=run_id,
+            timestamp=timestamp,
+            title=title,
+            sanitized_title=sanitized_title,
+        )
         logger.info(f"Created output directory: {output_dir}")
         return str(output_dir)
+
+    def _write_directory_metadata(
+        self,
+        directory: Path,
+        *,
+        run_id: str,
+        timestamp: str,
+        title: str,
+        sanitized_title: str,
+    ) -> None:
+        """Persist metadata to assist with later discovery operations."""
+
+        metadata = {
+            "run_id": run_id,
+            "timestamp": timestamp,
+            "title": title,
+            "sanitized_title": sanitized_title,
+        }
+
+        metadata_path = directory / ".archive_meta.json"
+        try:
+            metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2))
+        except OSError as exc:
+            logger.debug("Unable to write archive metadata for %s: %s", directory, exc)
 
     def get_video_output_path(self, run_id: str, timestamp: str, title: str) -> str:
         """Get output path for video file.
@@ -214,26 +253,53 @@ class FileArchivalManager:
         if not base_path.exists():
             return archived
 
+        pattern = re.compile(r"^(?P<timestamp>\d{8}_\d{6})_(?P<run_id>.+?)(?:_(?P<title>.+))?$")
+
         for item in base_path.iterdir():
             if not item.is_dir():
                 continue
 
-            # Parse directory name: {timestamp}_{run_id}_{title}
-            parts = item.name.split("_", 2)
-            if len(parts) >= 2:
-                # Handle timestamp format: YYYYMMDD_HHMMSS
-                timestamp_parts = parts[0:2]
-                timestamp = "_".join(timestamp_parts) if len(timestamp_parts) == 2 else parts[0]
-                run_id = parts[1] if len(parts) > 1 else "unknown"
+            metadata_file = item / ".archive_meta.json"
+            metadata: Dict[str, str] | None = None
+            if metadata_file.exists():
+                try:
+                    metadata = json.loads(metadata_file.read_text())
+                except (OSError, json.JSONDecodeError) as exc:
+                    logger.debug("Failed to read archive metadata for %s: %s", item, exc)
 
-                archived.append(
-                    {
-                        "run_id": run_id,
-                        "timestamp": timestamp,
-                        "directory": str(item.absolute()),
-                        "name": item.name,
-                    }
-                )
+            timestamp: str | None = None
+            run_id: str | None = None
+            title: str | None = None
+
+            if metadata:
+                timestamp = metadata.get("timestamp")
+                run_id = metadata.get("run_id")
+                title = metadata.get("sanitized_title") or metadata.get("title")
+                if not timestamp or not run_id:
+                    metadata = None
+
+            if not metadata:
+                match = pattern.match(item.name)
+                if not match:
+                    continue
+                timestamp = match.group("timestamp")
+                run_id = match.group("run_id")
+                title = match.group("title")
+
+            if run_id is None or timestamp is None:
+                continue
+
+            entry = {
+                "run_id": run_id,
+                "timestamp": timestamp,
+                "directory": str(item.absolute()),
+                "name": item.name,
+            }
+
+            if title:
+                entry["title"] = title
+
+            archived.append(entry)
 
         # Sort by timestamp descending (most recent first)
         archived.sort(key=lambda x: x["timestamp"], reverse=True)
