@@ -1,22 +1,102 @@
-"""Webインターフェース
+"""Web dashboard and API endpoints for monitoring automated YouTube runs."""
 
-Render上でのAPI提供とモニタリング用のWebアプリケーション
-"""
+from __future__ import annotations
 
-import asyncio
-import os
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, Iterable, List
 
 from flask import Flask, jsonify, render_template_string, request
 
 from .config import cfg
 from .discord import discord_notifier
-from .main import workflow
 from .sheets import sheets_manager
+from .workflow_runner import WorkflowRunner
 
 app = Flask(__name__)
+_runner = WorkflowRunner()
+_ALLOWED_MODES = {"daily", "special", "test"}
+_LOG_PATH = Path("logs/log")
 
-# HTMLテンプレート
+
+@dataclass(frozen=True)
+class ServiceStatus:
+    name: str
+    status: str
+    message: str
+
+    def as_dict(self) -> Dict[str, str]:
+        return {"status": self.status, "message": self.message}
+
+
+def _service_statuses() -> Dict[str, Dict[str, str]]:
+    statuses: List[ServiceStatus] = []
+    try:
+        statuses.append(
+            ServiceStatus(
+                "Anthropic",
+                "ok" if cfg.anthropic_api_key else "error",
+                "API key configured" if cfg.anthropic_api_key else "API key missing",
+            )
+        )
+        statuses.append(
+            ServiceStatus(
+                "Gemini",
+                "ok" if cfg.gemini_api_keys else "error",
+                f"{len(cfg.gemini_api_keys)} keys configured" if cfg.gemini_api_keys else "API keys missing",
+            )
+        )
+        statuses.append(
+            ServiceStatus(
+                "ElevenLabs",
+                "ok" if cfg.elevenlabs_api_key else "error",
+                "API key configured" if cfg.elevenlabs_api_key else "API key missing",
+            )
+        )
+        statuses.append(
+            ServiceStatus(
+                "Google",
+                "ok" if cfg.google_application_credentials else "error",
+                "Credentials configured" if cfg.google_application_credentials else "Credentials missing",
+            )
+        )
+        statuses.append(
+            ServiceStatus(
+                "Discord",
+                "ok" if cfg.discord_webhook_url else "warning",
+                "Webhook configured" if cfg.discord_webhook_url else "Webhook not configured",
+            )
+        )
+    except Exception as error:  # pragma: no cover - fallback logging
+        statuses.append(ServiceStatus("System", "error", str(error)))
+    return {status.name: status.as_dict() for status in statuses}
+
+
+def _merge_run_history(active: Iterable[Dict[str, str]], archived: Iterable[Dict[str, str]]) -> List[Dict[str, str]]:
+    history: Dict[str, Dict[str, str]] = {}
+    for run in archived:
+        run_id = run.get("run_id")
+        if run_id:
+            history[run_id] = run
+    for run in active:
+        run_id = run.get("run_id")
+        if not run_id:
+            continue
+        merged = history.get(run_id, {}).copy()
+        merged.update({k: v for k, v in run.items() if v is not None})
+        history[run_id] = merged
+    return sorted(history.values(), key=lambda item: item.get("started_at", ""), reverse=True)
+
+
+def _tail_logs(limit: int = 100) -> str:
+    if not _LOG_PATH.exists():
+        return "No log file found"
+    with _LOG_PATH.open("r", encoding="utf-8") as handle:
+        lines = handle.readlines()
+    return "\n".join(lines[-limit:])
+
+
 DASHBOARD_HTML = """
 <!DOCTYPE html>
 <html>
@@ -54,9 +134,9 @@ DASHBOARD_HTML = """
 
         <div class="card">
             <h2>Quick Actions</h2>
-            <button class="btn" onclick="runWorkflow('test')">🧪 Test Run</button>
-            <button class="btn" onclick="runWorkflow('daily')">📅 Daily Run</button>
-            <button class="btn" onclick="runWorkflow('special')">⭐ Special Run</button>
+            <button class="btn" onclick="runWorkflow(event, 'test')">🧪 Test Run</button>
+            <button class="btn" onclick="runWorkflow(event, 'daily')">📅 Daily Run</button>
+            <button class="btn" onclick="runWorkflow(event, 'special')">⭐ Special Run</button>
             <button class="btn danger" onclick="checkStatus()">🔄 Refresh Status</button>
         </div>
 
@@ -72,30 +152,31 @@ DASHBOARD_HTML = """
     </div>
 
     <script>
+        function renderStatus(status) {
+            let html = '';
+            for (const [service, info] of Object.entries(status.services)) {
+                const statusClass = info.status === 'ok' ? 'success' : (info.status === 'warning' ? 'warning' : 'error');
+                html += `<div class="status ${statusClass}">${service}: ${info.message}</div>`;
+            }
+            document.getElementById('system-status').innerHTML = html;
+        }
+
         async function checkStatus() {
             try {
                 const response = await fetch('/api/status');
                 const data = await response.json();
-
-                let html = '';
-                for (const [service, status] of Object.entries(data.services)) {
-                    const statusClass = status.status === 'ok' ? 'success' : 'error';
-                    html += `<div class="status ${statusClass}">${service}: ${status.status}</div>`;
-                }
-
-                document.getElementById('system-status').innerHTML = html;
+                renderStatus(data);
             } catch (error) {
-                document.getElementById('system-status').innerHTML =
-                    '<div class="status error">Failed to load status</div>';
+                document.getElementById('system-status').innerHTML = '<div class="status error">Failed to load status</div>';
             }
         }
 
-        async function runWorkflow(mode) {
+        async function runWorkflow(event, mode) {
             if (!confirm(`Run ${mode} workflow? This may take several minutes.`)) return;
-
+            const button = event.target;
             try {
-                const button = event.target;
                 button.disabled = true;
+                const originalLabel = button.textContent;
                 button.textContent = '⏳ Running...';
 
                 const response = await fetch('/api/run', {
@@ -105,50 +186,50 @@ DASHBOARD_HTML = """
                 });
 
                 const result = await response.json();
-
                 if (result.success) {
                     alert(`Workflow started successfully! Run ID: ${result.run_id}`);
                 } else {
                     alert(`Failed to start workflow: ${result.error}`);
                 }
-
+                button.textContent = originalLabel;
                 button.disabled = false;
-                button.textContent = button.textContent.replace('⏳ Running...', '');
                 loadRecentRuns();
-
             } catch (error) {
                 alert(`Error: ${error.message}`);
                 button.disabled = false;
             }
         }
 
+        function renderRuns(runs) {
+            if (!runs.length) {
+                document.getElementById('recent-runs').innerHTML = '<div class="status warning">No run history available</div>';
+                return;
+            }
+            let html = '<table><tr><th>Run ID</th><th>Mode</th><th>Status</th><th>Started</th><th>Finished</th><th>Video URL</th></tr>';
+            for (const run of runs.slice(0, 10)) {
+                const started = run.started_at ? new Date(run.started_at).toLocaleString() : 'N/A';
+                const finished = run.finished_at ? new Date(run.finished_at).toLocaleString() : 'In progress';
+                const videoLink = run.video_url ? `<a href="${run.video_url}" target="_blank">View</a>` : 'N/A';
+                html += `<tr>
+                    <td>${run.run_id || 'pending'}</td>
+                    <td>${run.mode || 'unknown'}</td>
+                    <td>${run.status}</td>
+                    <td>${started}</td>
+                    <td>${finished}</td>
+                    <td>${videoLink}</td>
+                </tr>`;
+            }
+            html += '</table>';
+            document.getElementById('recent-runs').innerHTML = html;
+        }
+
         async function loadRecentRuns() {
             try {
                 const response = await fetch('/api/runs');
                 const runs = await response.json();
-
-                let html = '<table><tr><th>Run ID</th><th>Mode</th><th>Status</th><th>Started</th><th>Video URL</th></tr>';
-
-                for (const run of runs.slice(0, 10)) {
-                    const videoLink = run.video_url ?
-                        `<a href="${run.video_url}" target="_blank">View</a>` :
-                        'N/A';
-
-                    html += `<tr>
-                        <td>${run.run_id}</td>
-                        <td>${run.mode || 'unknown'}</td>
-                        <td>${run.status}</td>
-                        <td>${new Date(run.started_at).toLocaleString()}</td>
-                        <td>${videoLink}</td>
-                    </tr>`;
-                }
-
-                html += '</table>';
-                document.getElementById('recent-runs').innerHTML = html;
-
+                renderRuns(runs);
             } catch (error) {
-                document.getElementById('recent-runs').innerHTML =
-                    '<div class="status error">Failed to load runs</div>';
+                document.getElementById('recent-runs').innerHTML = '<div class="status error">Failed to load runs</div>';
             }
         }
 
@@ -162,16 +243,13 @@ DASHBOARD_HTML = """
             }
         }
 
-        // 初期化
         checkStatus();
         loadRecentRuns();
         loadLogs();
-
-        // 定期更新
         setInterval(() => {
             checkStatus();
             loadRecentRuns();
-        }, 30000); // 30秒ごと
+        }, 30000);
     </script>
 </body>
 </html>
@@ -180,150 +258,76 @@ DASHBOARD_HTML = """
 
 @app.route("/")
 def dashboard():
-    """ダッシュボード表示"""
     return render_template_string(DASHBOARD_HTML)
 
 
 @app.route("/api/status")
 def api_status():
-    """システム状態API"""
-    status = {"timestamp": datetime.now().isoformat(), "services": {}}
-
-    # 各サービスの状態チェック
-    try:
-        # Anthropic API
-        if cfg.anthropic_api_key:
-            status["services"]["Anthropic"] = {"status": "ok", "message": "API key configured"}
-        else:
-            status["services"]["Anthropic"] = {"status": "error", "message": "API key missing"}
-
-        # Gemini API
-        if cfg.gemini_api_keys:
-            status["services"]["Gemini"] = {"status": "ok", "message": f"{len(cfg.gemini_api_keys)} keys configured"}
-        else:
-            status["services"]["Gemini"] = {"status": "error", "message": "API keys missing"}
-
-        # ElevenLabs API
-        if cfg.elevenlabs_api_key:
-            status["services"]["ElevenLabs"] = {"status": "ok", "message": "API key configured"}
-        else:
-            status["services"]["ElevenLabs"] = {"status": "error", "message": "API key missing"}
-
-        # Google Services
-        if cfg.google_application_credentials:
-            status["services"]["Google"] = {"status": "ok", "message": "Credentials configured"}
-        else:
-            status["services"]["Google"] = {"status": "error", "message": "Credentials missing"}
-
-        # Discord
-        if cfg.discord_webhook_url:
-            status["services"]["Discord"] = {"status": "ok", "message": "Webhook configured"}
-        else:
-            status["services"]["Discord"] = {"status": "warning", "message": "Webhook not configured"}
-
-    except Exception as e:
-        status["services"]["System"] = {"status": "error", "message": str(e)}
-
-    return jsonify(status)
+    return jsonify({"timestamp": datetime.utcnow().isoformat(), "services": _service_statuses()})
 
 
 @app.route("/api/run", methods=["POST"])
 def api_run():
-    """ワークフロー実行API"""
-    try:
-        data = request.get_json()
-        mode = data.get("mode", "test")
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode", "test")
+    if mode not in _ALLOWED_MODES:
+        return jsonify({"success": False, "error": "Invalid mode"}), 400
 
-        if mode not in ["daily", "special", "test"]:
-            return jsonify({"success": False, "error": "Invalid mode"}), 400
-
-        # 非同期でワークフローを実行
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        def run_workflow():
-            return loop.run_until_complete(workflow.execute_full_workflow(mode))
-
-        # バックグラウンドで実行
-        import threading
-
-        thread = threading.Thread(target=run_workflow)
-        thread.start()
-
-        return jsonify(
-            {"success": True, "message": f"Workflow started in {mode} mode", "run_id": workflow.run_id or "unknown"}
-        )
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    execution = _runner.start(mode)
+    run_id = execution.wait_until_started(timeout=5)
+    if not run_id:
+        execution.wait_until_finished(timeout=0)  # drain immediate failures
+        return jsonify({"success": False, "error": execution.error or "Failed to allocate run"}), 500
+    return jsonify({"success": True, "message": f"Workflow started in {mode} mode", "run_id": run_id})
 
 
 @app.route("/api/runs")
 def api_runs():
-    """実行履歴API"""
-    try:
-        if sheets_manager:
-            runs = sheets_manager.get_recent_runs(limit=20)
-            return jsonify(runs)
-        else:
-            return jsonify([])
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    active_runs = [execution.to_dict() for execution in _runner.list_recent(limit=20)]
+    sheet_runs: Iterable[Dict[str, str]] = []
+    if sheets_manager:
+        try:
+            sheet_runs = sheets_manager.get_recent_runs(limit=20)
+        except Exception as error:  # pragma: no cover - surfaced via API response
+            discord_notifier.notify(f"Sheets run history error: {error}", level="error")
+    return jsonify(_merge_run_history(active_runs, sheet_runs))
 
 
 @app.route("/api/logs")
 def api_logs():
-    """ログAPI"""
     try:
-        log_file = "logs/log"
-        if os.path.exists(log_file):
-            with open(log_file, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-                # 最新100行を返す
-                return "\n".join(lines[-100:])
-        else:
-            return "No log file found"
-
-    except Exception as e:
-        return f"Error reading logs: {e}"
+        return _tail_logs()
+    except Exception as error:  # pragma: no cover - simple IO guard
+        return f"Error reading logs: {error}"
 
 
 @app.route("/api/health")
 def health_check():
-    """ヘルスチェック"""
-    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat(), "version": "1.0.0"})
+    return jsonify({"status": "healthy"})
 
 
 @app.route("/api/webhook/discord", methods=["POST"])
 def discord_webhook():
-    """Discord Webhook エンドポイント"""
+    data = request.get_json(silent=True) or {}
+    message = data.get("message", "Test message")
+    level = data.get("level", "info")
     try:
-        data = request.get_json()
-        message = data.get("message", "Test message")
-        level = data.get("level", "info")
-
         discord_notifier.notify(message, level=level)
-
         return jsonify({"success": True, "message": "Notification sent"})
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    except Exception as error:  # pragma: no cover - network guard
+        return jsonify({"success": False, "error": str(error)}), 500
 
 
 @app.errorhandler(404)
-def not_found(error):
+def not_found(_error):
     return jsonify({"error": "Not found"}), 404
 
 
 @app.errorhandler(500)
-def internal_error(error):
+def internal_error(_error):
     return jsonify({"error": "Internal server error"}), 500
 
 
 if __name__ == "__main__":
-    # 開発用サーバー
-    port = int(os.environ.get("PORT", 5000))
-    debug = cfg.debug
-
-    app.run(host="0.0.0.0", port=port, debug=debug)
+    port = int(getattr(cfg, "port", 5000))
+    app.run(host="0.0.0.0", port=port, debug=bool(getattr(cfg, "debug", False)))
