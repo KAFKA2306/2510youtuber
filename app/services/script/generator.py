@@ -4,12 +4,21 @@ import logging
 import textwrap
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+import yaml
 from pydantic import BaseModel, Field, ValidationError
+
 from app.adapters.llm import LLMClient
 from app.adapters.llm import _extract_message_text as adapter_extract_message_text
 from app.config.settings import settings
 from app.services.script.speakers import get_speaker_registry
-from app.services.script.validator import DialogueEntry, Script, ScriptFormatError, ScriptValidationResult, ensure_dialogue_structure
+from app.services.script.validator import (
+    DialogueEntry,
+    Script,
+    ScriptFormatError,
+    ScriptValidationResult,
+    ensure_dialogue_structure,
+)
 logger = logging.getLogger(__name__)
 
 class ScriptGenerationMetadata(BaseModel):
@@ -44,6 +53,7 @@ class ScriptGenerationResult:
     script: Script
     metadata: ScriptGenerationMetadata
     raw_response: str
+    structured_yaml: str
 
 class SpeakerRoster:
     MIN_SPEAKERS = 2
@@ -125,8 +135,19 @@ class StructuredScriptGenerator:
                     logger.warning('Fallback script conversion failed: %s', fallback_error)
                     last_error = str(fallback_error)
                     continue
+                try:
+                    structured_yaml = self._dump_script_to_yaml(script)
+                except ValueError as yaml_error:
+                    logger.warning('Failed to serialize fallback script to YAML: %s', yaml_error)
+                    last_error = str(yaml_error)
+                    continue
                 metadata = ScriptGenerationMetadata(quality_report=quality_report)
-                fallback_candidate = ScriptGenerationResult(script=script, metadata=metadata, raw_response=response_text)
+                fallback_candidate = ScriptGenerationResult(
+                    script=script,
+                    metadata=metadata,
+                    raw_response=response_text,
+                    structured_yaml=structured_yaml,
+                )
                 if not self._quality_gate_enabled:
                     return fallback_candidate
                 logger.info('Quality gate enabled; retrying after fallback candidate')
@@ -143,9 +164,20 @@ class StructuredScriptGenerator:
                     continue
                 script = Script(title=payload.title, dialogues=repaired_dialogues)
                 logger.info('Augmented structured payload with %s dialogue lines', len(script.dialogues))
+            try:
+                structured_yaml = self._dump_script_to_yaml(script)
+            except ValueError as yaml_error:
+                logger.warning('Generated structured script failed YAML validation: %s', yaml_error)
+                last_error = str(yaml_error)
+                continue
             metadata = payload.to_metadata()
             metadata.quality_report = self._compute_quality_report(script)
-            return ScriptGenerationResult(script=script, metadata=metadata, raw_response=response_text)
+            return ScriptGenerationResult(
+                script=script,
+                metadata=metadata,
+                raw_response=response_text,
+                structured_yaml=structured_yaml,
+            )
         if fallback_candidate:
             logger.warning('Returning fallback script after all attempts failed to parse JSON')
             return fallback_candidate
@@ -153,7 +185,13 @@ class StructuredScriptGenerator:
         backup_script = self._build_backup_script(news_items, target_duration_minutes)
         backup_report = self._compute_quality_report(backup_script)
         metadata = ScriptGenerationMetadata(quality_report=backup_report)
-        return ScriptGenerationResult(script=backup_script, metadata=metadata, raw_response='')
+        structured_yaml = self._dump_script_to_yaml(backup_script)
+        return ScriptGenerationResult(
+            script=backup_script,
+            metadata=metadata,
+            raw_response='',
+            structured_yaml=structured_yaml,
+        )
 
     def _build_prompt(self, news_digest: str, target_duration_minutes: Optional[int]) -> str:
         speaker_list = ', '.join(self._allowed_speakers)
@@ -357,6 +395,17 @@ class StructuredScriptGenerator:
             return report
         existing.append(warning)
         return report.copy(update={'warnings': existing})
+
+    def _dump_script_to_yaml(self, script: Script) -> str:
+        payload = script.model_dump(mode='json')
+        yaml_blob = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+        try:
+            loaded = yaml.safe_load(yaml_blob)
+        except yaml.YAMLError as exc:
+            raise ValueError(f'Failed to validate structured script as YAML: {exc}') from exc
+        if not isinstance(loaded, dict):
+            raise ValueError('Structured script YAML must decode to a mapping')
+        return yaml_blob
 
     def _build_backup_script(self, news_items: List[Dict[str, Any]], target_duration_minutes: Optional[int]=None) -> Script:
         topics: List[Dict[str, str]] = []

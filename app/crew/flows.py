@@ -39,6 +39,7 @@ class WOWScriptFlow:
             "success": True,
             "final_script": result.script,
             "metadata": metadata,
+            "structured_script_yaml": result.structured_yaml,
         }
 
 

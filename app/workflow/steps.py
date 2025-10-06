@@ -2,6 +2,8 @@ import logging
 import os
 from datetime import datetime
 from typing import Any, Dict, List
+
+import yaml
 from app.align_subtitles import align_script_with_stt, export_srt
 from app.config import cfg
 from app.config.settings import settings
@@ -77,11 +79,13 @@ class GenerateScriptStep(WorkflowStep):
         try:
             crew_result = None
             structured_script = None
+            structured_script_yaml = None
             if use_crewai:
                 result_dict = await self._generate_with_crewai(news_items)
                 script_content = result_dict['script']
                 crew_result = result_dict.get('crew_result')
                 structured_script = result_dict.get('structured_script')
+                structured_script_yaml = result_dict.get('structured_script_yaml')
             else:
                 script_content = await self._generate_legacy(context, news_items)
             if not script_content or len(script_content) < 100:
@@ -103,11 +107,16 @@ class GenerateScriptStep(WorkflowStep):
             context.set('script_validation', validation.to_dict())
             if structured_script:
                 context.set('script_structured', structured_script)
+            if isinstance(structured_script_yaml, str):
+                context.set('script_structured_yaml', structured_script_yaml)
             if crew_result:
                 context.set('crew_result', crew_result)
                 structured = crew_result.get('structured_script')
                 if structured:
                     context.set('script_structured', structured)
+                yaml_blob = crew_result.get('structured_script_yaml')
+                if isinstance(yaml_blob, str):
+                    context.set('script_structured_yaml', yaml_blob)
             logger.info(f'Generated script: {len(script_content)} characters')
             result_data = {'script': script_content, 'script_path': script_path, 'length': len(script_content), 'quality_checked': use_crewai or cfg.use_three_stage_quality_check, 'used_crewai': use_crewai, 'validation': validation.to_dict()}
             if crew_result:
@@ -118,8 +127,13 @@ class GenerateScriptStep(WorkflowStep):
                 structured_from_result = crew_result.get('structured_script')
                 if structured_from_result:
                     result_data['structured_script'] = structured_from_result
+                yaml_from_result = crew_result.get('structured_script_yaml')
+                if isinstance(yaml_from_result, str):
+                    result_data['structured_script_yaml'] = yaml_from_result
             if structured_script and 'structured_script' not in result_data:
                 result_data['structured_script'] = structured_script
+            if isinstance(structured_script_yaml, str) and 'structured_script_yaml' not in result_data:
+                result_data['structured_script_yaml'] = structured_script_yaml
             return self._success(data=result_data, files=[script_path])
         except Exception as e:
             logger.error(f'Step 2 failed: {e}')
@@ -140,9 +154,25 @@ class GenerateScriptStep(WorkflowStep):
         else:
             raise TypeError('Script generator returned unsupported payload type')
         script_content = script_model.to_text()
-        structured_payload = script_model.model_dump(mode='json')
+        structured_yaml = crew_result.get('structured_script_yaml')
+        structured_payload: Dict[str, Any]
+        if isinstance(structured_yaml, str):
+            try:
+                structured_payload = yaml.safe_load(structured_yaml) or {}
+            except yaml.YAMLError as exc:
+                logger.warning('Failed to parse structured script YAML from Crew result: %s', exc)
+                structured_payload = script_model.model_dump(mode='json')
+                structured_yaml = yaml.safe_dump(structured_payload, allow_unicode=True, sort_keys=False)
+        else:
+            structured_payload = script_model.model_dump(mode='json')
+            structured_yaml = yaml.safe_dump(structured_payload, allow_unicode=True, sort_keys=False)
         logger.info('Script preview (first 200 chars): %r', script_content[:200])
-        return {'script': script_content, 'crew_result': crew_result, 'structured_script': structured_payload}
+        return {
+            'script': script_content,
+            'crew_result': crew_result,
+            'structured_script': structured_payload,
+            'structured_script_yaml': structured_yaml,
+        }
 
     async def _generate_legacy(self, context: WorkflowContext, news_items: List[Dict[str, Any]]) -> str:
         from app.script_gen import generate_dialogue
@@ -218,7 +248,14 @@ class SynthesizeAudioStep(WorkflowStep):
             return self._failure(str(err))
         try:
             structured_script = context.get('script_structured')
+            structured_yaml = context.get('script_structured_yaml')
             dialogues = None
+            if not structured_script and isinstance(structured_yaml, str):
+                try:
+                    structured_script = yaml.safe_load(structured_yaml) or {}
+                    context.set('script_structured', structured_script)
+                except yaml.YAMLError as exc:
+                    logger.debug(f'Failed to restore structured script from YAML: {exc}')
             if structured_script:
                 try:
                     script_model = Script.model_validate(structured_script)
