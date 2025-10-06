@@ -1,9 +1,3 @@
-"""Google Drive操作モジュール
-
-生成した動画ファイルをGoogle Driveにアップロードし、
-共有リンクを生成してファイル管理を行います。
-"""
-
 import json
 import logging
 import os
@@ -12,21 +6,15 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
-
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
-
 from app.config.paths import ProjectPaths
-
 from .config import cfg
-
 logger = logging.getLogger(__name__)
 
-
 class DriveManager:
-    """Google Drive管理クラス"""
 
     def __init__(self):
         self.service = None
@@ -35,531 +23,332 @@ class DriveManager:
         self._setup_service()
 
     def _setup_service(self):
-        """Google Drive APIサービスを初期化"""
         try:
             if not self.credentials:
-                raise ValueError("Google credentials not configured")
-
-            # 認証情報を設定
+                raise ValueError('Google credentials not configured')
             if isinstance(self.credentials, dict):
-                credentials = Credentials.from_service_account_info(
-                    self.credentials, scopes=["https://www.googleapis.com/auth/drive"]
-                )
+                credentials = Credentials.from_service_account_info(self.credentials, scopes=['https://www.googleapis.com/auth/drive'])
             elif isinstance(self.credentials, (str, Path)):
                 cred_path = ProjectPaths.resolve_relative(str(self.credentials))
                 if not cred_path.exists():
-                    raise ValueError(f"Google credentials file not found: {cred_path}")
-                credentials = Credentials.from_service_account_file(
-                    str(cred_path), scopes=["https://www.googleapis.com/auth/drive"]
-                )
+                    raise ValueError(f'Google credentials file not found: {cred_path}')
+                credentials = Credentials.from_service_account_file(str(cred_path), scopes=['https://www.googleapis.com/auth/drive'])
             else:
-                raise ValueError(f"Invalid credentials format or path: {self.credentials}")
-
-            # Drive APIサービスを構築
-            self.service = build("drive", "v3", credentials=credentials)
-
-            # フォルダの存在確認
+                raise ValueError(f'Invalid credentials format or path: {self.credentials}')
+            self.service = build('drive', 'v3', credentials=credentials)
             if self.folder_id:
                 self._verify_folder_access()
-
-            logger.info("Google Drive service initialized")
-
+            logger.info('Google Drive service initialized')
         except Exception as e:
-            logger.error(f"Failed to initialize Google Drive service: {e}")
+            logger.error(f'Failed to initialize Google Drive service: {e}')
             raise
 
     def _verify_folder_access(self):
-        """指定フォルダへのアクセス権限を確認"""
         try:
-            folder_info = (
-                self.service.files()
-                .get(fileId=self.folder_id, fields="id,name,mimeType", supportsAllDrives=True)
-                .execute()
-            )
-
-            if folder_info.get("mimeType") != "application/vnd.google-apps.folder":
-                raise ValueError(f"Specified ID is not a folder: {self.folder_id}")
-
+            folder_info = self.service.files().get(fileId=self.folder_id, fields='id,name,mimeType', supportsAllDrives=True).execute()
+            if folder_info.get('mimeType') != 'application/vnd.google-apps.folder':
+                raise ValueError(f'Specified ID is not a folder: {self.folder_id}')
             logger.info(f"Verified access to folder: {folder_info.get('name')}")
-
         except Exception as e:
-            logger.warning(f"Could not verify folder access: {e}")
+            logger.warning(f'Could not verify folder access: {e}')
 
-    def upload_file(
-        self, file_path: str, folder_id: str = None, custom_name: str = None, make_public: bool = True
-    ) -> Dict[str, Any]:
-        """ファイルをGoogle Driveにアップロード（ストレージクォータエラー時はローカル保存のみ）"""
+    def upload_file(self, file_path: str, folder_id: str=None, custom_name: str=None, make_public: bool=True) -> Dict[str, Any]:
         try:
             file_path_obj = ProjectPaths.resolve_relative(file_path)
             if not file_path_obj.exists():
-                raise FileNotFoundError(f"File not found: {file_path}")
-
+                raise FileNotFoundError(f'File not found: {file_path}')
             file_size = file_path_obj.stat().st_size
             file_name = custom_name or file_path_obj.name
-
-            logger.info(f"Uploading file: {file_name} ({file_size} bytes)")
-
+            logger.info(f'Uploading file: {file_name} ({file_size} bytes)')
             target_folder_id = folder_id or self.folder_id
-
-            file_metadata = {"name": file_name}
-
+            file_metadata = {'name': file_name}
             if target_folder_id:
-                file_metadata["parents"] = [target_folder_id]
-
+                file_metadata['parents'] = [target_folder_id]
             mime_type = self._get_mime_type(str(file_path_obj))
-
-            media = MediaFileUpload(
-                str(file_path_obj), mimetype=mime_type, resumable=True if file_size > 5 * 1024 * 1024 else False
-            )
-
-            file_result = (
-                self.service.files()
-                .create(
-                    body=file_metadata,
-                    media_body=media,
-                    fields="id,name,size,webViewLink,webContentLink",
-                    supportsAllDrives=True,
-                )
-                .execute()
-            )
-
+            media = MediaFileUpload(str(file_path_obj), mimetype=mime_type, resumable=True if file_size > 5 * 1024 * 1024 else False)
+            file_result = self.service.files().create(body=file_metadata, media_body=media, fields='id,name,size,webViewLink,webContentLink', supportsAllDrives=True).execute()
             if make_public:
-                self._make_file_public(file_result.get("id"))
-
-            upload_info = {
-                "file_id": file_result.get("id"),
-                "name": file_result.get("name"),
-                "size": int(file_result.get("size", 0)),
-                "web_view_link": file_result.get("webViewLink"),
-                "web_content_link": file_result.get("webContentLink"),
-                "folder_id": target_folder_id,
-                "uploaded_at": datetime.now().isoformat(),
-                "public": make_public,
-            }
-
+                self._make_file_public(file_result.get('id'))
+            upload_info = {'file_id': file_result.get('id'), 'name': file_result.get('name'), 'size': int(file_result.get('size', 0)), 'web_view_link': file_result.get('webViewLink'), 'web_content_link': file_result.get('webContentLink'), 'folder_id': target_folder_id, 'uploaded_at': datetime.now().isoformat(), 'public': make_public}
             logger.info(f"File uploaded successfully: {upload_info['file_id']}")
             return upload_info
-
         except Exception as e:
             error_str = str(e)
-            logger.error(f"File upload failed: {error_str}")
-
+            logger.error(f'File upload failed: {error_str}')
             analysis = self._analyze_drive_error(e)
-
-            # ストレージクォータエラーの場合は警告のみでスキップ
-            if "storageQuotaExceeded" in error_str or "Service Accounts do not have storage quota" in error_str:
-                reason = analysis.get("message", error_str)
-                logger.warning(
-                    "Skipping Drive upload due to storage quota limitation (file: %s): %s",
-                    file_name,
-                    reason,
-                )
-                # エラーではなく、スキップ情報として返す
-                return {
-                    "skipped": True,
-                    "reason": "storage_quota_exceeded",
-                    "file_path": file_path,
-                    "file_name": file_name,
-                    "file_size": file_size,
-                    "message": "File not uploaded to Drive due to service account storage limitation. Use shared drive or local backup.",
-                    "analysis": analysis,
-                }
-
+            if 'storageQuotaExceeded' in error_str or 'Service Accounts do not have storage quota' in error_str:
+                reason = analysis.get('message', error_str)
+                logger.warning('Skipping Drive upload due to storage quota limitation (file: %s): %s', file_name, reason)
+                return {'skipped': True, 'reason': 'storage_quota_exceeded', 'file_path': file_path, 'file_name': file_name, 'file_size': file_size, 'message': 'File not uploaded to Drive due to service account storage limitation. Use shared drive or local backup.', 'analysis': analysis}
             return self._get_upload_error_info(file_path, error_str, analysis)
 
     @staticmethod
     def _analyze_drive_error(error: Exception) -> Dict[str, Any]:
-        """Pull structured details from Drive API errors for easier troubleshooting."""
-
-        analysis: Dict[str, Any] = {
-            "status": None,
-            "reason": None,
-            "message": str(error),
-            "classification": None,
-            "suggestions": [],
-        }
-
+        analysis: Dict[str, Any] = {'status': None, 'reason': None, 'message': str(error), 'classification': None, 'suggestions': []}
         if isinstance(error, HttpError):
-            analysis["status"] = getattr(error.resp, "status", None)
-            raw_content = getattr(error, "content", b"")
-
+            analysis['status'] = getattr(error.resp, 'status', None)
+            raw_content = getattr(error, 'content', b'')
             payload: Dict[str, Any] = {}
             if isinstance(raw_content, bytes) and raw_content:
                 try:
-                    payload = json.loads(raw_content.decode("utf-8"))
+                    payload = json.loads(raw_content.decode('utf-8'))
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     payload = {}
-
-            error_info = payload.get("error") if isinstance(payload, dict) else {}
+            error_info = payload.get('error') if isinstance(payload, dict) else {}
             if isinstance(error_info, dict):
-                message = error_info.get("message")
+                message = error_info.get('message')
                 if message:
-                    analysis["message"] = message
-
-                details = error_info.get("errors") or error_info.get("details")
+                    analysis['message'] = message
+                details = error_info.get('errors') or error_info.get('details')
                 if isinstance(details, list) and details:
                     first = details[0]
                     if isinstance(first, dict):
-                        analysis["reason"] = first.get("reason") or analysis["reason"]
-
-        message_lower = analysis["message"].lower() if analysis["message"] else ""
-        reason_lower = analysis["reason"].lower() if analysis["reason"] else ""
-
-        if "storagequotaexceeded" in reason_lower or "storage quota" in message_lower:
-            analysis["classification"] = "storage_quota"
-            analysis.setdefault("suggestions", [])
-            analysis["suggestions"].append(
-                "Service accounts do not have personal Drive storage. Upload to a shared drive or enable domain-wide delegation."
-            )
-        elif "insufficientfilepermissions" in reason_lower or "insufficient permissions" in message_lower:
-            analysis["classification"] = "permission_denied"
-            analysis.setdefault("suggestions", [])
-            analysis["suggestions"].append(
-                "Check that the service account has access to the target folder or shared drive."
-            )
-
+                        analysis['reason'] = first.get('reason') or analysis['reason']
+        message_lower = analysis['message'].lower() if analysis['message'] else ''
+        reason_lower = analysis['reason'].lower() if analysis['reason'] else ''
+        if 'storagequotaexceeded' in reason_lower or 'storage quota' in message_lower:
+            analysis['classification'] = 'storage_quota'
+            analysis.setdefault('suggestions', [])
+            analysis['suggestions'].append('Service accounts do not have personal Drive storage. Upload to a shared drive or enable domain-wide delegation.')
+        elif 'insufficientfilepermissions' in reason_lower or 'insufficient permissions' in message_lower:
+            analysis['classification'] = 'permission_denied'
+            analysis.setdefault('suggestions', [])
+            analysis['suggestions'].append('Check that the service account has access to the target folder or shared drive.')
         return analysis
 
     def _get_mime_type(self, file_path: str) -> str:
         import mimetypes
-
         mime_type, _ = mimetypes.guess_type(file_path)
         if mime_type:
             return mime_type
         ext = Path(file_path).suffix.lower()
-        mime_mappings = {
-            ".mp4": "video/mp4",
-            ".avi": "video/x-msvideo",
-            ".mov": "video/quicktime",
-            ".wav": "audio/wav",
-            ".mp3": "audio/mpeg",
-            ".png": "image/png",
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".srt": "text/plain",
-            ".txt": "text/plain",
-            ".json": "application/json",
-        }
-        return mime_mappings.get(ext, "application/octet-stream")
+        mime_mappings = {'.mp4': 'video/mp4', '.avi': 'video/x-msvideo', '.mov': 'video/quicktime', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.srt': 'text/plain', '.txt': 'text/plain', '.json': 'application/json'}
+        return mime_mappings.get(ext, 'application/octet-stream')
 
     def _make_file_public(self, file_id: str):
         try:
-            permission = {"type": "anyone", "role": "reader"}
+            permission = {'type': 'anyone', 'role': 'reader'}
             self.service.permissions().create(fileId=file_id, body=permission, supportsAllDrives=True).execute()
-            logger.debug(f"Made file public: {file_id}")
+            logger.debug(f'Made file public: {file_id}')
         except Exception as e:
-            logger.warning(f"Failed to make file public: {e}")
+            logger.warning(f'Failed to make file public: {e}')
 
-    def upload_video_package(
-        self, video_path: str, thumbnail_path: str = None, subtitle_path: str = None, metadata: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+    def upload_video_package(self, video_path: str, thumbnail_path: str=None, subtitle_path: str=None, metadata: Dict[str, Any]=None) -> Dict[str, Any]:
         try:
             package_folder_id = self._create_package_folder(metadata)
-            upload_results = {"package_folder_id": package_folder_id, "uploaded_files": [], "errors": []}
-
-            # Save locally if configured
+            upload_results = {'package_folder_id': package_folder_id, 'uploaded_files': [], 'errors': []}
             local_dir = None
             if cfg.save_local_backup:
                 local_dir = self._create_local_backup_folder(metadata)
-
             if video_path and os.path.exists(video_path):
-                video_result = self.upload_file(
-                    video_path,
-                    folder_id=package_folder_id,
-                    custom_name=f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4",
-                )
-                upload_results["uploaded_files"].append({"type": "video", "result": video_result})
-                upload_results["video_file_id"] = video_result.get("file_id")
-                upload_results["video_link"] = video_result.get("web_view_link")
-
-                # Save local backup
-                if local_dir and (video_result.get("error") or video_result.get("skipped")):
-                    self._save_local_copy(video_path, local_dir, "video.mp4")
-
+                video_result = self.upload_file(video_path, folder_id=package_folder_id, custom_name=f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+                upload_results['uploaded_files'].append({'type': 'video', 'result': video_result})
+                upload_results['video_file_id'] = video_result.get('file_id')
+                upload_results['video_link'] = video_result.get('web_view_link')
+                if local_dir and (video_result.get('error') or video_result.get('skipped')):
+                    self._save_local_copy(video_path, local_dir, 'video.mp4')
             if thumbnail_path and os.path.exists(thumbnail_path):
-                thumbnail_result = self.upload_file(
-                    thumbnail_path,
-                    folder_id=package_folder_id,
-                    custom_name=f"thumbnail_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
-                )
-                upload_results["uploaded_files"].append({"type": "thumbnail", "result": thumbnail_result})
-                upload_results["thumbnail_file_id"] = thumbnail_result.get("file_id")
-
-                # Save local backup
-                if local_dir and (thumbnail_result.get("error") or thumbnail_result.get("skipped")):
-                    self._save_local_copy(thumbnail_path, local_dir, "thumbnail.png")
-
+                thumbnail_result = self.upload_file(thumbnail_path, folder_id=package_folder_id, custom_name=f"thumbnail_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+                upload_results['uploaded_files'].append({'type': 'thumbnail', 'result': thumbnail_result})
+                upload_results['thumbnail_file_id'] = thumbnail_result.get('file_id')
+                if local_dir and (thumbnail_result.get('error') or thumbnail_result.get('skipped')):
+                    self._save_local_copy(thumbnail_path, local_dir, 'thumbnail.png')
             if subtitle_path and os.path.exists(subtitle_path):
-                subtitle_result = self.upload_file(
-                    subtitle_path,
-                    folder_id=package_folder_id,
-                    custom_name=f"subtitles_{datetime.now().strftime('%Y%m%d_%H%M%S')}.srt",
-                )
-                upload_results["uploaded_files"].append({"type": "subtitle", "result": subtitle_result})
-                upload_results["subtitle_file_id"] = subtitle_result.get("file_id")
-
-                # Save local backup
-                if local_dir and (subtitle_result.get("error") or subtitle_result.get("skipped")):
-                    self._save_local_copy(subtitle_path, local_dir, "subtitles.srt")
-
+                subtitle_result = self.upload_file(subtitle_path, folder_id=package_folder_id, custom_name=f"subtitles_{datetime.now().strftime('%Y%m%d_%H%M%S')}.srt")
+                upload_results['uploaded_files'].append({'type': 'subtitle', 'result': subtitle_result})
+                upload_results['subtitle_file_id'] = subtitle_result.get('file_id')
+                if local_dir and (subtitle_result.get('error') or subtitle_result.get('skipped')):
+                    self._save_local_copy(subtitle_path, local_dir, 'subtitles.srt')
             if metadata:
                 metadata_path = self._create_metadata_file(metadata, package_folder_id)
                 if metadata_path:
-                    metadata_result = self.upload_file(
-                        metadata_path, folder_id=package_folder_id, custom_name="metadata.json"
-                    )
-                    upload_results["uploaded_files"].append({"type": "metadata", "result": metadata_result})
-
-                    # Save local backup
-                    if local_dir and (metadata_result.get("error") or metadata_result.get("skipped")):
-                        self._save_local_copy(metadata_path, local_dir, "metadata.json")
-
+                    metadata_result = self.upload_file(metadata_path, folder_id=package_folder_id, custom_name='metadata.json')
+                    upload_results['uploaded_files'].append({'type': 'metadata', 'result': metadata_result})
+                    if local_dir and (metadata_result.get('error') or metadata_result.get('skipped')):
+                        self._save_local_copy(metadata_path, local_dir, 'metadata.json')
                     try:
                         os.remove(metadata_path)
                     except (OSError, FileNotFoundError) as e:
-                        logger.debug(f"Could not remove metadata file {metadata_path}: {e}")
-
-            upload_results["package_folder_link"] = self._get_folder_link(package_folder_id)
-            upload_results["upload_completed_at"] = datetime.now().isoformat()
-
+                        logger.debug(f'Could not remove metadata file {metadata_path}: {e}')
+            upload_results['package_folder_link'] = self._get_folder_link(package_folder_id)
+            upload_results['upload_completed_at'] = datetime.now().isoformat()
             if local_dir:
-                upload_results["local_backup_dir"] = local_dir
-                logger.info(f"Files saved locally to: {local_dir}")
-
-            logger.info(f"Video package uploaded to folder: {package_folder_id}")
+                upload_results['local_backup_dir'] = local_dir
+                logger.info(f'Files saved locally to: {local_dir}')
+            logger.info(f'Video package uploaded to folder: {package_folder_id}')
             return upload_results
         except Exception as e:
-            logger.error(f"Video package upload failed: {e}")
-            return {"error": str(e), "uploaded_files": [], "upload_failed_at": datetime.now().isoformat()}
+            logger.error(f'Video package upload failed: {e}')
+            return {'error': str(e), 'uploaded_files': [], 'upload_failed_at': datetime.now().isoformat()}
 
-    def _create_package_folder(self, metadata: Dict[str, Any] = None) -> str:
+    def _create_package_folder(self, metadata: Dict[str, Any]=None) -> str:
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            title = metadata.get("title", "Untitled") if metadata else "Untitled"
-            safe_title = "".join(c for c in title if c.isalnum() or c in (" ", "-", "_")).strip()
-            folder_name = f"{timestamp}_{safe_title[:30]}"
-            folder_metadata = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            title = metadata.get('title', 'Untitled') if metadata else 'Untitled'
+            safe_title = ''.join((c for c in title if c.isalnum() or c in (' ', '-', '_'))).strip()
+            folder_name = f'{timestamp}_{safe_title[:30]}'
+            folder_metadata = {'name': folder_name, 'mimeType': 'application/vnd.google-apps.folder'}
             if self.folder_id:
-                folder_metadata["parents"] = [self.folder_id]
-            folder_result = (
-                self.service.files().create(body=folder_metadata, fields="id,name", supportsAllDrives=True).execute()
-            )
-            folder_id = folder_result.get("id")
-            logger.info(f"Created package folder: {folder_name} ({folder_id})")
+                folder_metadata['parents'] = [self.folder_id]
+            folder_result = self.service.files().create(body=folder_metadata, fields='id,name', supportsAllDrives=True).execute()
+            folder_id = folder_result.get('id')
+            logger.info(f'Created package folder: {folder_name} ({folder_id})')
             return folder_id
         except Exception as e:
-            logger.error(f"Failed to create package folder: {e}")
+            logger.error(f'Failed to create package folder: {e}')
             return self.folder_id
 
     def _create_metadata_file(self, metadata: Dict[str, Any], folder_id: str) -> str:
         try:
             temp_dir = ProjectPaths.temp_path()
             temp_dir.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False, encoding="utf-8", dir=str(temp_dir)
-            ) as f:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8', dir=str(temp_dir)) as f:
                 json.dump(metadata, f, ensure_ascii=False, indent=2)
                 temp_path = f.name
-            logger.debug(f"Created metadata file: {temp_path}")
+            logger.debug(f'Created metadata file: {temp_path}')
             return temp_path
         except Exception as e:
-            logger.error(f"Failed to create metadata file: {e}")
+            logger.error(f'Failed to create metadata file: {e}')
             return None
 
     def _get_folder_link(self, folder_id: str) -> str:
         try:
-            folder_info = (
-                self.service.files().get(fileId=folder_id, fields="webViewLink", supportsAllDrives=True).execute()
-            )
-            return folder_info.get("webViewLink", "")
+            folder_info = self.service.files().get(fileId=folder_id, fields='webViewLink', supportsAllDrives=True).execute()
+            return folder_info.get('webViewLink', '')
         except Exception as e:
-            logger.warning(f"Failed to get folder link: {e}")
-            return f"https://drive.google.com/drive/folders/{folder_id}"
+            logger.warning(f'Failed to get folder link: {e}')
+            return f'https://drive.google.com/drive/folders/{folder_id}'
 
-    def _get_upload_error_info(
-        self, file_path: str, error_msg: str, analysis: Dict[str, Any] | None = None
-    ) -> Dict[str, Any]:
-        return {
-            "error": error_msg,
-            "file_path": file_path,
-            "file_exists": os.path.exists(file_path),
-            "file_size": os.path.getsize(file_path) if os.path.exists(file_path) else 0,
-            "upload_failed_at": datetime.now().isoformat(),
-            "analysis": analysis or {},
-        }
+    def _get_upload_error_info(self, file_path: str, error_msg: str, analysis: Dict[str, Any] | None=None) -> Dict[str, Any]:
+        return {'error': error_msg, 'file_path': file_path, 'file_exists': os.path.exists(file_path), 'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else 0, 'upload_failed_at': datetime.now().isoformat(), 'analysis': analysis or {}}
 
-    def _create_local_backup_folder(self, metadata: Dict[str, Any] = None) -> str:
-        """ローカルバックアップフォルダを作成"""
+    def _create_local_backup_folder(self, metadata: Dict[str, Any]=None) -> str:
         try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            title = metadata.get("title", "Untitled") if metadata else "Untitled"
-            safe_title = "".join(c for c in title if c.isalnum() or c in (" ", "-", "_")).strip()
-            folder_name = f"{timestamp}_{safe_title[:30]}"
-
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            title = metadata.get('title', 'Untitled') if metadata else 'Untitled'
+            safe_title = ''.join((c for c in title if c.isalnum() or c in (' ', '-', '_'))).strip()
+            folder_name = f'{timestamp}_{safe_title[:30]}'
             base_dir = ProjectPaths.resolve_relative(cfg.local_output_dir)
             local_dir = base_dir / folder_name
-
             local_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Created local backup folder: {local_dir}")
+            logger.info(f'Created local backup folder: {local_dir}')
             return str(local_dir)
         except Exception as e:
-            logger.error(f"Failed to create local backup folder: {e}")
+            logger.error(f'Failed to create local backup folder: {e}')
             return None
 
     def _save_local_copy(self, source_path: str, dest_dir: str, dest_filename: str):
-        """ファイルをローカルにコピー"""
         try:
             source = ProjectPaths.resolve_relative(source_path)
             if not source.exists():
-                logger.warning(f"Source file for local backup not found: {source}")
+                logger.warning(f'Source file for local backup not found: {source}')
                 return
-
             dest_path = Path(dest_dir) / dest_filename
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(str(source), dest_path)
-            logger.info(f"Saved local copy: {dest_path}")
+            logger.info(f'Saved local copy: {dest_path}')
         except Exception as e:
-            logger.warning(f"Failed to save local copy: {e}")
+            logger.warning(f'Failed to save local copy: {e}')
 
-    def list_files(self, folder_id: str = None, limit: int = 100) -> List[Dict[str, Any]]:
+    def list_files(self, folder_id: str=None, limit: int=100) -> List[Dict[str, Any]]:
         try:
             target_folder_id = folder_id or self.folder_id
-            query = f"'{target_folder_id}' in parents and trashed=false" if target_folder_id else "trashed=false"
-            results = (
-                self.service.files()
-                .list(
-                    q=query,
-                    pageSize=limit,
-                    fields="files(id,name,size,mimeType,createdTime,webViewLink)",
-                    supportsAllDrives=True,
-                    includeItemsFromAllDrives=True,
-                )
-                .execute()
-            )
-            files = results.get("files", [])
+            query = f"'{target_folder_id}' in parents and trashed=false" if target_folder_id else 'trashed=false'
+            results = self.service.files().list(q=query, pageSize=limit, fields='files(id,name,size,mimeType,createdTime,webViewLink)', supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
+            files = results.get('files', [])
             file_list = []
             for file_info in files:
-                file_list.append(
-                    {
-                        "id": file_info.get("id"),
-                        "name": file_info.get("name"),
-                        "size": int(file_info.get("size", 0)),
-                        "mime_type": file_info.get("mimeType"),
-                        "created_time": file_info.get("createdTime"),
-                        "web_view_link": file_info.get("webViewLink"),
-                    }
-                )
-            logger.info(f"Listed {len(file_list)} files from folder: {target_folder_id}")
+                file_list.append({'id': file_info.get('id'), 'name': file_info.get('name'), 'size': int(file_info.get('size', 0)), 'mime_type': file_info.get('mimeType'), 'created_time': file_info.get('createdTime'), 'web_view_link': file_info.get('webViewLink')})
+            logger.info(f'Listed {len(file_list)} files from folder: {target_folder_id}')
             return file_list
         except Exception as e:
-            logger.error(f"Failed to list files: {e}")
+            logger.error(f'Failed to list files: {e}')
             return []
 
     def delete_file(self, file_id: str) -> bool:
         try:
             self.service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
-            logger.info(f"Deleted file: {file_id}")
+            logger.info(f'Deleted file: {file_id}')
             return True
         except Exception as e:
-            logger.error(f"Failed to delete file {file_id}: {e}")
+            logger.error(f'Failed to delete file {file_id}: {e}')
             return False
 
-    def cleanup_old_files(self, days_old: int = 30) -> int:
+    def cleanup_old_files(self, days_old: int=30) -> int:
         try:
             cutoff_date = datetime.now() - timedelta(days=days_old)
             cutoff_str = cutoff_date.isoformat()
             query = f"createdTime < '{cutoff_str}' and trashed=false"
             if self.folder_id:
                 query += f" and '{self.folder_id}' in parents"
-            results = (
-                self.service.files()
-                .list(
-                    q=query, fields="files(id,name,createdTime)", supportsAllDrives=True, includeItemsFromAllDrives=True
-                )
-                .execute()
-            )
-            old_files = results.get("files", [])
+            results = self.service.files().list(q=query, fields='files(id,name,createdTime)', supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
+            old_files = results.get('files', [])
             deleted_count = 0
             for file_info in old_files:
-                if self.delete_file(file_info.get("id")):
+                if self.delete_file(file_info.get('id')):
                     deleted_count += 1
-            logger.info(f"Cleaned up {deleted_count} old files (older than {days_old} days)")
+            logger.info(f'Cleaned up {deleted_count} old files (older than {days_old} days)')
             return deleted_count
         except Exception as e:
-            logger.error(f"Failed to cleanup old files: {e}")
+            logger.error(f'Failed to cleanup old files: {e}')
             return 0
 
     def get_storage_usage(self) -> Dict[str, Any]:
         try:
-            about_info = self.service.about().get(fields="storageQuota").execute()
-            storage_quota = about_info.get("storageQuota", {})
-            usage_info = {
-                "limit_gb": int(storage_quota.get("limit", 0)) / (1024**3),
-                "usage_gb": int(storage_quota.get("usage", 0)) / (1024**3),
-                "usage_in_drive_gb": int(storage_quota.get("usageInDrive", 0)) / (1024**3),
-                "usage_in_drive_trash_gb": int(storage_quota.get("usageInDriveTrash", 0)) / (1024**3),
-            }
-            usage_info["available_gb"] = usage_info["limit_gb"] - usage_info["usage_gb"]
-            usage_info["usage_percentage"] = (usage_info["usage_gb"] / usage_info["limit_gb"]) * 100
+            about_info = self.service.about().get(fields='storageQuota').execute()
+            storage_quota = about_info.get('storageQuota', {})
+            usage_info = {'limit_gb': int(storage_quota.get('limit', 0)) / 1024 ** 3, 'usage_gb': int(storage_quota.get('usage', 0)) / 1024 ** 3, 'usage_in_drive_gb': int(storage_quota.get('usageInDrive', 0)) / 1024 ** 3, 'usage_in_drive_trash_gb': int(storage_quota.get('usageInDriveTrash', 0)) / 1024 ** 3}
+            usage_info['available_gb'] = usage_info['limit_gb'] - usage_info['usage_gb']
+            usage_info['usage_percentage'] = usage_info['usage_gb'] / usage_info['limit_gb'] * 100
             return usage_info
         except Exception as e:
-            logger.error(f"Failed to get storage usage: {e}")
+            logger.error(f'Failed to get storage usage: {e}')
             return {}
-
-
-# グローバルインスタンス
 drive_manager = DriveManager() if cfg.google_credentials_json else None
 
-
-def upload_file(file_path: str, folder_id: str = None, make_public: bool = True) -> Dict[str, Any]:
+def upload_file(file_path: str, folder_id: str=None, make_public: bool=True) -> Dict[str, Any]:
     if drive_manager:
         return drive_manager.upload_file(file_path, folder_id, make_public=make_public)
     else:
-        logger.warning("Drive manager not available")
-        return {"error": "Drive manager not configured"}
+        logger.warning('Drive manager not available')
+        return {'error': 'Drive manager not configured'}
 
-
-def upload_video_package(
-    video_path: str, thumbnail_path: str = None, subtitle_path: str = None, metadata: Dict[str, Any] = None
-) -> Dict[str, Any]:
+def upload_video_package(video_path: str, thumbnail_path: str=None, subtitle_path: str=None, metadata: Dict[str, Any]=None) -> Dict[str, Any]:
     if drive_manager:
         return drive_manager.upload_video_package(video_path, thumbnail_path, subtitle_path, metadata)
     else:
-        logger.warning("Drive manager not available")
-        return {"error": "Drive manager not configured"}
-
-
-if __name__ == "__main__":
-    print("Testing Google Drive functionality...")
+        logger.warning('Drive manager not available')
+        return {'error': 'Drive manager not configured'}
+if __name__ == '__main__':
+    print('Testing Google Drive functionality...')
     if cfg.google_credentials_json:
         try:
             manager = DriveManager()
-            print("\n=== Storage Usage ===")
+            print('\n=== Storage Usage ===')
             usage = manager.get_storage_usage()
             if usage:
                 print(f"Total: {usage.get('limit_gb', 0):.1f} GB")
                 print(f"Used: {usage.get('usage_gb', 0):.1f} GB ({usage.get('usage_percentage', 0):.1f}%)")
                 print(f"Available: {usage.get('available_gb', 0):.1f} GB")
-            print("\n=== Recent Files ===")
+            print('\n=== Recent Files ===')
             files = manager.list_files(limit=5)
             for file_info in files[:3]:
                 print(f"  {file_info['name']} ({file_info['size']} bytes)")
-            test_files = ["output_audio.wav", "thumbnail.png", "subtitles.srt"]
+            test_files = ['output_audio.wav', 'thumbnail.png', 'subtitles.srt']
             for test_file in test_files:
                 if os.path.exists(test_file):
-                    print(f"\n=== Testing upload: {test_file} ===")
+                    print(f'\n=== Testing upload: {test_file} ===')
                     result = manager.upload_file(test_file, make_public=True)
-                    if "file_id" in result:
+                    if 'file_id' in result:
                         print(f"Uploaded: {result['file_id']}")
                         print(f"Link: {result.get('web_view_link', 'N/A')}")
-                        if manager.delete_file(result["file_id"]):
+                        if manager.delete_file(result['file_id']):
                             print(f"Test file deleted: {result['file_id']}")
                     else:
                         print(f"Upload failed: {result.get('error', 'Unknown error')}")
                     break
         except Exception as e:
-            print(f"Test failed: {e}")
+            print(f'Test failed: {e}')
     else:
-        print("Google Drive credentials not configured, skipping tests")
-
-    print("\nGoogle Drive test completed.")
+        print('Google Drive credentials not configured, skipping tests')
+    print('\nGoogle Drive test completed.')
