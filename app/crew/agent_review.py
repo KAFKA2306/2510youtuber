@@ -17,6 +17,7 @@ from typing import Dict, Iterable, List, Optional
 from pydantic import BaseModel, Field
 
 from app.config.settings import settings
+from app.adapters.llm import extract_structured_json
 from app.crew.tools.ai_clients import GeminiClient
 from app.logging_config import WorkflowLogger
 from app.prompt_cache import get_prompt_manager
@@ -385,17 +386,22 @@ def parse_json_from_gemini(response_text: str, agent_key: str) -> dict:
     if agent_key in RAW_OUTPUT_AGENTS:
         # プレーンテキストとして返す
         text = response_text.strip()
-        if not text.startswith("{") and not text.startswith("["):
-            logger.info(f"{agent_key}: RAW text output detected")
-            return {"raw_output": text, "success": True}
+        if text.startswith("{") or text.startswith("["):
+            # Defer to structured parsing below.
+            pass
+        else:
+            candidate = extract_structured_json(response_text)
+            if candidate is None:
+                logger.info(f"{agent_key}: RAW text output detected")
+                return {"raw_output": text, "success": True}
+            response_text = candidate
 
     # JSON パース試行
     try:
-        # コードブロック除去
-        cleaned = re.sub(r"```json\s*", "", response_text)
-        cleaned = re.sub(r"```", "", cleaned)
-
-        return json.loads(cleaned)
+        candidate = extract_structured_json(response_text)
+        if candidate is None:
+            raise json.JSONDecodeError("No JSON object found", response_text, 0)
+        return json.loads(candidate)
     except json.JSONDecodeError as e:
         if agent_key in RAW_OUTPUT_AGENTS:
             # RAW出力として許容

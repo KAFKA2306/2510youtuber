@@ -30,6 +30,8 @@ _ALLOWED_GEN_ARGS = {
     "safety_settings",
 }
 
+_CODE_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.+?)```", re.IGNORECASE | re.DOTALL)
+
 
 def _normalize_model(model: Optional[str]) -> str:
     candidate = model or settings.llm_model
@@ -85,6 +87,77 @@ def _extract_message_text(response: Any) -> str:
     except Exception as exc:  # pragma: no cover - defensive fallback
         _LOGGER.debug("Failed to parse LiteLLM response: %s", exc)
         return str(response)
+
+
+def _find_json_bounds(text: str) -> Optional[str]:
+    """Return the first balanced JSON object or array in *text*."""
+
+    length = len(text)
+    for index in range(length):
+        start_char = text[index]
+        if start_char not in "{[":
+            continue
+
+        stack: List[str] = ["}" if start_char == "{" else "]"]
+        in_string = False
+        escape = False
+
+        for cursor in range(index + 1, length):
+            char = text[cursor]
+
+            if in_string:
+                if escape:
+                    escape = False
+                elif char == "\\":
+                    escape = True
+                elif char == '"':
+                    in_string = False
+                continue
+
+            if char == '"':
+                in_string = True
+                continue
+
+            if char in "{[":
+                stack.append("}" if char == "{" else "]")
+                continue
+
+            if char in "}]":
+                if not stack:
+                    break
+                expected = stack.pop()
+                if char != expected:
+                    break
+                if not stack:
+                    return text[index : cursor + 1].strip()
+        # If the stack did not empty correctly, keep scanning from next index
+    return None
+
+
+def extract_structured_json(text: str) -> Optional[str]:
+    """Extract a JSON object/array from LLM text output.
+
+    Gemini responses sometimes wrap valid JSON with Markdown fences or
+    explanatory prose. This helper strips common wrappers and returns the
+    first balanced JSON payload when possible.
+    """
+
+    if not text:
+        return None
+
+    candidates: List[str] = []
+
+    fence_match = _CODE_FENCE_PATTERN.search(text)
+    if fence_match:
+        candidates.append(fence_match.group(1))
+
+    candidates.append(text)
+
+    for candidate in candidates:
+        snippet = _find_json_bounds(candidate.strip())
+        if snippet:
+            return snippet
+    return None
 
 
 def _resolve_original_completion() -> Optional[Any]:
@@ -345,11 +418,7 @@ class LLMClient:
             return raw
 
         if isinstance(raw, str):
-            cleaned = raw.strip()
-            if cleaned.startswith("```"):
-                cleaned = re.sub(r"^```json\s*", "", cleaned, flags=re.IGNORECASE)
-                cleaned = re.sub(r"^```\s*", "", cleaned)
-                cleaned = re.sub(r"```\s*$", "", cleaned)
+            cleaned = extract_structured_json(raw) or raw.strip()
             try:
                 return json.loads(cleaned)
             except json.JSONDecodeError:
