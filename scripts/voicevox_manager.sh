@@ -9,7 +9,7 @@ VOICEVOX_PORT="${VOICEVOX_PORT:-50121}"
 VOICEVOX_CONTAINER_NAME="${VOICEVOX_CONTAINER_NAME:-voicevox-nemo}"
 VOICEVOX_SPEAKER="${VOICEVOX_SPEAKER:-1}"
 VOICEVOX_IMAGE="${VOICEVOX_IMAGE:-voicevox/voicevox_engine:cpu-ubuntu20.04-latest}"
-VOICEVOX_HEALTHCHECK_PATH="${VOICEVOX_HEALTHCHECK_PATH:-/version}"
+VOICEVOX_HEALTHCHECK_PATH="${VOICEVOX_HEALTHCHECK_PATH:-/health}"
 VOICEVOX_START_TIMEOUT="${VOICEVOX_START_TIMEOUT:-90}"
 VOICEVOX_PULL_RETRIES="${VOICEVOX_PULL_RETRIES:-3}"
 VOICEVOX_HEALTH_INTERVAL="${VOICEVOX_HEALTH_INTERVAL:-10s}"
@@ -99,7 +99,7 @@ wait_for_health() {
                 esac
             fi
 
-            if curl -fs "http://localhost:${VOICEVOX_PORT}${VOICEVOX_HEALTHCHECK_PATH}" >/dev/null 2>&1; then
+            if wget -q -O /dev/null "http://localhost:${VOICEVOX_PORT}${VOICEVOX_HEALTHCHECK_PATH}" >/dev/null 2>&1; then
                 log "✅ VOICEVOX Nemo is responding on http://localhost:${VOICEVOX_PORT}${VOICEVOX_HEALTHCHECK_PATH}"
                 return 0
             fi
@@ -159,7 +159,7 @@ status() {
     echo "   Health: ${health}"
     echo "   Port: ${VOICEVOX_PORT}"
 
-    if ! curl -fs "http://localhost:${VOICEVOX_PORT}${VOICEVOX_HEALTHCHECK_PATH}" >/dev/null 2>&1; then
+    if ! wget -q -O /dev/null "http://localhost:${VOICEVOX_PORT}${VOICEVOX_HEALTHCHECK_PATH}" >/dev/null 2>&1; then
         echo "   Endpoint: warming up..."
     fi
 
@@ -196,8 +196,7 @@ start() {
         --name "${VOICEVOX_CONTAINER_NAME}"
         --restart "${VOICEVOX_RESTART_POLICY}"
         -p "${VOICEVOX_PORT}:50021"
-        --health-cmd "curl -fs http://localhost:50021${VOICEVOX_HEALTHCHECK_PATH} || exit 1"
-        --health-interval "${VOICEVOX_HEALTH_INTERVAL}"
+                --health-cmd "wget -q -O /dev/null http://localhost:50021${VOICEVOX_HEALTHCHECK_PATH} || exit 1"         --health-interval "${VOICEVOX_HEALTH_INTERVAL}"
         --health-retries "${VOICEVOX_HEALTH_RETRIES}"
         --health-timeout "${VOICEVOX_HEALTH_TIMEOUT}"
         --health-start-period "${VOICEVOX_HEALTH_START_PERIOD}"
@@ -283,7 +282,7 @@ test() {
 
     # クエリ作成
     log "Creating audio query..."
-    local query=$(curl -s -X POST \
+    local query=$(wget -qO- -S -X POST \
         "http://localhost:${VOICEVOX_PORT}/audio_query?text=${encoded_text}&speaker=${VOICEVOX_SPEAKER}")
 
     if [ -z "$query" ] || [ "$query" == "null" ]; then
@@ -294,7 +293,7 @@ test() {
 
     # 音声合成
     log "Synthesizing audio..."
-    curl -s -X POST \
+    wget -qO- -S -X POST \
         -H "Content-Type: application/json" \
         -d "$query" \
         "http://localhost:${VOICEVOX_PORT}/synthesis?speaker=${VOICEVOX_SPEAKER}" \
