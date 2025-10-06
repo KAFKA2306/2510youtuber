@@ -1,5 +1,6 @@
 import logging
 import os
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -12,6 +13,7 @@ from app.metadata import generate_youtube_metadata
 from app.metadata_storage import metadata_storage
 from app.prompts import get_default_news_collection_prompt, get_default_script_generation_prompt
 from app.search_news import collect_news
+from app.script_gen import ScriptGenerator, generate_dialogue
 from app.services.file_archival import FileArchivalManager
 from app.services.media.qa_pipeline import MediaQAPipeline
 from app.services.script import ScriptFormatError, ensure_dialogue_structure
@@ -65,6 +67,15 @@ class CollectNewsStep(WorkflowStep):
 
 class GenerateScriptStep(WorkflowStep):
 
+    def __init__(
+        self,
+        *,
+        script_generator: ScriptGenerator | None = None,
+        legacy_generator: Callable[[List[Dict[str, Any]], str, int | None, bool], str] | None = None,
+    ) -> None:
+        self._script_generator: ScriptGenerator | None = script_generator
+        self._legacy_generator = legacy_generator or generate_dialogue
+
     @property
     def step_name(self) -> str:
         return 'script_generation'
@@ -77,15 +88,10 @@ class GenerateScriptStep(WorkflowStep):
         use_crewai = getattr(cfg, 'use_crewai_script_generation', True)
         logger.info(f"CrewAI WOW Script Generation: {('ENABLED' if use_crewai else 'DISABLED')}")
         try:
-            crew_result = None
-            structured_script = None
-            structured_script_yaml = None
+            script_payload: Dict[str, Any] = {}
             if use_crewai:
-                result_dict = await self._generate_with_crewai(news_items)
-                script_content = result_dict['script']
-                crew_result = result_dict.get('crew_result')
-                structured_script = result_dict.get('structured_script')
-                structured_script_yaml = result_dict.get('structured_script_yaml')
+                script_payload = await self._generate_with_crewai(news_items)
+                script_content = script_payload['script']
             else:
                 script_content = await self._generate_legacy(context, news_items)
             if not script_content or len(script_content) < 100:
@@ -102,37 +108,33 @@ class GenerateScriptStep(WorkflowStep):
             script_path = FileUtils.get_temp_file(prefix='script_', suffix='.txt')
             with open(script_path, 'w', encoding='utf-8') as f:
                 f.write(script_content)
-            context.set('script_content', script_content)
-            context.set('script_path', script_path)
-            context.set('script_validation', validation.to_dict())
-            if structured_script:
-                context.set('script_structured', structured_script)
-            if isinstance(structured_script_yaml, str):
-                context.set('script_structured_yaml', structured_script_yaml)
+            crew_result = script_payload.get('crew_result')
+            crew_mapping = crew_result if isinstance(crew_result, Mapping) else {}
+            structured_script = script_payload.get('structured_script') or crew_mapping.get('structured_script')
+            structured_script_yaml = script_payload.get('structured_script_yaml') or crew_mapping.get('structured_script_yaml')
+            context_updates = {
+                'script_content': script_content,
+                'script_path': script_path,
+                'script_validation': validation.to_dict(),
+            }
             if crew_result:
-                context.set('crew_result', crew_result)
-                structured = crew_result.get('structured_script')
-                if structured:
-                    context.set('script_structured', structured)
-                yaml_blob = crew_result.get('structured_script_yaml')
-                if isinstance(yaml_blob, str):
-                    context.set('script_structured_yaml', yaml_blob)
+                context_updates['crew_result'] = crew_result
+            if structured_script:
+                context_updates['script_structured'] = structured_script
+            if isinstance(structured_script_yaml, str):
+                context_updates['script_structured_yaml'] = structured_script_yaml
+            for key, value in context_updates.items():
+                context.set(key, value)
             logger.info(f'Generated script: {len(script_content)} characters')
             result_data = {'script': script_content, 'script_path': script_path, 'length': len(script_content), 'quality_checked': use_crewai or cfg.use_three_stage_quality_check, 'used_crewai': use_crewai, 'validation': validation.to_dict()}
-            if crew_result:
-                metadata = crew_result.get('metadata') or {}
+            metadata = crew_mapping.get('metadata') if crew_mapping else {}
+            if metadata:
                 result_data['script_metrics'] = metadata
                 if 'japanese_purity_score' in metadata:
-                    result_data['japanese_purity_score'] = metadata.get('japanese_purity_score')
-                structured_from_result = crew_result.get('structured_script')
-                if structured_from_result:
-                    result_data['structured_script'] = structured_from_result
-                yaml_from_result = crew_result.get('structured_script_yaml')
-                if isinstance(yaml_from_result, str):
-                    result_data['structured_script_yaml'] = yaml_from_result
-            if structured_script and 'structured_script' not in result_data:
+                    result_data['japanese_purity_score'] = metadata['japanese_purity_score']
+            if structured_script:
                 result_data['structured_script'] = structured_script
-            if isinstance(structured_script_yaml, str) and 'structured_script_yaml' not in result_data:
+            if isinstance(structured_script_yaml, str):
                 result_data['structured_script_yaml'] = structured_script_yaml
             return self._success(data=result_data, files=[script_path])
         except Exception as e:
@@ -140,47 +142,25 @@ class GenerateScriptStep(WorkflowStep):
             return self._failure(str(e))
 
     async def _generate_with_crewai(self, news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
-        from app.crew.flows import create_wow_script_crew
-        from app.services.script.validator import Script
         logger.info('🚀 Using CrewAI WOW Script Creation Crew...')
-        crew_result = create_wow_script_crew(news_items=news_items, target_duration_minutes=cfg.max_video_duration_minutes)
-        if not crew_result.get('success'):
-            raise Exception(f"CrewAI execution failed: {crew_result.get('error', 'Unknown error')}")
-        script_payload = crew_result.get('final_script')
-        if isinstance(script_payload, Script):
-            script_model = script_payload
-        elif isinstance(script_payload, dict):
-            script_model = Script.model_validate(script_payload)
-        else:
-            raise TypeError('Script generator returned unsupported payload type')
-        script_content = script_model.to_text()
-        structured_yaml = crew_result.get('structured_script_yaml')
-        structured_payload: Dict[str, Any]
-        if isinstance(structured_yaml, str):
-            try:
-                structured_payload = yaml.safe_load(structured_yaml) or {}
-            except yaml.YAMLError as exc:
-                logger.warning('Failed to parse structured script YAML from Crew result: %s', exc)
-                structured_payload = script_model.model_dump(mode='json')
-                structured_yaml = yaml.safe_dump(structured_payload, allow_unicode=True, sort_keys=False)
-        else:
-            structured_payload = script_model.model_dump(mode='json')
-            structured_yaml = yaml.safe_dump(structured_payload, allow_unicode=True, sort_keys=False)
-        logger.info('Script preview (first 200 chars): %r', script_content[:200])
-        return {
-            'script': script_content,
-            'crew_result': crew_result,
-            'structured_script': structured_payload,
-            'structured_script_yaml': structured_yaml,
-        }
+        payload = self._get_script_generator().generate_crewai_payload(
+            news_items,
+            target_duration_minutes=cfg.max_video_duration_minutes,
+        )
+        logger.info('Script preview (first 200 chars): %r', payload['script'][:200])
+        return payload
 
     async def _generate_legacy(self, context: WorkflowContext, news_items: List[Dict[str, Any]]) -> str:
-        from app.script_gen import generate_dialogue
         logger.info(f"3-stage quality check: {('ENABLED' if cfg.use_three_stage_quality_check else 'DISABLED')}")
         prompt_b = self._get_prompt(context.mode)
         if sheets_manager and context.run_id:
             sheets_manager.record_prompt_used(context.run_id, 'prompt_b', prompt_b)
-        return generate_dialogue(news_items, prompt_b, target_duration_minutes=cfg.max_video_duration_minutes, use_quality_check=cfg.use_three_stage_quality_check)
+        return self._legacy_generator(
+            news_items,
+            prompt_b,
+            target_duration_minutes=cfg.max_video_duration_minutes,
+            use_quality_check=cfg.use_three_stage_quality_check,
+        )
 
     def _get_prompt(self, mode: str) -> str:
         try:
@@ -193,6 +173,11 @@ class GenerateScriptStep(WorkflowStep):
 
     def _default_prompt(self) -> str:
         return get_default_script_generation_prompt()
+
+    def _get_script_generator(self) -> ScriptGenerator:
+        if self._script_generator is None:
+            self._script_generator = ScriptGenerator(api_key=settings.api_keys.get('gemini'))
+        return self._script_generator
 
 class GenerateVisualDesignStep(WorkflowStep):
 
