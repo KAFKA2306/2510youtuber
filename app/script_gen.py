@@ -1,51 +1,136 @@
-# app/script_gen.py
-"""
-Script Generation Module
-CrewAIを使った台本生成ロジック
-"""
+"""Legacy script generation helpers with lightweight dependency injection."""
+
+from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from collections.abc import Callable, Mapping
+from typing import Any, Optional
+
+import yaml
 
 from app.crew.flows import create_wow_script_crew
 from app.crew.tools.ai_clients import GeminiClient
-from app.models.workflow import Script
+from app.services.script.validator import Script
 
 logger = logging.getLogger(__name__)
 
 
 class ScriptGenerator:
-    """台本生成を管理するクラス"""
+    """Facilitates Gemini-powered script creation with optional CrewAI support."""
 
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
-        self.client = GeminiClient(api_key=api_key, model=model)
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str = "gemini-1.5-flash",
+        *,
+        client: Callable[[str, dict[str, Any] | None], str] | Any | None = None,
+        crew_runner: Callable[..., Script | Mapping[str, Any]] | None = None,
+    ) -> None:
+        if client is None and api_key:
+            client = GeminiClient(api_key=api_key, model=model)
+        if client is not None and hasattr(client, "generate"):
+            client = client.generate
+        self._generate: Optional[Callable[[str, dict[str, Any] | None], str]] = client  # type: ignore[assignment]
+        self._crew_runner: Callable[..., Script | Mapping[str, Any]] = crew_runner or create_wow_script_crew
 
-    def generate_simple(self, prompt: str, config: Dict[str, Any] = None) -> str:
-        """
-        Geminiを直接呼び出す簡易生成（デバッグ用）
-        """
+    def generate_with_crewai(self, news_items: list, *, target_duration_minutes: int | None = None) -> Script:
+        return self.generate_crewai_payload(
+            news_items,
+            target_duration_minutes=target_duration_minutes,
+        )["script_model"]
+
+    def generate_crewai_payload(
+        self,
+        news_items: list,
+        *,
+        target_duration_minutes: int | None = None,
+    ) -> dict[str, Any]:
+        payload = self._run(
+            "CrewAI script generation",
+            lambda: self._crew_runner(news_items=news_items, target_duration_minutes=target_duration_minutes),
+        )
+        payload_mapping: Mapping[str, Any] = payload if isinstance(payload, Mapping) else {}
+        if payload_mapping.get("success") is False:
+            raise RuntimeError(payload_mapping.get("error") or "CrewAI execution failed")
+        script = self.ensure_script(payload)
+        structured_yaml = payload_mapping.get("structured_script_yaml") if payload_mapping else None
+        structured_payload, structured_yaml = self.ensure_structured_payload(script, structured_yaml)
+        return {
+            "script": script.to_text(),
+            "script_model": script,
+            "crew_result": payload,
+            "structured_script": structured_payload,
+            "structured_script_yaml": structured_yaml,
+        }
+
+    def _run(self, label: str, operation: Callable[[], Any]) -> Any:
         try:
-            # ❌ timeout=120 は削除
-            result = self.client.generate(prompt, generation_config=config)
-            return result
-        except Exception as e:
-            logger.error(f"Simple script generation failed: {e}")
+            return operation()
+        except Exception as exc:  # pragma: no cover - just logging
+            logger.error("%s failed: %s", label, exc)
             raise
 
-    def generate_with_crewai(self, news_items: list) -> Script:
-        """
-        CrewAIを使ってWOWスクリプトを生成する
+    @staticmethod
+    def ensure_script(payload: Script | Mapping[str, Any]) -> Script:
+        if isinstance(payload, Script):
+            return payload
+        if not isinstance(payload, Mapping):
+            raise TypeError(f"Unsupported CrewAI payload type: {type(payload)}")
 
-        Args:
-            news_items: ニュース要約のリスト
-        Returns:
-            Scriptオブジェクト
-        """
-        try:
-            crew_result = create_wow_script_crew(news_items)
-            if not isinstance(crew_result, Script):
-                raise ValueError(f"CrewAI did not return Script, got {type(crew_result)}")
-            return crew_result
-        except Exception as e:
-            logger.error(f"CrewAI script generation failed: {e}")
-            raise
+        candidate = payload.get("final_script") or payload.get("script")
+        if isinstance(candidate, Script):
+            return candidate
+        if isinstance(candidate, Mapping):
+            return Script.model_validate(candidate)
+
+        raise TypeError("CrewAI result did not contain a Script payload")
+
+    @staticmethod
+    def ensure_structured_payload(script: Script, yaml_blob: str | None) -> tuple[dict[str, Any], str]:
+        if isinstance(yaml_blob, str):
+            try:
+                payload = yaml.safe_load(yaml_blob) or {}
+            except yaml.YAMLError as exc:  # pragma: no cover - best effort logging
+                logger.warning("Failed to parse structured script YAML: %s", exc)
+            else:
+                return payload, yaml_blob
+
+        payload = script.model_dump(mode="json")
+        fallback_yaml = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
+        return payload, fallback_yaml
+
+
+def generate_dialogue(
+    news_items: list[dict[str, Any]],
+    prompt: str,
+    *,
+    target_duration_minutes: int | None = None,
+    use_quality_check: bool = True,
+) -> str:
+    """Generate a dialogue script using the configured quality pipeline."""
+
+    if use_quality_check:
+        from app.script_quality import generate_high_quality_script
+
+        result = generate_high_quality_script(
+            news_items,
+            prompt,
+            target_duration_minutes or 30,
+        )
+        if result.get("success") and result.get("final_script"):
+            final_script = result["final_script"]
+            if isinstance(final_script, Script):
+                return final_script.to_text()
+            if isinstance(final_script, Mapping):
+                return Script.model_validate(final_script).to_text()
+            if isinstance(final_script, str):
+                return final_script
+        raise RuntimeError(result.get("error") or "Three-stage script generation failed")
+
+    from app.services.script.generator import StructuredScriptGenerator
+
+    structured = StructuredScriptGenerator().generate(
+        news_items,
+        target_duration_minutes,
+    )
+    return structured.script.to_text()
