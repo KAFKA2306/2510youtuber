@@ -217,18 +217,30 @@ class StructuredScriptGenerator:
         stripped = text.strip()
         if not stripped:
             return None
-        if stripped.startswith('{'):
-            if StructuredScriptGenerator._is_balanced_json(stripped):
-                return stripped
-        start = stripped.find('{')
-        if start == -1:
-            return None
-        slice_text = stripped[start:]
-        end_index = StructuredScriptGenerator._find_matching_brace(slice_text)
-        if end_index is None:
-            return None
-        candidate = slice_text[:end_index + 1]
-        return candidate if StructuredScriptGenerator._is_balanced_json(candidate) else None
+        if stripped.startswith('{') and StructuredScriptGenerator._is_balanced_json(stripped):
+            return stripped
+
+        search_start = 0
+        while True:
+            start = stripped.find('{', search_start)
+            if start == -1:
+                return None
+
+            slice_text = stripped[start:]
+            end_index = StructuredScriptGenerator._find_matching_brace(slice_text)
+            if end_index is None:
+                search_start = start + 1
+                if search_start >= len(stripped):
+                    return None
+                continue
+
+            candidate = slice_text[:end_index + 1]
+            if StructuredScriptGenerator._is_balanced_json(candidate):
+                return candidate
+
+            search_start = start + 1
+            if search_start >= len(stripped):
+                return None
 
     @staticmethod
     def _extract_message_text(response: Dict[str, Any]) -> str:
