@@ -4,16 +4,17 @@ import os
 import re
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from app.logging_config import get_log_session, setup_logging
 
 from .api_rotation import initialize_api_infrastructure
 from .config import cfg
-from .services.media import ensure_ffmpeg_tooling
 from .discord import discord_notifier
 from .metadata_storage import metadata_storage
 from .models.workflow import WorkflowResult
+from .services.media import ensure_ffmpeg_tooling
 from .sheets import sheets_manager
 from .workflow import (
     AlignSubtitlesStep,
@@ -32,143 +33,222 @@ from .workflow import (
     WorkflowContext,
     WorkflowStep,
 )
+from .workflow_runtime import AttemptOutcome, AttemptStatus, ScriptInsights, WorkflowRunState
 
 log_level_str = os.getenv("LOG_LEVEL", "INFO")
 log_level = getattr(logging, log_level_str.upper(), logging.INFO)
 _LOG_SESSION = setup_logging(log_level=log_level)
 logger = logging.getLogger(__name__)
-initialize_api_infrastructure()
-logger.info("API infrastructure initialized at startup")
-_STARTUP_FFMPEG_PATH = ensure_ffmpeg_tooling(cfg.ffmpeg_path)
-logger.info("FFmpeg binary validated at startup: %s", _STARTUP_FFMPEG_PATH)
+
+
+_BOOTSTRAP_FFMPEG_PATH: Optional[str] = None
+_BOOTSTRAP_COMPLETED = False
+
+
+def _bootstrap_runtime() -> str:
+    """Ensure heavy-weight dependencies are initialized exactly once."""
+
+    global _BOOTSTRAP_COMPLETED, _BOOTSTRAP_FFMPEG_PATH
+
+    if _BOOTSTRAP_COMPLETED and _BOOTSTRAP_FFMPEG_PATH:
+        return _BOOTSTRAP_FFMPEG_PATH
+
+    initialize_api_infrastructure()
+    logger.info("API infrastructure initialized")
+    _BOOTSTRAP_FFMPEG_PATH = ensure_ffmpeg_tooling(cfg.ffmpeg_path)
+    _BOOTSTRAP_COMPLETED = True
+    logger.info("FFmpeg binary validated: %s", _BOOTSTRAP_FFMPEG_PATH)
+    return _BOOTSTRAP_FFMPEG_PATH
+
+
+RETRY_CLEANUP_MAP: Dict[str, Sequence[str]] = {
+    "script_generation": ("script_content", "script_path"),
+    "visual_design_generation": ("visual_design", "visual_design_dict"),
+    "metadata_generation": ("metadata",),
+    "thumbnail_generation": ("thumbnail_path",),
+    "audio_synthesis": ("audio_path",),
+    "audio_transcription": ("stt_words",),
+    "subtitle_alignment": ("subtitle_path", "aligned_subtitles"),
+    "video_generation": (
+        "video_path",
+        "archived_audio_path",
+        "archived_subtitle_path",
+        "broll_path",
+        "broll_metadata",
+        "broll_keywords",
+        "broll_clip_paths",
+        "broll_source",
+        "use_stock_footage",
+        "archived_broll_path",
+    ),
+    "media_quality_assurance": (
+        "qa_report",
+        "qa_report_path",
+        "qa_passed",
+        "qa_retry_request",
+    ),
+    "drive_upload": ("drive_result",),
+    "youtube_upload": ("youtube_result", "video_id", "video_url"),
+}
+
+
+def _default_workflow_steps() -> List[WorkflowStep]:
+    """Instantiate the standard set of workflow steps."""
+
+    return [
+        CollectNewsStep(),
+        GenerateScriptStep(),
+        GenerateVisualDesignStep(),
+        GenerateMetadataStep(),
+        GenerateThumbnailStep(),
+        SynthesizeAudioStep(),
+        TranscribeAudioStep(),
+        AlignSubtitlesStep(),
+        GenerateVideoStep(),
+        QualityAssuranceStep(),
+        UploadToDriveStep(),
+        UploadToYouTubeStep(),
+        ReviewVideoStep(),
+    ]
+
+
+@dataclass
+class WorkflowPlan:
+    """Execution plan containing the prepared context and retry rules."""
+
+    run_state: WorkflowRunState
+    max_attempts: int
 
 
 class YouTubeWorkflow:
-    RETRY_CLEANUP_MAP = {
-        "script_generation": {"script_content", "script_path"},
-        "visual_design_generation": {"visual_design", "visual_design_dict"},
-        "metadata_generation": {"metadata"},
-        "thumbnail_generation": {"thumbnail_path"},
-        "audio_synthesis": {"audio_path"},
-        "audio_transcription": {"stt_words"},
-        "subtitle_alignment": {"subtitle_path", "aligned_subtitles"},
-        "video_generation": {
-            "video_path",
-            "archived_audio_path",
-            "archived_subtitle_path",
-            "broll_path",
-            "broll_metadata",
-            "broll_keywords",
-            "broll_clip_paths",
-            "broll_source",
-            "use_stock_footage",
-            "archived_broll_path",
-        },
-        "media_quality_assurance": {"qa_report", "qa_report_path", "qa_passed", "qa_retry_request"},
-        "drive_upload": {"drive_result"},
-        "youtube_upload": {"youtube_result", "video_id", "video_url"},
-    }
+    """High-level orchestrator that runs the YouTube production workflow."""
 
-    def __init__(self):
-        self.run_id = None
+    def __init__(self, steps: Optional[Iterable[WorkflowStep]] = None) -> None:
+        _bootstrap_runtime()
+        self.run_id: Optional[str] = None
         self.mode = "daily"
         self.context: Optional[WorkflowContext] = None
         self._log_session = get_log_session()
-        self.steps: List[WorkflowStep] = [
-            CollectNewsStep(),
-            GenerateScriptStep(),
-            GenerateVisualDesignStep(),
-            GenerateMetadataStep(),
-            GenerateThumbnailStep(),
-            SynthesizeAudioStep(),
-            TranscribeAudioStep(),
-            AlignSubtitlesStep(),
-            GenerateVideoStep(),
-            QualityAssuranceStep(),
-            UploadToDriveStep(),
-            UploadToYouTubeStep(),
-            ReviewVideoStep(),
-        ]
+        self.steps: List[WorkflowStep] = list(steps) if steps else _default_workflow_steps()
 
     async def execute_full_workflow(self, mode: str = "daily") -> Dict[str, Any]:
-        start_time = datetime.now()
-        self.mode = mode
-        self.run_id = self._initialize_run(mode)
-        self.context = WorkflowContext(run_id=self.run_id, mode=mode)
+        """Run every workflow step (with QA-driven retries) and return the payload."""
+
+        plan = self._prepare_plan(mode)
+        run_state = plan.run_state
         await self._notify_workflow_start(mode)
-        qa_gating = getattr(getattr(cfg, "media_quality", None), "gating", None)
-        max_attempts = 1 + max(0, getattr(qa_gating, "retry_attempts", 0))
-        start_index = 0
-        step_results: List[Optional[Any]] = [None] * len(self.steps)
-        attempt = 0
-        while attempt < max_attempts:
-            attempt += 1
-            logger.info(f"🚀 Workflow attempt {attempt}/{max_attempts}")
-            retry_triggered = False
-            for index in range(start_index, len(self.steps)):
-                step = self.steps[index]
-                logger.info(f"Executing: {step.step_name}")
-                result = await step.execute(self.context)
-                step_results[index] = result
-                if result.files_generated:
-                    self.context.add_files(result.files_generated)
-                if not result.success:
-                    if isinstance(step, QualityAssuranceStep):
-                        retry_request = self.context.get("qa_retry_request")
-                        if retry_request and attempt < max_attempts:
-                            retry_step_name = retry_request.get("start_step")
-                            retry_index = self._resolve_step_index(retry_step_name)
-                            if retry_index is None:
-                                failure = await self._handle_workflow_failure(step.step_name, result)
-                                self._cleanup_temp_files()
-                                return failure
-                            reason = retry_request.get("reason")
-                            if reason:
-                                logger.warning(reason)
-                            logger.warning(
-                                "Retrying workflow from step '%s' (attempt %s/%s)",
-                                self.steps[retry_index].step_name,
-                                attempt + 1,
-                                max_attempts,
-                            )
-                            self._prepare_context_for_retry(retry_index)
-                            self._clear_step_results(step_results, retry_index)
-                            start_index = retry_index
-                            retry_triggered = True
-                            break
-                    failure = await self._handle_workflow_failure(step.step_name, result)
-                    self._cleanup_temp_files()
-                    return failure
-            if retry_triggered:
-                continue
-            final_results = [res for res in step_results if res is not None]
-            video_url = self.context.get("video_url")
-            if video_url:
-                metadata_storage.update_video_stats(run_id=self.run_id, video_url=video_url)
-                logger.info("Updated metadata storage with video URL")
-            execution_time = (datetime.now() - start_time).total_seconds()
-            result = self._compile_final_result(final_results, execution_time)
-            if self._log_session:
-                self._log_session.mark_status(
-                    "succeeded",
-                    execution_time_seconds=execution_time,
-                    attempts=attempt,
-                    max_attempts=max_attempts,
-                    steps=[step.step_name for step in self.steps],
-                    video_url=video_url,
-                    news_count=result.get("news_count"),
+
+        while run_state.attempt < plan.max_attempts:
+            run_state.start_attempt()
+            logger.info("🚀 Workflow attempt %s/%s", run_state.attempt, plan.max_attempts)
+            outcome = await self._run_attempt(run_state, plan.max_attempts)
+
+            if outcome.status is AttemptStatus.SUCCESS:
+                return await self._finalize_success(run_state, plan.max_attempts)
+
+            if outcome.status is AttemptStatus.RETRY and outcome.restart_index is not None:
+                restart_name = self.steps[outcome.restart_index].step_name
+                if outcome.reason:
+                    logger.warning(outcome.reason)
+                logger.warning(
+                    "Retry requested by QA – restarting from '%s' (attempt %s/%s)",
+                    restart_name,
+                    run_state.attempt + 1,
+                    plan.max_attempts,
                 )
-            await self._notify_workflow_success(result)
-            self._update_run_status("completed", result)
+                run_state.request_retry(outcome.restart_index)
+                continue
+
+            failure_step = outcome.failure_step or "unknown"
+            failure = await self._handle_workflow_failure(failure_step, outcome.failure_result)
             self._cleanup_temp_files()
-            return result
+            return failure
+
         logger.error("Workflow failed after exhausting QA retries")
-        failure_index = max(start_index, 0)
-        failure_step = self.steps[failure_index].step_name if failure_index < len(self.steps) else "unknown"
-        failure_result = step_results[failure_index] if failure_index < len(step_results) else None
+        failure_index = max(run_state.start_index, 0)
+        failure_step = (
+            self.steps[failure_index].step_name
+            if failure_index < len(self.steps)
+            else "unknown"
+        )
+        failure_result = (
+            run_state.results[failure_index]
+            if failure_index < len(run_state.results)
+            else None
+        )
         failure = await self._handle_workflow_failure(failure_step, failure_result)
         self._cleanup_temp_files()
         return failure
+
+    def _prepare_plan(self, mode: str) -> WorkflowPlan:
+        """Create the run state and retry envelope for an execution."""
+
+        _bootstrap_runtime()
+        self.mode = mode
+        self.run_id = self._initialize_run(mode)
+        self.context = WorkflowContext(run_id=self.run_id, mode=mode)
+
+        qa_gating = getattr(getattr(cfg, "media_quality", None), "gating", None)
+        max_attempts = 1 + max(0, getattr(qa_gating, "retry_attempts", 0))
+
+        run_state = WorkflowRunState(
+            run_id=self.run_id,
+            mode=mode,
+            context=self.context,
+            steps=self.steps,
+            retry_cleanup_map=RETRY_CLEANUP_MAP,
+        )
+        return WorkflowPlan(run_state=run_state, max_attempts=max_attempts)
+
+    async def _run_attempt(
+        self, run_state: WorkflowRunState, max_attempts: int
+    ) -> AttemptOutcome:
+        """Execute steps once and describe the resulting state."""
+
+        for index in range(run_state.start_index, len(self.steps)):
+            step = self.steps[index]
+            logger.info("Executing: %s", step.step_name)
+            result = await step.execute(run_state.context)
+            run_state.register_result(index, result)
+
+            if getattr(result, "success", False):
+                continue
+
+            if isinstance(step, QualityAssuranceStep):
+                retry_directive = self._evaluate_retry_request(run_state, max_attempts)
+                if retry_directive is not None:
+                    return retry_directive
+
+            return AttemptOutcome(
+                status=AttemptStatus.FAILURE,
+                failure_step=step.step_name,
+                failure_result=result,
+            )
+
+        return AttemptOutcome(status=AttemptStatus.SUCCESS)
+
+    def _evaluate_retry_request(
+        self, run_state: WorkflowRunState, max_attempts: int
+    ) -> Optional[AttemptOutcome]:
+        """Translate QA retry metadata into an actionable directive."""
+
+        if run_state.context is None or run_state.attempt >= max_attempts:
+            return None
+
+        retry_request = run_state.context.get("qa_retry_request")
+        if not retry_request:
+            return None
+
+        retry_step_name = retry_request.get("start_step")
+        retry_index = self._resolve_step_index(retry_step_name)
+        if retry_index is None:
+            return None
+
+        return AttemptOutcome(
+            status=AttemptStatus.RETRY,
+            restart_index=retry_index,
+            reason=retry_request.get("reason"),
+        )
 
     def _resolve_step_index(self, step_name: Optional[str]) -> Optional[int]:
         if not step_name:
@@ -177,20 +257,6 @@ class YouTubeWorkflow:
             if step.step_name == step_name:
                 return idx
         return None
-
-    def _prepare_context_for_retry(self, start_index: int) -> None:
-        if not self.context:
-            return
-        keys_to_remove = set()
-        for step in self.steps[start_index:]:
-            keys_to_remove.update(self.RETRY_CLEANUP_MAP.get(step.step_name, set()))
-        for key in keys_to_remove:
-            if key in self.context.state:
-                self.context.state.pop(key, None)
-
-    def _clear_step_results(self, step_results: List[Optional[Any]], start_index: int) -> None:
-        for idx in range(start_index, len(step_results)):
-            step_results[idx] = None
 
     def _initialize_run(self, mode: str) -> str:
         if sheets_manager:
@@ -206,7 +272,8 @@ class YouTubeWorkflow:
         return run_id
 
     async def _handle_workflow_failure(self, step_name: str, result: Any) -> Dict[str, Any]:
-        error_message = f"{step_name} failed: {result.error if hasattr(result, 'error') else 'Unknown error'}"
+        error_detail = result.error if hasattr(result, 'error') else str(result or 'Unknown error')
+        error_message = f"{step_name} failed: {error_detail}"
         logger.error(error_message)
         await self._notify_workflow_error(RuntimeError(error_message))
         self._update_run_status("failed", {"error": error_message})
@@ -220,36 +287,74 @@ class YouTubeWorkflow:
         return {
             "success": False,
             "failed_step": step_name,
-            "error": result.error if hasattr(result, "error") else str(result),
+            "error": error_detail,
             "run_id": self.run_id,
         }
 
-    def _compile_final_result(self, step_results: List[Any], execution_time: float) -> Dict[str, Any]:
-        news_count = step_results[0].get("count", 0) if step_results else 0
-        script_length = step_results[1].get("length", 0) if len(step_results) > 1 else 0
-        video_path = self.context.get("video_path")
-        video_id = self.context.get("video_id")
-        video_url = self.context.get("video_url")
-        thumbnail_path = self.context.get("thumbnail_path")
-        metadata = self.context.get("metadata", {})
-        title = metadata.get("title") if metadata else None
-        video_review_data = self.context.get("video_review") if self.context else None
-        video_review_summary = None
-        video_review_actions: List[str] = []
-        if isinstance(video_review_data, dict):
-            feedback_block = video_review_data.get("feedback") or {}
-            if isinstance(feedback_block, dict):
-                video_review_summary = feedback_block.get("summary")
-                actions = feedback_block.get("next_video_actions") or []
-                if isinstance(actions, list):
-                    video_review_actions = [str(action) for action in actions if action]
-                elif actions:
-                    video_review_actions = [str(actions)]
-        script_step = step_results[1] if len(step_results) > 1 else None
+
+    async def _finalize_success(
+        self, run_state: WorkflowRunState, max_attempts: int
+    ) -> Dict[str, Any]:
+        step_results = run_state.results
+        video_url = run_state.context.get("video_url")
+        if video_url:
+            metadata_storage.update_video_stats(run_id=run_state.run_id, video_url=video_url)
+            logger.info("Updated metadata storage with video URL")
+
+        execution_time = run_state.execution_time_seconds()
+        result = self._compile_final_result(run_state, step_results, execution_time)
+
+        if self._log_session:
+            self._log_session.mark_status(
+                "succeeded",
+                execution_time_seconds=execution_time,
+                attempts=run_state.attempt,
+                max_attempts=max_attempts,
+                steps=[step.step_name for step in self.steps],
+                video_url=video_url,
+                news_count=result.get("news_count"),
+            )
+
+        await self._notify_workflow_success(result)
+        self._update_run_status("completed", result)
+        self._cleanup_temp_files()
+        return result
+
+    def _get_step_result(
+        self, results: List[Optional[Any]], target_step: str
+    ) -> Optional[Any]:
+        for step, result in zip(self.steps, results):
+            if step.step_name == target_step:
+                return result
+        return None
+
+    def _compile_final_result(
+        self,
+        run_state: WorkflowRunState,
+        step_results: List[Optional[Any]],
+        execution_time: float,
+    ) -> Dict[str, Any]:
+        context = run_state.context
+        news_step = self._get_step_result(step_results, 'news_collection')
+        script_step = self._get_step_result(step_results, 'script_generation')
+        metadata_step = self._get_step_result(step_results, 'metadata_generation')
+
+        insights = ScriptInsights.from_step(script_step)
+        news_count = news_step.get("count", 0) if news_step else 0
+        script_length = script_step.get("length", 0) if script_step else 0
+        video_path = context.get("video_path")
+        video_id = context.get("video_id")
+        video_url = context.get("video_url")
+        thumbnail_path = context.get("thumbnail_path")
+        metadata = context.get("metadata", {}) or {}
+        title = metadata.get("title")
+        video_review_data = context.get("video_review")
+        video_review_summary, video_review_actions = self._extract_video_review(video_review_data)
+
         workflow_result = WorkflowResult(
             success=True,
-            run_id=self.run_id,
-            mode=self.mode,
+            run_id=run_state.run_id,
+            mode=run_state.mode,
             execution_time_seconds=execution_time,
             news_count=news_count,
             script_length=script_length,
@@ -258,87 +363,102 @@ class YouTubeWorkflow:
             video_url=video_url,
             title=title,
             thumbnail_path=thumbnail_path,
-            wow_score=self._extract_wow_score(script_step),
-            surprise_points=self._extract_surprise_points(script_step),
-            emotion_peaks=self._extract_emotion_peaks(script_step),
-            visual_instructions=self._extract_visual_instructions(script_step),
-            retention_prediction=self._extract_retention_prediction(script_step),
-            japanese_purity=self._extract_japanese_purity(script_step),
-            hook_type=self._classify_hook_from_script(script_step),
-            topic=self._extract_topic(step_results[0] if step_results else None),
-            completed_steps=sum(1 for s in step_results if s.success),
-            failed_steps=sum(1 for s in step_results if not s.success),
+            wow_score=insights.wow_score,
+            surprise_points=insights.surprise_points,
+            emotion_peaks=insights.emotion_peaks,
+            visual_instructions=insights.visual_instructions,
+            retention_prediction=insights.retention_prediction,
+            japanese_purity=insights.japanese_purity,
+            hook_type=self._determine_hook_type(script_step, metadata_step, insights),
+            topic=self._extract_topic(news_step),
+            completed_steps=sum(1 for s in step_results if getattr(s, "success", False)),
+            failed_steps=sum(1 for s in step_results if not getattr(s, "success", False)),
             total_steps=len(self.steps),
-            generated_files=self.context.generated_files if self.context else [],
+            generated_files=context.generated_files,
             video_review_summary=video_review_summary,
             video_review_actions=video_review_actions,
         )
         metadata_storage.log_execution(workflow_result)
-        result = {
+
+        serialized_steps = {}
+        for step, step_result in zip(self.steps, step_results):
+            if step_result is None:
+                continue
+            serialized_steps[step.step_name] = {
+                "success": getattr(step_result, "success", False),
+                **(getattr(step_result, "data", {}) or {}),
+            }
+
+        result: Dict[str, Any] = {
             "success": True,
-            "run_id": self.run_id,
+            "run_id": run_state.run_id,
             "execution_time": execution_time,
-            "generated_files": self.context.generated_files if self.context else [],
-            "steps": {},
+            "generated_files": context.generated_files,
+            "steps": serialized_steps,
+            "news_count": news_count,
+            "script_length": script_length,
+            "video_path": video_path,
+            "video_id": video_id,
+            "video_url": video_url,
+            "drive_folder": context.get("folder_id"),
+            "video_review": video_review_data,
+            "script_insights": {
+                "wow_score": insights.wow_score,
+                "surprise_points": insights.surprise_points,
+                "emotion_peaks": insights.emotion_peaks,
+                "visual_instructions": insights.visual_instructions,
+                "retention_prediction": insights.retention_prediction,
+                "japanese_purity": insights.japanese_purity,
+                "hook_variant": insights.hook_variant,
+                "title_variants": insights.title_variants,
+                "thumbnail_prompts": insights.thumbnail_prompts,
+                "emotion_curve": insights.emotion_curve,
+                "visual_calls_to_action": insights.visual_calls_to_action,
+                "visual_b_roll_suggestions": insights.visual_b_roll_suggestions,
+                "emotion_highlights": insights.emotion_highlights,
+                "visual_guidelines": insights.visual_guidelines,
+                "visual_shot_list": insights.visual_shot_list,
+            },
         }
-        step_names = [step.step_name for step in self.steps]
-        for i, step_result in enumerate(step_results):
-            if i < len(step_names):
-                result["steps"][step_names[i]] = {"success": step_result.success, **step_result.data}
-        result["news_count"] = news_count
-        result["script_length"] = script_length
-        result["video_path"] = video_path
-        result["video_id"] = video_id
-        result["video_url"] = video_url
-        result["drive_folder"] = self.context.get("folder_id") if self.context else None
-        result["video_review"] = video_review_data
         return result
 
-    def _extract_wow_score(self, script_step: Any) -> Optional[float]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        metrics = script_step.data.get("script_metrics", {})
-        if not metrics:
-            return None
-        return metrics.get("wow_score")
+    def _extract_video_review(
+        self, review_data: Optional[Dict[str, Any]]
+    ) -> tuple[Optional[str], List[str]]:
+        if not isinstance(review_data, dict):
+            return None, []
+        feedback_block = review_data.get("feedback") or {}
+        if not isinstance(feedback_block, dict):
+            return None, []
+        summary = feedback_block.get("summary")
+        actions_raw = feedback_block.get("next_video_actions") or []
+        if isinstance(actions_raw, list):
+            actions = [str(action) for action in actions_raw if action]
+        elif actions_raw:
+            actions = [str(actions_raw)]
+        else:
+            actions = []
+        return summary, actions
 
-    def _extract_japanese_purity(self, script_step: Any) -> Optional[float]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        purity = script_step.data.get("japanese_purity_score")
-        if purity:
-            return purity
-        metrics = script_step.data.get("script_metrics", {})
-        return metrics.get("japanese_purity")
+    def _determine_hook_type(
+        self,
+        script_step: Any,
+        metadata_step: Any,
+        insights: ScriptInsights,
+    ) -> Optional[str]:
+        if insights.hook_variant:
+            return insights.hook_variant
+        metadata_hook = None
+        if metadata_step and hasattr(metadata_step, "data"):
+            metadata_hook = metadata_step.data.get("hook")
+        if metadata_hook:
+            return metadata_hook
+        script_content = ""
+        if script_step and hasattr(script_step, "data"):
+            script_content = script_step.data.get("script", "")
+        return self._classify_hook_from_content(script_content)
 
-    def _extract_surprise_points(self, script_step: Any) -> Optional[int]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        metrics = script_step.data.get("script_metrics", {})
-        return metrics.get("surprise_points")
-
-    def _extract_emotion_peaks(self, script_step: Any) -> Optional[int]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        metrics = script_step.data.get("script_metrics", {})
-        return metrics.get("emotion_peaks")
-
-    def _extract_visual_instructions(self, script_step: Any) -> Optional[int]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        metrics = script_step.data.get("script_metrics", {})
-        return metrics.get("visual_instructions")
-
-    def _extract_retention_prediction(self, script_step: Any) -> Optional[float]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        metrics = script_step.data.get("script_metrics", {})
-        return metrics.get("retention_prediction")
-
-    def _classify_hook_from_script(self, script_step: Any) -> str:
-        if not script_step or not hasattr(script_step, "data"):
-            return "その他"
-        script_content = script_step.data.get("script", "")
+    def _classify_hook_from_content(self, script_content: str) -> str:
         if not script_content:
             return "その他"
         first_segment = script_content[:200]
@@ -351,104 +471,6 @@ class YouTubeWorkflow:
         if re.search(r"(知らない|隠された|裏側|真実)", first_segment):
             return "隠された真実"
         return "その他"
-
-    def _extract_emotion_curve(self, script_step: Any) -> Optional[List[Dict[str, Any]]]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        metrics = script_step.data.get("script_metrics", {})
-        curve = metrics.get("emotion_curve")
-        if isinstance(curve, list):
-            return curve
-        return None
-
-    def _extract_visual_calls_to_action(self, script_step: Any) -> Optional[List[str]]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        metrics = script_step.data.get("script_metrics", {})
-        calls = metrics.get("visual_calls_to_action")
-        if isinstance(calls, list):
-            return [str(item) for item in calls]
-        if calls:
-            return [str(calls)]
-        return None
-
-    def _extract_visual_b_roll_suggestions(self, script_step: Any) -> Optional[List[str]]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        metrics = script_step.data.get("script_metrics", {})
-        suggestions = metrics.get("visual_b_roll_suggestions")
-        if isinstance(suggestions, list):
-            return [str(item) for item in suggestions]
-        if suggestions:
-            return [str(suggestions)]
-        return None
-
-    def _extract_emotion_highlights(self, script_step: Any) -> Optional[List[str]]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        metrics = script_step.data.get("script_metrics", {})
-        highlights = metrics.get("emotion_highlights")
-        if isinstance(highlights, list):
-            return [str(item) for item in highlights]
-        if highlights:
-            return [str(highlights)]
-        return None
-
-    def _extract_visual_guidelines(self, script_step: Any) -> Optional[List[str]]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        guidelines = script_step.data.get("visual_guidelines")
-        if isinstance(guidelines, list):
-            return [str(item) for item in guidelines]
-        if guidelines:
-            return [str(guidelines)]
-        return None
-
-    def _extract_visual_shot_list(self, script_step: Any) -> Optional[List[str]]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        shot_list = script_step.data.get("visual_shot_list")
-        if isinstance(shot_list, list):
-            return [str(item) for item in shot_list]
-        if shot_list:
-            return [str(shot_list)]
-        return None
-
-    def _extract_hook_variant(self, script_step: Any) -> Optional[str]:
-        if not script_step or not hasattr(script_step, "data"):
-            return None
-        return script_step.data.get("hook_variant")
-
-    def _extract_title_variants(self, script_step: Any) -> List[str]:
-        if not script_step or not hasattr(script_step, "data"):
-            return []
-        variants = script_step.data.get("title_variants")
-        if isinstance(variants, list):
-            return [str(item) for item in variants]
-        if variants:
-            return [str(variants)]
-        return []
-
-    def _extract_thumbnail_prompts(self, script_step: Any) -> List[str]:
-        if not script_step or not hasattr(script_step, "data"):
-            return []
-        prompts = script_step.data.get("thumbnail_prompts")
-        if isinstance(prompts, list):
-            return [str(item) for item in prompts]
-        if prompts:
-            return [str(prompts)]
-        return []
-
-    def _extract_hook_from_metadata(self, metadata_step: Any) -> Optional[str]:
-        if not metadata_step or not hasattr(metadata_step, "data"):
-            return None
-        return metadata_step.data.get("hook")
-
-    def _extract_hook_from_script(self, script_step: Any) -> Optional[str]:
-        hook = self._extract_hook_variant(script_step)
-        if hook:
-            return hook
-        return self._extract_hook_from_metadata(script_step)
 
     def _extract_topic(self, news_step: Any) -> str:
         if not news_step or not hasattr(news_step, "data"):
@@ -466,7 +488,6 @@ class YouTubeWorkflow:
         if "GDP" in first_title or "景気" in first_title:
             return "経済指標"
         return "一般"
-
     async def _notify_workflow_start(self, mode: str):
         message = f"YouTube動画生成ワークフローを開始しました\nモード: {mode}\nRun ID: {self.run_id}"
         discord_notifier.notify(message, level="info", title="ワークフロー開始")
@@ -500,6 +521,7 @@ class YouTubeWorkflow:
                 cleaned_count += 1
         if cleaned_count > 0:
             logger.info(f"Cleaned up {cleaned_count} temporary files")
+        self.context.generated_files.clear()
 
 
 def _get_workflow() -> YouTubeWorkflow:

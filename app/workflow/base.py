@@ -5,7 +5,7 @@ Implements Strategy pattern for separating workflow logic into testable, composa
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 
 @dataclass
@@ -43,6 +43,20 @@ class WorkflowContext:
     def add_files(self, files: List[str]) -> None:
         """Add generated files to tracking."""
         self.generated_files.extend(files)
+
+    def remove_files(self, files: Iterable[str]) -> None:
+        """Remove generated files from tracking when they are deleted."""
+
+        if not files:
+            return
+
+        files_to_remove = set(filter(None, files))
+        if not files_to_remove:
+            return
+
+        self.generated_files = [
+            path for path in self.generated_files if path not in files_to_remove
+        ]
 
 
 class WorkflowStep(ABC):
