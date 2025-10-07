@@ -200,13 +200,10 @@ class StructuredScriptGenerator:
         return textwrap.dedent(template).strip()
 
     def _parse_payload(self, response_text: str) -> StructuredScriptPayload:
-        json_blob = self._extract_json_block(response_text)
-        if not json_blob:
-            raise ValueError('No JSON object found in LLM response')
         try:
-            data = json.loads(json_blob)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f'Malformed JSON: {exc}') from exc
+            data = self._extract_structured_data(response_text)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
         try:
             return StructuredScriptPayload.model_validate(data)
         except ValidationError as exc:
@@ -245,6 +242,41 @@ class StructuredScriptGenerator:
     @staticmethod
     def _extract_message_text(response: Dict[str, Any]) -> str:
         return adapter_extract_message_text(response)
+
+    def _extract_structured_data(self, response_text: str) -> Dict[str, Any]:
+        errors = []
+        json_blob = self._extract_json_block(response_text)
+        if json_blob:
+            try:
+                return self._load_json_object(json_blob, allow_wrapped=True)
+            except ValueError as exc:
+                errors.append(exc)
+
+        stripped = response_text.strip()
+        if stripped:
+            try:
+                return self._load_json_object(stripped, allow_wrapped=True)
+            except ValueError as exc:
+                errors.append(exc)
+
+        if errors:
+            raise ValueError(f'No JSON object found in LLM response: {errors[-1]}')
+        raise ValueError('No JSON object found in LLM response')
+
+    @staticmethod
+    def _load_json_object(text: str, allow_wrapped: bool=False) -> Dict[str, Any]:
+        try:
+            decoded = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f'Malformed JSON: {exc}') from exc
+
+        if isinstance(decoded, dict):
+            return decoded
+
+        if allow_wrapped and isinstance(decoded, str):
+            return StructuredScriptGenerator._load_json_object(decoded, allow_wrapped=False)
+
+        raise ValueError(f'Unexpected JSON top-level type: {type(decoded).__name__}')
 
     @staticmethod
     def _find_matching_brace(text: str) -> Optional[int]:
