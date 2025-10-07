@@ -5,10 +5,10 @@ Perplexity AIを使用して最新の経済ニュースを収集・要約しま�
 
 import json
 import logging
-import os  # 追加
+import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 import httpx
 
@@ -20,60 +20,100 @@ from app.prompts import build_news_collection_prompt, get_news_collection_system
 logger = logging.getLogger(__name__)
 
 
+class PerplexityKeyProvider(Protocol):
+    """Perplexity APIキーの供給インターフェース"""
+
+    def get_keys(self) -> List[Tuple[str, str]]:
+        """(key_name, key_value) のリストを返す"""
+
+
+class ConfigAndEnvPerplexityKeyProvider:
+    """設定と環境変数の両方からPerplexityキーを提供する"""
+
+    def __init__(self, config_key: Optional[str], env: Optional[dict[str, str]] = None):
+        self._config_key = config_key
+        self._env = env or os.environ
+
+    def get_keys(self) -> List[Tuple[str, str]]:
+        keys: List[Tuple[str, str]] = []
+        seen_values: set[str] = set()
+
+        if self._config_key:
+            keys.append(("config.api_keys.perplexity", self._config_key))
+            seen_values.add(self._config_key)
+
+        for i in range(1, 10):  # PERPLEXITY_API_KEY_1からPERPLEXITY_API_KEY_9まで
+            key_name = f"PERPLEXITY_API_KEY_{i}" if i > 1 else "PERPLEXITY_API_KEY"
+            key_value = self._env.get(key_name)
+            if key_value and key_value not in seen_values:
+                keys.append((key_name, key_value))
+                seen_values.add(key_value)
+
+        return keys
+
+
+class StaticPerplexityKeyProvider:
+    """テスト用などで固定キーを提供する"""
+
+    def __init__(self, keys: Optional[List[Tuple[str, str]]] = None):
+        self._keys = list(keys or [])
+
+    def get_keys(self) -> List[Tuple[str, str]]:
+        return list(self._keys)
+
+
 class NewsCollector:
     """ニュース収集クラス"""
 
-    def __init__(self):
+    def __init__(
+        self,
+        key_provider: Optional[PerplexityKeyProvider] = None,
+    ):
         self.api_url = "https://api.perplexity.ai/chat/completions"
         self.newsapi_url = "https://newsapi.org/v2/everything"
-
-        # キーローテーションマネージャーを初期化
-        rotation_manager = get_rotation_manager()
-
-        # Perplexity keysを登録
-        perplexity_keys_with_names = []
-        for i in range(1, 10):  # PERPLEXITY_API_KEY_1からPERPLEXITY_API_KEY_9まで
-            key_name = f"PERPLEXITY_API_KEY_{i}" if i > 1 else "PERPLEXITY_API_KEY"
-            key_value = os.getenv(key_name)
-            if key_value:
-                perplexity_keys_with_names.append((key_name, key_value))
-
-        if perplexity_keys_with_names:
-            rotation_manager.register_keys("perplexity", perplexity_keys_with_names)
-            logger.info(f"Registered {len(perplexity_keys_with_names)} Perplexity API keys for rotation")
-        else:
-            logger.warning("No Perplexity API keys configured")
+        self._rotation_manager = get_rotation_manager()
+        self._key_provider = key_provider or ConfigAndEnvPerplexityKeyProvider(cfg.perplexity_api_key)
+        self._has_registered_keys = self._register_perplexity_keys()
 
         logger.info("NewsCollector initialized with key rotation and NewsAPI fallback")
 
+    def _register_perplexity_keys(self) -> bool:
+        keys = self._key_provider.get_keys() if self._key_provider else []
+        if keys:
+            self._rotation_manager.register_keys("perplexity", keys)
+            logger.info(f"Registered {len(keys)} Perplexity API keys for rotation")
+            return True
+
+        logger.warning("No Perplexity API keys configured")
+        return False
+
+    @property
+    def has_perplexity_keys(self) -> bool:
+        return self._has_registered_keys
+
     def collect_news(self, prompt_a: str, mode: str = "daily") -> List[Dict[str, Any]]:
-        """ニュースを収集・要約
+        """ニュースを収集・要約"""
 
-        Args:
-            prompt_a: ニュース収集用プロンプト
-            mode: 実行モード (daily/special/test)
-
-        Returns:
-            ニュース項目のリスト
-
-        """
         try:
             with llm_logging_context(component="news_collection", mode=mode):
                 adjusted_prompt = self._adjust_prompt_for_mode(prompt_a, mode)
 
-                # Perplexityで収集を試みる（ローテーション対応）
-                try:
-                    response_text = self._call_perplexity_with_rotation(adjusted_prompt)
-                    news_items = self._parse_news_response(response_text)
-                    validated_news = self._validate_news_items(news_items)
+                if self._has_registered_keys:
+                    try:
+                        response_text = self._call_perplexity_with_rotation(adjusted_prompt)
+                        news_items = self._parse_news_response(response_text)
+                        validated_news = self._validate_news_items(news_items)
 
-                    if validated_news:
-                        logger.info(f"Collected {len(validated_news)} news items via Perplexity (mode: {mode})")
-                        return validated_news
-                except Exception as e:
-                    logger.warning(f"Perplexity collection failed: {e}, trying NewsAPI fallback...")
+                        if validated_news:
+                            logger.info(
+                                f"Collected {len(validated_news)} news items via Perplexity (mode: {mode})"
+                            )
+                            return validated_news
+                    except Exception as e:
+                        logger.warning(f"Perplexity collection failed: {e}, trying NewsAPI fallback...")
+                else:
+                    logger.info("Skipping Perplexity news collection because no API keys were registered")
 
-            # NewsAPIフォールバック
             if cfg.newsapi_key:
                 try:
                     news_items = self._collect_from_newsapi(mode)
@@ -83,7 +123,6 @@ class NewsCollector:
                 except Exception as e:
                     logger.warning(f"NewsAPI fallback failed: {e}")
 
-            # すべて失敗した場合はダミーニュース
             logger.error("All news collection methods failed")
             return self._get_fallback_news(mode)
 
@@ -97,7 +136,6 @@ class NewsCollector:
 
     def _call_perplexity_with_rotation(self, prompt: str, max_attempts: int = 3) -> str:
         """キーローテーション対応Perplexity API呼び出し"""
-        rotation_manager = get_rotation_manager()
 
         def api_call_with_key(api_key: str) -> str:
             """単一APIキーでの呼び出し"""
@@ -141,10 +179,9 @@ class NewsCollector:
                     return content
 
             except httpx.HTTPStatusError as e:
-                # Rate limit検出
                 if e.response.status_code == 429:
                     logger.warning(f"Perplexity rate limit: {e}")
-                    raise  # ローテーションマネージャーがハンドリング
+                    raise
 
                 logger.error(f"Perplexity API HTTP error: {e}")
                 raise
@@ -153,9 +190,8 @@ class NewsCollector:
                 logger.warning(f"Perplexity API error: {e}")
                 raise
 
-        # キーローテーション実行
         try:
-            return rotation_manager.execute_with_rotation(
+            return self._rotation_manager.execute_with_rotation(
                 provider="perplexity", api_call=api_call_with_key, max_attempts=max_attempts
             )
         except Exception as e:
@@ -165,12 +201,10 @@ class NewsCollector:
     def _parse_news_response(self, response: str) -> List[Dict[str, Any]]:
         """Perplexity応答からニュースデータを抽出"""
         try:
-            # JSON部分を抽出
             match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
             if match:
                 json_str = match.group(1)
             else:
-                # フォールバックとして、最初と最後の[]を探す
                 start = response.find("[")
                 end = response.rfind("]") + 1
                 if start != -1 and end != 0:
@@ -198,111 +232,76 @@ class NewsCollector:
                     logger.warning("Skipping invalid news item: missing required fields")
                     continue
 
-                url = item.get("url", "")
-                if not (url.startswith("http://") or url.startswith("https://")):
-                    logger.warning(f"Invalid URL format: {url}")
-                    item["url"] = f"https://example.com/news/{hash(item['title']) % 10000}"
+                item.setdefault("timestamp", datetime.utcnow().isoformat())
+                item.setdefault("category", "general")
+                if "key_points" in item and isinstance(item["key_points"], list):
+                    item["key_points"] = [str(point) for point in item["key_points"]]
 
-                validated_item = {
-                    "title": str(item["title"])[:200],
-                    "url": item["url"],
-                    "summary": str(item["summary"])[:500],
-                    "key_points": item.get("key_points", [])[:5],
-                    "source": str(item["source"]),
-                    "impact_level": item.get("impact_level", "medium"),
-                    "category": item.get("category", "経済"),
-                    "collected_at": datetime.now().isoformat(),
-                }
-                validated.append(validated_item)
+                validated.append(item)
 
             except Exception as e:
-                logger.warning(f"Failed to validate news item: {e}")
-                continue
+                logger.warning(f"Skipping malformed news item: {e}")
         return validated
 
-    def _get_fallback_news(self, mode: str) -> List[Dict[str, Any]]:
-        """フォールバック用のダミーニュース"""
-        current_time = datetime.now().isoformat()
-        fallback_news = [
-            {
-                "title": f"ニュース収集エラー - {mode}モード",
-                "url": "https://example.com/error",
-                "summary": f"ニュース収集中にエラーが発生しました。モード: {mode}。手動での確認が必要です。システム管理者に連絡してください。",
-                "key_points": ["API接続エラー", "手動確認が必要", "システム管理者への連絡が必要"],
-                "source": "システム",
-                "impact_level": "high",
-                "category": "システム",
-                "collected_at": current_time,
-            }
-        ]
-        if mode == "test":
-            fallback_news.append(
+    def _collect_from_newsapi(self, mode: str) -> List[Dict[str, Any]]:
+        """NewsAPIフォールバック処理"""
+        params = {
+            "q": "economy OR finance OR stock market",
+            "language": "ja",
+            "pageSize": 5 if mode == "daily" else 3,
+            "sortBy": "publishedAt",
+            "apiKey": cfg.newsapi_key,
+        }
+
+        response = httpx.get(self.newsapi_url, params=params, timeout=30.0)
+        response.raise_for_status()
+        data = response.json()
+
+        articles = data.get("articles", [])
+        news_items = []
+        for article in articles:
+            news_items.append(
                 {
-                    "title": "テスト用ニュース項目",
-                    "url": "https://example.com/test",
-                    "summary": "これはテスト実行用のダミーニュースです。実際の運用では実在のニュースに置き換えられます。",
-                    "key_points": ["テストデータ", "ダミー情報", "実運用時は削除"],
-                    "source": "テストシステム",
-                    "impact_level": "low",
-                    "category": "テスト",
-                    "collected_at": current_time,
+                    "title": article.get("title", ""),
+                    "url": article.get("url", ""),
+                    "summary": article.get("description", ""),
+                    "source": article.get("source", {}).get("name", "NewsAPI"),
+                    "timestamp": article.get("publishedAt", datetime.utcnow().isoformat()),
+                    "category": "general",
                 }
             )
-        return fallback_news
+        return news_items
 
-    def _collect_from_newsapi(self, mode: str) -> List[Dict[str, Any]]:
-        """NewsAPI.orgからニュースを収集（フォールバック）
+    def _call_perplexity_with_retry(self, prompt: str, max_attempts: int = 3) -> str:
+        last_error = None
+        for attempt in range(max_attempts):
+            try:
+                return self._call_perplexity_with_rotation(prompt)
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Perplexity attempt {attempt + 1}/{max_attempts} failed: {e}")
+        if last_error:
+            raise last_error
+        raise RuntimeError("Perplexity request failed without specific error")
 
-        Args:
-            mode: 実行モード
-
-        Returns:
-            ニュース項目のリスト
-        """
-        try:
-            # 検索クエリを構築（英語記事にフォールバック）
-            query_params = {
-                "apiKey": cfg.newsapi_key,
-                "q": "economy OR finance OR stock market OR business",
-                "language": "en",  # 日本語記事が少ないため英語で取得
-                "sortBy": "publishedAt",
-                "pageSize": 5,
-            }
-
-            with httpx.Client() as client:
-                response = client.get(self.newsapi_url, params=query_params, timeout=30.0)
-                response.raise_for_status()
-                data = response.json()
-
-                articles = data.get("articles", [])
-                if not articles:
-                    logger.warning("NewsAPI returned no articles")
-                    return []
-
-                # NewsAPIの形式を統一形式に変換
-                news_items = []
-                for article in articles[:5]:
-                    news_item = {
-                        "title": article.get("title", "無題"),
-                        "url": article.get("url", ""),
-                        "summary": article.get("description", "") or article.get("content", "")[:300],
-                        "key_points": [
-                            article.get("title", ""),
-                            f"出典: {article.get('source', {}).get('name', '不明')}",
-                        ],
-                        "source": article.get("source", {}).get("name", "NewsAPI"),
-                        "impact_level": "medium",
-                        "category": "経済",
-                        "collected_at": datetime.now().isoformat(),
-                    }
-                    news_items.append(news_item)
-
-                logger.info(f"NewsAPI collected {len(news_items)} articles")
-                return self._validate_news_items(news_items)
-
-        except Exception as e:
-            logger.error(f"NewsAPI collection failed: {e}")
-            return []
+    def _get_fallback_news(self, mode: str) -> List[Dict[str, Any]]:
+        """フォールバックニュース"""
+        now = datetime.utcnow()
+        return [
+            {
+                "title": "経済インサイト: 今週の注目トピック",
+                "url": "https://example.com/economy-insights",
+                "summary": "市場動向と政策発表の主要ポイントをまとめました。",
+                "source": "Fallback",
+                "timestamp": now.isoformat(),
+                "category": "general",
+                "key_points": [
+                    "株式市場のボラティリティ上昇",
+                    "中央銀行による金融政策の示唆",
+                    "主要企業の決算発表",
+                ],
+            },
+        ]
 
     def search_specific_topic(self, topic: str, num_items: int = 3) -> List[Dict[str, Any]]:
         """特定トピックに関するニュースを検索"""
@@ -324,6 +323,10 @@ JSON形式で回答してください：
   }}
 ]
 """
+        if not self._has_registered_keys:
+            logger.info("Skipping Perplexity topic search because no API keys were registered")
+            return self._get_fallback_news("special")
+
         try:
             response = self._call_perplexity_with_retry(prompt)
             news_items = self._parse_news_response(response)
@@ -333,31 +336,51 @@ JSON形式で回答してください：
             return self._get_fallback_news("special")
 
 
+def create_news_collector(key_provider: Optional[PerplexityKeyProvider] = None) -> Optional[NewsCollector]:
+    """ニュースコレクターを生成するファクトリ"""
+
+    provider = key_provider or ConfigAndEnvPerplexityKeyProvider(cfg.perplexity_api_key)
+    keys = provider.get_keys()
+    if not keys:
+        logger.warning("No Perplexity API keys available; NewsCollector remains disabled")
+        return None
+
+    collector = NewsCollector(key_provider=StaticPerplexityKeyProvider(keys))
+    if not collector.has_perplexity_keys:
+        return None
+    return collector
+
+
+# フォールバックニュース生成用
+def _fallback_news(mode: str) -> List[Dict[str, Any]]:
+    return NewsCollector(StaticPerplexityKeyProvider())._get_fallback_news(mode)
+
+
 # グローバルインスタンス
-news_collector = NewsCollector() if cfg.perplexity_api_key else None
+news_collector = create_news_collector()
 
 
 def collect_news(prompt_a: str, mode: str = "daily") -> List[Dict[str, Any]]:
     """ニュース収集の簡易関数"""
     if news_collector:
         return news_collector.collect_news(prompt_a, mode)
-    else:
-        logger.warning("News collector not available, using fallback")
-        return NewsCollector()._get_fallback_news(mode)
+
+    logger.warning("News collector not available, using fallback")
+    return _fallback_news(mode)
 
 
 def search_topic(topic: str, num_items: int = 3) -> List[Dict[str, Any]]:
     """トピック検索の簡易関数"""
     if news_collector:
         return news_collector.search_specific_topic(topic, num_items)
-    else:
-        logger.warning("News collector not available, using fallback")
-        return NewsCollector()._get_fallback_news("special")
+
+    logger.warning("News collector not available, using fallback")
+    return _fallback_news("special")
 
 
 if __name__ == "__main__":
     print("Testing news collection...")
-    if cfg.perplexity_api_key:
+    if news_collector:
         test_prompt = """
 今日の重要な経済ニュースを2-3件収集してください：
 - 株式市場の動向
@@ -367,8 +390,7 @@ if __name__ == "__main__":
 信頼性の高い情報源からの最新情報を優先してください。
 """
         try:
-            collector = NewsCollector()
-            news = collector.collect_news(test_prompt, "test")
+            news = news_collector.collect_news(test_prompt, "test")
             print(f"Collected {len(news)} news items:")
             for i, item in enumerate(news, 1):
                 print(f"\n{i}. {item['title']}")

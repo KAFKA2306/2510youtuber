@@ -16,6 +16,7 @@ from pydub.silence import detect_silence
 
 from app.config import cfg
 from app.models.qa import CheckStatus, MediaCheckResult, QualityGateReport
+from app.services.media.fractions import FractionParser
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +28,11 @@ class MediaQAError(Exception):
 class MediaQAPipeline:
     """Runs domain-specific quality checks and persists reports."""
 
-    def __init__(self, config):
+    def __init__(self, config, *, fraction_parser: Optional[FractionParser] = None):
         self.config = config
         self._ffmpeg_binary = getattr(cfg, "ffmpeg_path", "ffmpeg") or "ffmpeg"
         self._ffprobe_binary = "ffprobe"
+        self._fraction_parser = fraction_parser or FractionParser()
 
     def run(
         self,
@@ -399,13 +401,10 @@ class MediaQAPipeline:
         return path
 
     def _parse_fraction(self, value: Optional[str]) -> float:
-        if not value:
-            return 0.0
-        if "/" in value:
-            numerator, denominator = value.split("/", 1)
-            denominator = float(denominator) if float(denominator) != 0 else 1.0
-            return float(numerator) / denominator
-        return float(value)
+        result = self._fraction_parser.parse(value)
+        if not result.is_valid and value:
+            logger.debug("Failed to parse fraction '%s'; using default %s", value, result.value)
+        return result.value
 
     def _extract_bitrate(self, stream_bitrate: Optional[str], format_bitrate: Optional[str]) -> float:
         for candidate in (stream_bitrate, format_bitrate):

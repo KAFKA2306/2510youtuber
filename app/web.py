@@ -289,7 +289,7 @@ def api_runs():
         try:
             sheet_runs = sheets_manager.get_recent_runs(limit=20)
         except Exception as error:  # pragma: no cover - surfaced via API response
-            discord_notifier.notify(f"Sheets run history error: {error}", level="error")
+            discord_notifier.notify_blocking(f"Sheets run history error: {error}", level="error")
     return jsonify(_merge_run_history(active_runs, sheet_runs))
 
 
@@ -312,7 +312,7 @@ def discord_webhook():
     message = data.get("message", "Test message")
     level = data.get("level", "info")
     try:
-        discord_notifier.notify(message, level=level)
+        discord_notifier.notify_blocking(message, level=level)
         return jsonify({"success": True, "message": "Notification sent"})
     except Exception as error:  # pragma: no cover - network guard
         return jsonify({"success": False, "error": str(error)}), 500
