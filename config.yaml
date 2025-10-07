@@ -82,6 +82,9 @@ media_quality:
     fail_on_missing_inputs: true
     retry_attempts: 1
     retry_start_step: script_generation
+    critical_checks:
+      - audio_integrity
+      - video_compliance
   audio:
     enabled: true
     peak_dbfs_max: -1.0
