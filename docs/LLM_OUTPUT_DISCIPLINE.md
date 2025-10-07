@@ -7,7 +7,7 @@
 - 会話構造と話者名はPythonバリデータで静的整形し、CrewAIプロンプトは最小制約に留めています。【F:app/services/script/validator.py†L120-L210】【F:app/services/script/generator.py†L196-L200】
 - 日本語純度は品質レビューと最終チェックでダブルゲートし、95点以上・英語混入ゼロを要求するテンプレートが存在します。【F:app/config_prompts/prompts/quality_check.yaml†L141-L311】
 - WOWスコア8.0以上などの閾値は設定ファイルと品質パイプラインで評価され、未達時はリトライやフォールバックに接続されます。【F:config.yaml†L132-L149】【F:app/script_quality.py†L192-L353】
-- `LLMInteractionLogger`が全ステージのプロンプト/レスポンスをJSONLに記録し、失敗調査と再学習データ抽出を支えています。【F:app/llm_logging.py†L1-L154】【F:app/script_quality.py†L236-L334】
+- `LLMInteractionLogger`が全ステージのプロンプト/レスポンスをYAMLドキュメントとして記録し、失敗調査と再学習データ抽出を支えています。【F:app/llm_logging.py†L1-L154】【F:app/script_quality.py†L236-L334】
 
 ## 主要ガードレール俯瞰
 | 領域 | 主な実装 | 自動検知/フォールバック | 代表的な失敗シグナル | 推奨強化 |
@@ -16,7 +16,7 @@
 | 会話フォーマット | CrewAIプロンプトの話者ホワイトリストと`ensure_dialogue_structure`の静的整形。【F:app/services/script/generator.py†L196-L200】【F:app/services/script/validator.py†L120-L210】 | 最低行数・話者数未達で差し戻し、alias補正で自動修正。【F:app/services/script/validator.py†L150-L210】 | 話者タグ漏れ、非会話行の氾濫、単一話者台本。 | 自動補正辞書の拡張とフォーマッタで後処理完結させ、プロンプト負荷を軽減。 |
 | 日本語純度 | 品質レビューTask6/7テンプレートと最終脚本生成ステージでの指示。【F:app/config_prompts/prompts/quality_check.yaml†L163-L311】【F:app/script_quality.py†L288-L343】 | 許可語以外の英語検出、95点未満で差し戻し。 | 固有名詞の英語残留、カタカナ過多、ルビ不足。 | 静的辞書＋形態素検査で自動修正し、LLMには残差TODOのみ渡す。 |
 | 品質ゲート | WOW閾値と品質スコア抽出ロジック。【F:config.yaml†L132-L149】【F:app/script_quality.py†L192-L353】 | WOW<8.0や保持率不足で再生成／フォールバックに誘導。【F:app/services/script/generator.py†L151-L188】 | 再試行ループの多発、閾値直下の停滞。 | LLM出力に依存しないスコア計算（統計計測）と自動調整ノブ導入。 |
-| トレーサビリティ | `LLMInteractionLogger` と `llm_logging_context` の多段活用。【F:app/llm_logging.py†L75-L154】【F:app/script_quality.py†L236-L334】 | JSONL永続化による再現ログ。 | ログ欠損、匿名化忘れ、セッション紐付け漏れ。 | 失敗シグナルの自動ダッシュボード化とサンプリング分析。 |
+| トレーサビリティ | `LLMInteractionLogger` と `llm_logging_context` の多段活用。【F:app/llm_logging.py†L75-L154】【F:app/script_quality.py†L236-L334】 | YAML永続化による再現ログ。 | ログ欠損、匿名化忘れ、セッション紐付け漏れ。 | 失敗シグナルの自動ダッシュボード化とサンプリング分析。 |
 
 ## ガードレール別の現状と破壊的改善案
 
@@ -75,7 +75,7 @@
 
 ### 5. 出力トレーサビリティとログ
 **現状の制御**
-- `LLMInteractionLogger`はプロンプト・レスポンス・コンテキストをJSONLに保存し、スレッドローカルで追跡メタデータを管理します。【F:app/llm_logging.py†L75-L154】
+- `LLMInteractionLogger`はプロンプト・レスポンス・コンテキストをYAMLドキュメントとして保存し、スレッドローカルで追跡メタデータを管理します。【F:app/llm_logging.py†L75-L154】
 - `llm_logging_context`がステージ情報を注入し、`record_llm_interaction`が例外時も運用停止させない設計です。【F:app/llm_logging.py†L94-L154】
 - Script品質ステージは全呼び出しをログ経由で記録し、後段の分析や回帰テストに使える形で残します。【F:app/script_quality.py†L236-L334】
 
@@ -90,7 +90,7 @@
 | P0 | JSON Schema＋Jinjaテンプレートの導入 | スクリプト構造を静的定義し、LLMは穴埋めのみ。 `_build_prompt`のハードコードを除去。【F:app/services/script/generator.py†L196-L200】 | Schema設計: 🟦（未アサイン） / 次: 設計レビューをArchitecture WGで実施。 |
 | P0 | 日本語純度自動補正パイプライン | 形態素解析でNG語を検出し、自動置換後の差分をLLMにTODOで返す。【F:app/config_prompts/prompts/quality_check.yaml†L232-L305】 | 実装: 🟥（要担当） / 次: `services/text_cleaning`モジュールを新設。 |
 | P1 | 品質スコアの統計算出 | WOWスコアをLLMに依存せず算出する補助モジュールを追加。【F:app/script_quality.py†L250-L264】 | リサーチ: 🟩（進行中） / 次: サンプル台本10本で精度ベンチ。 |
-| P1 | LLMログ分析ダッシュボード | JSONLを解析し、失敗パターンと再試行率を可視化。【F:app/llm_logging.py†L75-L154】 | DataOps: 🟨（相談中） / 次: BigQueryスキーマ草案を共有。 |
+| P1 | LLMログ分析ダッシュボード | YAMLログを解析し、失敗パターンと再試行率を可視化。【F:app/llm_logging.py†L75-L154】 | DataOps: 🟨（相談中） / 次: BigQueryスキーマ草案を共有。 |
 | P2 | 話者辞書の自動同期 | `ensure_dialogue_structure`のalias辞書を設定ファイルから生成。【F:app/services/script/validator.py†L150-L210】 | DevOps: ⬜️（未着手） / 次: `config/speakers.yaml`の追加を検討。 |
 
 > **運用メモ**: バックログの列は各スプリントで見直し、完了したアイテムは履歴セクションへ移動すること。未割当タスクはレビューミーティングで必ずアサイン先を決め、破壊的改善のスピードを落とさないでください。

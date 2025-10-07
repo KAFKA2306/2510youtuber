@@ -4,13 +4,14 @@
 視聴者フィードバックに基づく継続的改善を実現します。
 """
 
-import json
 import logging
 import os
 import random
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +63,10 @@ class BackgroundTheme:
 class BackgroundThemeManager:
     """背景テーマの管理とA/Bテスト"""
 
-    def __init__(self, themes_file: str = "config/background_themes.json"):
+    def __init__(self, themes_file: str = "config/background_themes.yaml"):
         self.themes_file = themes_file
         self.themes: Dict[str, BackgroundTheme] = {}
-        self.analytics_file = "data/background_analytics.json"
+        self.analytics_file = "data/background_analytics.yaml"
         self._load_themes()
         self._load_analytics()
 
@@ -74,13 +75,18 @@ class BackgroundThemeManager:
         if os.path.exists(self.themes_file):
             try:
                 with open(self.themes_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+                    data = yaml.safe_load(f) or {}
                     for name, theme_data in data.items():
                         # Convert lists to tuples where needed
                         if "gradient_colors" in theme_data:
                             theme_data["gradient_colors"] = [tuple(c) for c in theme_data["gradient_colors"]]
                         if "robot_icon_size" in theme_data:
                             theme_data["robot_icon_size"] = tuple(theme_data["robot_icon_size"])
+                        for circle in theme_data.get("accent_circles", []):
+                            if "pos" in circle:
+                                circle["pos"] = tuple(circle["pos"])
+                            if "color" in circle:
+                                circle["color"] = tuple(circle["color"])
                         self.themes[name] = BackgroundTheme(**theme_data)
                 logger.info(f"Loaded {len(self.themes)} background themes")
             except Exception as e:
@@ -211,13 +217,18 @@ class BackgroundThemeManager:
             data = {}
             for name, theme in self.themes.items():
                 theme_dict = asdict(theme)
-                # Convert tuples to lists for JSON serialization
+                # Convert tuples to lists for serialization
                 theme_dict["gradient_colors"] = [list(c) for c in theme_dict["gradient_colors"]]
                 theme_dict["robot_icon_size"] = list(theme_dict["robot_icon_size"])
+                for circle in theme_dict.get("accent_circles", []):
+                    if "pos" in circle:
+                        circle["pos"] = list(circle["pos"])
+                    if "color" in circle:
+                        circle["color"] = list(circle["color"])
                 data[name] = theme_dict
 
             with open(self.themes_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
             logger.info(f"Saved {len(self.themes)} themes to {self.themes_file}")
         except Exception as e:
             logger.error(f"Failed to save themes: {e}")
@@ -227,7 +238,7 @@ class BackgroundThemeManager:
         if os.path.exists(self.analytics_file):
             try:
                 with open(self.analytics_file, "r", encoding="utf-8") as f:
-                    analytics = json.load(f)
+                    analytics = yaml.safe_load(f) or {}
                     for name, stats in analytics.items():
                         if name in self.themes:
                             theme = self.themes[name]
@@ -259,7 +270,7 @@ class BackgroundThemeManager:
                 }
 
             with open(self.analytics_file, "w", encoding="utf-8") as f:
-                json.dump(analytics, f, indent=2, ensure_ascii=False)
+                yaml.safe_dump(analytics, f, allow_unicode=True, sort_keys=False)
         except Exception as e:
             logger.error(f"Failed to save analytics: {e}")
 
@@ -428,3 +439,4 @@ if __name__ == "__main__":
 
     # レポート出力
     manager.print_analytics_report()
+

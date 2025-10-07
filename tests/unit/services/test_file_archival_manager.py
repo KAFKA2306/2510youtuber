@@ -1,7 +1,8 @@
-import json
 from pathlib import Path
 
 import pytest
+
+import yaml
 
 from app.services.file_archival import FileArchivalManager
 
@@ -25,7 +26,7 @@ def test_list_archived_workflows_parses_run_id_with_underscores(tmp_path):
         title="Daily Recap",
     )
 
-    metadata = json.loads((first_dir / ".archive_meta.json").read_text())
+    metadata = yaml.safe_load((first_dir / ".archive_meta.yaml").read_text())
     assert metadata["run_id"] == "local_20250101_123456"
     assert metadata["timestamp"] == "20240101_010101"
     assert metadata["sanitized_title"] == manager.sanitize_title("Market News: Update")

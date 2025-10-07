@@ -7,7 +7,6 @@ improving automatically.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -59,7 +58,7 @@ class AgentReviewResult(BaseModel):
 class AgentReviewStorage:
     """Persistence layer for agent reviews."""
 
-    def __init__(self, storage_path: str = "data/agent_reviews.json") -> None:
+    def __init__(self, storage_path: str = "data/agent_reviews.yaml") -> None:
         self.storage_path = storage_path
         self._data: Dict[str, Dict[str, object]] = self._load()
 
@@ -68,17 +67,17 @@ class AgentReviewStorage:
             return {}
         try:
             with open(self.storage_path, "r", encoding="utf-8") as handle:
-                data = json.load(handle)
+                data = yaml.safe_load(handle)
                 if isinstance(data, dict):
                     return data
-        except (OSError, ValueError) as exc:
+        except (OSError, yaml.YAMLError) as exc:
             logger.warning("Failed to load agent review storage: %s", exc)
         return {}
 
     def save(self) -> None:
         os.makedirs(os.path.dirname(self.storage_path) or ".", exist_ok=True)
         with open(self.storage_path, "w", encoding="utf-8") as handle:
-            json.dump(self._data, handle, ensure_ascii=False, indent=2)
+            yaml.safe_dump(self._data, handle, allow_unicode=True, sort_keys=False)
 
     def append(self, result: AgentReviewResult) -> None:
         payload = result.model_dump(mode="json")

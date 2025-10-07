@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Generator, Optional
+
+import yaml
 
 from app.config.paths import ProjectPaths
 from app.logging_config import get_log_session
@@ -17,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _make_serializable(value: Any) -> Any:
-    """Convert *value* into JSON-serializable data."""
+    """Convert *value* into YAML-serializable data."""
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     if isinstance(value, dict):
@@ -76,7 +77,7 @@ class LLMInteractionLogger:
     """Persist structured records of LLM prompts and responses."""
 
     def __init__(self, log_path: Optional[Path] = None) -> None:
-        self.log_path = (log_path or ProjectPaths.logs_path("llm_interactions.jsonl")).resolve()
+        self.log_path = (log_path or ProjectPaths.logs_path("llm_interactions.yaml")).resolve()
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._write_lock = threading.Lock()
 
@@ -89,7 +90,7 @@ class LLMInteractionLogger:
         response: Any,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Write a JSON line with prompt, response, and context information."""
+        """Append a YAML document with prompt, response, and context information."""
 
         session = get_log_session()
         context = _CONTEXT.get()
@@ -109,12 +110,19 @@ class LLMInteractionLogger:
 
         payload = {key: value for key, value in payload.items() if value is not None}
 
-        line = json.dumps(payload, ensure_ascii=False)
+        document = yaml.safe_dump(
+            payload,
+            allow_unicode=True,
+            sort_keys=False,
+        )
+        if not document.endswith("\n"):
+            document += "\n"
+        entry = f"---\n{document}"
 
         try:
             with self._write_lock:
                 with self.log_path.open("a", encoding="utf-8") as handle:
-                    handle.write(line + "\n")
+                    handle.write(entry)
         except Exception as exc:  # pragma: no cover - logging must be fire-and-forget
             _LOGGER.debug("Failed to write LLM interaction log: %s", exc)
 
