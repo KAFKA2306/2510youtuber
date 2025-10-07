@@ -36,7 +36,12 @@ dependencies = [
     "coqui-tts",
     "openai",
     "PyYAML",
+    "litellm",
+    "crewai",
 ]
+
+[tool.setuptools]
+packages = ["app"]
 
 [tool.ruff]
 line-length = 120

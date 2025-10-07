@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable, Mapping
 from typing import Any, Optional
 
@@ -13,6 +14,33 @@ from app.crew.tools.ai_clients import GeminiClient
 from app.services.script.validator import Script
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_script_from_llm_output(llm_output: str) -> str:
+    """Extracts the script from the LLM output, which may contain extra text."""
+    # It could be a JSON blob
+    try:
+        import json
+        data = json.loads(llm_output)
+        if "dialogues" in data and "title" in data:
+            return Script.model_validate(data).to_text()
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # It could be a script with leading/trailing text
+    lines = llm_output.split('\n')
+    script_lines = []
+    in_script = False
+    for line in lines:
+        if re.match(r"^(田中|鈴木|ナレーター|司会)[:：]", line):
+            in_script = True
+        if in_script:
+            script_lines.append(line)
+
+    if script_lines:
+        return "\n".join(script_lines)
+
+    return llm_output # Return original if we can't find anything
 
 
 class ScriptGenerator:
@@ -124,7 +152,7 @@ def generate_dialogue(
             if isinstance(final_script, Mapping):
                 return Script.model_validate(final_script).to_text()
             if isinstance(final_script, str):
-                return final_script
+                return _extract_script_from_llm_output(final_script)
         raise RuntimeError(result.get("error") or "Three-stage script generation failed")
 
     from app.services.script.generator import StructuredScriptGenerator
