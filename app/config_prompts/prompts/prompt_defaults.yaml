@@ -26,28 +26,27 @@ workflow:
         - 確実に存在する情報源
         - 短時間で処理可能な内容
     response_format: |-
-      以下のJSON形式で厳密に回答してください：
-      ```json
-      [
-        {
-          "title": "ニュースのタイトル",
-          "url": "https://実在する出典URL",
-          "summary": "要約（200-300文字）",
-          "key_points": ["重要ポイント1", "重要ポイント2", "重要ポイント3"],
-          "source": "情報源名（例：日本経済新聞、Reuters、Bloomberg）",
-          "impact_level": "high/medium/low",
-          "category": "経済/金融/企業/国際/政策"
-        }
-      ]
+      以下のYAML形式で厳密に回答してください：
+      ```yaml
+      - title: ニュースのタイトル
+        url: https://実在する出典URL
+        summary: 要約（200-300文字）
+        key_points:
+          - 重要ポイント1
+          - 重要ポイント2
+          - 重要ポイント3
+        source: 情報源名（例：日本経済新聞、Reuters、Bloomberg）
+        impact_level: high
+        category: 経済
       ```
 
       注意事項：
-      - 必ず有効なJSONフォーマットで回答
+      - 必ず有効なYAMLフォーマットで回答
       - URLは実在するものを使用
       - 信頼性の高いメディアからの情報を優先
       - 日付は{{ current_date }}に近い最新情報
     system_message: |-
-      You are an expert financial news analyst. Provide answers in JSON format as requested.
+      You are an expert financial news analyst. Provide answers in YAML format as requested.
   script_generation:
     base_prompt: |-
       提供されたニュース情報をもとに、経済専門家による対談形式の台本を作成してください。
@@ -183,21 +182,22 @@ sheets_defaults:
     4. **ロングテール**: 「日経平均 今後の見通し」等のフレーズ
     5. **競合分析**: 同ジャンルの人気動画のタグを研究
 
-    📊 JSON出力形式：
-    ```json
-    {
-      "title": "最適化されたタイトル（60-70文字）",
-      "description": "完璧な説明文（改行・リンク含む）",
-      "tags": ["タグ1", "タグ2", ...],
-      "category": "News & Politics",
-      "sources": [
-        {"name": "情報源名", "url": "https://..."},
-        ...
-      ],
-      "hashtags": ["#ハッシュタグ1", "#ハッシュタグ2", ...],
-      "thumbnail_text": "サムネイルに入れるべきテキスト（15文字以内）",
-      "hook_line": "最初の2行のフック文"
-    }
+    📊 YAML出力形式：
+    ```yaml
+    title: 最適化されたタイトル（60-70文字）
+    description: 完璧な説明文（改行・リンク含む）
+    tags:
+      - タグ1
+      - タグ2
+    category: News & Politics
+    sources:
+      - name: 情報源名
+        url: https://...
+    hashtags:
+      - "#ハッシュタグ1"
+      - "#ハッシュタグ2"
+    thumbnail_text: サムネイルに入れるべきテキスト（15文字以内）
+    hook_line: 最初の2行のフック文
     ```
 
     ⚡ Radical Thinking Points:

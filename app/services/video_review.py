@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import math
 import os
@@ -17,6 +16,7 @@ from typing import Dict, List, Optional
 
 import ffmpeg
 import google.generativeai as genai
+import yaml
 
 from app.api_rotation import get_rotation_manager
 from app.config.settings import settings
@@ -201,7 +201,7 @@ class GeminiVisionReviewer:
             generation_config = genai.GenerationConfig(
                 temperature=self.temperature,
                 max_output_tokens=self.max_output_tokens,
-                response_mime_type="application/json",
+                response_mime_type="text/x-yaml",
             )
             response = model.generate_content(
                 [prompt, *image_parts],
@@ -241,10 +241,10 @@ class GeminiVisionReviewer:
             raise
 
         try:
-            data = json.loads(raw_response)
-        except json.JSONDecodeError as exc:
-            logger.warning("Failed to parse JSON from Gemini. Raw response: %s", raw_response[:500])
-            raise ValueError("Gemini response was not valid JSON") from exc
+            data = yaml.safe_load(raw_response)
+        except yaml.YAMLError as exc:
+            logger.warning("Failed to parse YAML from Gemini. Raw response: %s", raw_response[:500])
+            raise ValueError("Gemini response was not valid YAML") from exc
 
         return VideoReviewFeedback(**data)
 
@@ -277,14 +277,20 @@ class GeminiVisionReviewer:
 
         instructions = "\n".join(
             [
-                "出力フォーマットは以下のJSON構造に従ってください:",
-                "{",
-                '  "summary": "動画全体の要約",',
-                '  "positive_highlights": ["良かった点1", "良かった点2"],',
-                '  "improvement_suggestions": ["改善案1", "改善案2"],',
-                '  "retention_risks": ["離脱につながる懸念"],',
-                '  "next_video_actions": ["次の動画で試すこと"]',
-                "}",
+                "出力フォーマットは以下のYAML構造に従ってください:",
+                "```yaml",
+                "summary: 動画全体の要約",
+                "positive_highlights:",
+                "  - 良かった点1",
+                "  - 良かった点2",
+                "improvement_suggestions:",
+                "  - 改善案1",
+                "  - 改善案2",
+                "retention_risks:",
+                "  - 離脱につながる懸念",
+                "next_video_actions:",
+                "  - 次の動画で試すこと",
+                "```",
                 "日本語のみを使用し、簡潔かつ実行可能な提案にしてください。",
                 "未知の場合は" "不明" "と記載せず、推測で埋めないでください。",
             ]

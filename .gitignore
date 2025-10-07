@@ -5,10 +5,7 @@
 *env*
 *setup*
 *.json
-!tauri-app/package.json
-!tauri-app/package-lock.json
-!tauri-app/tsconfig.json
-!tauri-app/tsconfig.node.json
+tauri-app/node_modules/
 
 # Python
 __pycache__/

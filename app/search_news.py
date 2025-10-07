@@ -3,7 +3,6 @@
 Perplexity AIを使用して最新の経済ニュースを収集・要約します。
 """
 
-import json
 import logging
 import os
 import re
@@ -11,6 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 import httpx
+import yaml
 
 from .api_rotation import get_rotation_manager
 from .config import cfg
@@ -201,24 +201,21 @@ class NewsCollector:
     def _parse_news_response(self, response: str) -> List[Dict[str, Any]]:
         """Perplexity応答からニュースデータを抽出"""
         try:
-            match = re.search(r"```json\n(.*?)\n```", response, re.DOTALL)
+            match = re.search(r"```(?:yaml|yml)\n(.*?)```", response, re.DOTALL)
             if match:
-                json_str = match.group(1)
+                yaml_blob = match.group(1)
+                news_data = yaml.safe_load(yaml_blob)
             else:
-                start = response.find("[")
-                end = response.rfind("]") + 1
-                if start != -1 and end != 0:
-                    json_str = response[start:end]
-                else:
-                    raise ValueError("No JSON block found in response")
+                news_data = yaml.safe_load(response)
 
-            news_data = json.loads(json_str)
             if isinstance(news_data, dict):
                 news_data = [news_data]
+            if not isinstance(news_data, list):
+                raise ValueError("YAML payload must be a list or mapping")
             return news_data
 
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from Perplexity response: {e}")
+        except yaml.YAMLError as e:
+            logger.error(f"Failed to parse YAML from Perplexity response: {e}")
             logger.debug(f"Raw response: {response[:500]}...")
             return []
 
@@ -310,18 +307,16 @@ class NewsCollector:
 
 トピック: {topic}
 
-JSON形式で回答してください：
-[
-  {{
-    "title": "...",
-    "url": "...",
-    "summary": "...",
-    "key_points": [...],
-    "source": "...",
-    "impact_level": "...",
-    "category": "..."
-  }}
-]
+YAML形式で回答してください：
+```yaml
+- title: "..."
+  url: "..."
+  summary: "..."
+  key_points: ["...", "..."]
+  source: "..."
+  impact_level: "..."
+  category: "..."
+```
 """
         if not self._has_registered_keys:
             logger.info("Skipping Perplexity topic search because no API keys were registered")

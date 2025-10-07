@@ -19,4 +19,4 @@ def test_dump_script_to_yaml_round_trip():
     yaml_blob = generator._dump_script_to_yaml(script)
 
     loaded = yaml.safe_load(yaml_blob)
-    assert loaded == script.model_dump(mode="json")
+    assert loaded == script.model_dump(mode="python")

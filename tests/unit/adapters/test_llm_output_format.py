@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
-from app.adapters.llm import LLMClient, extract_structured_json
-from app.crew.agent_review import parse_json_from_gemini
+import yaml
+
+from app.adapters.llm import LLMClient, extract_structured_yaml
+from app.crew.agent_review import parse_yaml_from_gemini
 
 
 class _DummyLLMClient(LLMClient):
@@ -20,17 +20,17 @@ class _DummyLLMClient(LLMClient):
         return self._raw_output
 
 
-def test_extract_structured_json_with_markdown_fences() -> None:
-    payload = """Gemini reply:\n```json\n{\n  \"score\": 8,\n  \"items\": [\n    {\"id\": 1}\n  ]\n}\n```\nThanks!"""
+def test_extract_structured_yaml_with_markdown_fences() -> None:
+    payload = """Gemini reply:\n```yaml\nscore: 8\nitems:\n  - id: 1\n```\nThanks!"""
 
-    snippet = extract_structured_json(payload)
+    snippet = extract_structured_yaml(payload)
 
     assert snippet is not None
-    assert json.loads(snippet)["score"] == 8
+    assert yaml.safe_load(snippet)["score"] == 8
 
 
 def test_generate_structured_handles_preface_text() -> None:
-    raw = "Here you go: {\"rating\": 4, \"notes\": [\"tighten intro\"]} Extra commentary."
+    raw = "Here you go:\n```yaml\nrating: 4\nnotes:\n  - tighten intro\n```\nExtra commentary."
     client = _DummyLLMClient(raw)
 
     result = client.generate_structured("prompt")
@@ -40,10 +40,10 @@ def test_generate_structured_handles_preface_text() -> None:
 
 
 @pytest.mark.parametrize("agent_key", ["fact_checker", "script_writer"])
-def test_parse_json_from_gemini_allows_wrapped_json(agent_key: str) -> None:
-    response = """assistant: ```json\n{\n  \"score\": 6.5,\n  \"verdict\": \"Needs polish\"\n}\n``` summary"""
+def test_parse_yaml_from_gemini_allows_wrapped_yaml(agent_key: str) -> None:
+    response = """assistant: ```yaml\nscore: 6.5\nverdict: Needs polish\n``` summary"""
 
-    parsed = parse_json_from_gemini(response, agent_key)
+    parsed = parse_yaml_from_gemini(response, agent_key)
 
     if agent_key == "script_writer":
         # RAW agents return dict with success flag when JSON parsing fails, but

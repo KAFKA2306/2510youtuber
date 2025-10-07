@@ -29,26 +29,31 @@ tasks:
       4. 視聴者参加型の質問・アンケート・コメント促進を最低3回入れる。
       5. ストーリーの流れを崩さず、PREP法と感情の波を維持する。
 
-      【出力形式】（JSONのみ）
-      {"title": "動画タイトル",
-       "dialogues": [
-         {"speaker": "武宏", "line": "セリフ"},
-         {"speaker": "つむぎ", "line": "セリフ"}
-       ],
-       "engagement_plan": {
-         "pattern_interrupts": ["0:30 グラフ提示", "1:00 視聴者アンケート"],
-         "open_loops": ["なぜ今が転換点なのか？"],
-         "viewer_prompts": ["コメントで予想を教えてください"],
-         "predicted_retention": 52.5
-       }
-      }
+      【出力形式】（YAMLのみ）
+      ```yaml
+      title: 動画タイトル
+      dialogues:
+        - speaker: 武宏
+          line: セリフ
+        - speaker: つむぎ
+          line: セリフ
+      engagement_plan:
+        pattern_interrupts:
+          - 0:30 グラフ提示
+          - 1:00 視聴者アンケート
+        open_loops:
+          - なぜ今が転換点なのか？
+        viewer_prompts:
+          - コメントで予想を教えてください
+        predicted_retention: 52.5
+      ```
 
-      - JSON以外のテキスト、Markdown装飾、説明文は出力しないこと。
+      - YAML以外のテキスト、Markdown装飾、説明文は出力しないこと。
       - dialogues配列は50行以上、話者は最低2名で交互に発話すること。
       - engagement_planのpredicted_retentionは小数点1桁で記載すること。
 
     expected_output: |
-      エンゲージメント施策を組み込んだ対談スクリプトと施策概要のJSON
+      エンゲージメント施策を組み込んだ対談スクリプトと施策概要のYAML
 
 # ==========================
 # Task 6: Quality Evaluation
@@ -170,41 +175,36 @@ tasks:
       - WOWスコア 7.0-7.9: ⚠️ 要改善 → Agent 5で微調整
       - WOWスコア 7.0未満: ❌ 不合格 → Agent 4に差し戻し（最大2回）
 
-      【重要】最終出力は、以下のJSON形式のみを出力してください。説明文、分析の過程、コメント等は一切含めないでください。
-      あなたの思考プロセスは含めず、評価結果のJSONのみを出力してください。
+      【重要】最終出力は、以下のYAML形式のみを出力してください。説明文、分析の過程、コメント等は一切含めないでください。
+      あなたの思考プロセスは含めず、評価結果のYAMLのみを出力してください。
 
-      【出力形式】（JSON）
-      ```json
-      {
-        "wow_score": 8.5,
-        "dimension_scores": {
-          "surprise": 9.0,
-          "emotion": 8.5,
-          "clarity": 8.0,
-          "retention_prediction": 54.0,
-          "action": 8.5,
-          "evidence": 9.0,
-          "japanese_purity": 96.0,
-          "visual_design": 9.0
-        },
-        "is_passing": true,
-        "quality_level": "excellent",
-        "strengths": [
-          "驚きポイントが5箇所あり、非常に効果的",
-          "ストーリーアークが機能し、感情移入できる",
-          "具体的数値が12箇所あり、説得力が高い"
-        ],
-        "improvements": [
-          "2:30-3:00区間に追加の驚きポイントを挿入",
-          "専門用語「量的緩和」を「お金を増やす政策」に言い換え"
-        ],
-        "critical_issues": [],
-        "recommendation": "合格。Agent 7（日本語純度向上）へ進む"
-      }
+      【出力形式】（YAML）
+      ```yaml
+      wow_score: 8.5
+      dimension_scores:
+        surprise: 9.0
+        emotion: 8.5
+        clarity: 8.0
+        retention_prediction: 54.0
+        action: 8.5
+        evidence: 9.0
+        japanese_purity: 96.0
+        visual_design: 9.0
+      is_passing: true
+      quality_level: excellent
+      strengths:
+        - 驚きポイントが5箇所あり、非常に効果的
+        - ストーリーアークが機能し、感情移入できる
+        - 具体的数値が12箇所あり、説得力が高い
+      improvements:
+        - 2:30-3:00区間に追加の驚きポイントを挿入
+        - 専門用語「量的緩和」を「お金を増やす政策」に言い換え
+      critical_issues: []
+      recommendation: 合格。Agent 7（日本語純度向上）へ進む
       ```
 
     expected_output: |
-      品質評価レポート（8軸スコア + WOWスコア + 改善指示）のJSON
+      品質評価レポート（8軸スコア + WOWスコア + 改善指示）のYAML
 
   # ==========================
   # Task 7: Japanese Purity Check
@@ -274,38 +274,34 @@ tasks:
 
       【最終仕上げ】
       - 話者名の統一確認（武宏: つむぎ: ナレーター:）
-      - final_scriptは必ず「話者名: セリフ」の形式で記述してください。**（重要：JSON内の`final_script`の値もこの形式を厳守すること）**
+      - final_scriptは必ず「話者名: セリフ」の形式で記述してください。**（重要：YAML内の`final_script`の値もこの形式を厳守すること）**
       - 視覚指示の形式統一
       - 文字数の最終調整（目標±5%以内）
 
-      【重要】最終出力は、以下のJSON形式のみを出力してください。説明文、分析、コメント等は一切含めないでください。
-      必ずMarkdownのコードブロック（```json ... ```）で囲んでください。
+      【重要】最終出力は、以下のYAML形式のみを出力してください。説明文、分析、コメント等は一切含めないでください。
+      必ずMarkdownのコードブロック（```yaml ... ```）で囲んでください。
 
-      あなたの思考プロセスや分析は含めず、JSONのみを出力してください。
+      あなたの思考プロセスや分析は含めず、YAMLのみを出力してください。
 
-      【出力形式】（JSON）
-      ```json
-      {
-        "final_script": "日本語純度100%の最終完成台本（必ず「武宏: セリフ」形式）",
-        "japanese_purity_score": 97.5,
-        "issues_fixed": [
-          "「impact」を「影響」に変更（3箇所）",
-          "「trend」を「傾向」に変更（2箇所）",
-          "「QE」を「量的緩和」に置換（1箇所）"
-        ],
-        "character_count": 2420,
-        "visual_instructions_count": 18,
-        "quality_guarantee": {
-          "wow_score": 8.5,
-          "japanese_purity": 97.5,
-          "retention_prediction": 54.0,
-          "surprise_points": 6,
-          "emotion_peaks": 5,
-          "concrete_numbers": 12
-        },
-        "certification": "✅ WOW Script Creation Crew認定：視聴者満足度保証"
-      }
+      【出力形式】（YAML）
+      ```yaml
+      final_script: "日本語純度100%の最終完成台本（必ず「武宏: セリフ」形式）"
+      japanese_purity_score: 97.5
+      issues_fixed:
+        - 「impact」を「影響」に変更（3箇所）
+        - 「trend」を「傾向」に変更（2箇所）
+        - 「QE」を「量的緩和」に置換（1箇所）
+      character_count: 2420
+      visual_instructions_count: 18
+      quality_guarantee:
+        wow_score: 8.5
+        japanese_purity: 97.5
+        retention_prediction: 54.0
+        surprise_points: 6
+        emotion_peaks: 5
+        concrete_numbers: 12
+      certification: ✅ WOW Script Creation Crew認定：視聴者満足度保証
       ```
 
     expected_output: |
-      最終完成台本 + 日本語純度スコア + 品質保証データ（JSON）
+      最終完成台本 + 日本語純度スコア + 品質保証データ（YAML）

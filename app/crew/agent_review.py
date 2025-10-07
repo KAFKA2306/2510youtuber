@@ -14,10 +14,11 @@ import re
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional
 
+import yaml
 from pydantic import BaseModel, Field
 
 from app.config.settings import settings
-from app.adapters.llm import extract_structured_json
+from app.adapters.llm import extract_structured_yaml
 from app.crew.tools.ai_clients import GeminiClient
 from app.logging_config import WorkflowLogger
 from app.prompt_cache import get_prompt_manager
@@ -252,7 +253,7 @@ class AgentReviewCycle:
         else:
             # 出力解析ログ
             workflow_logger.logger.debug(f"Parsing output from {agent_key} ({len(response_text)} chars)")
-            response = parse_json_from_gemini(str(response_text), agent_key)
+            response = parse_yaml_from_gemini(str(response_text), agent_key)
 
         # 正規化
         processed = self._normalize_response(response)
@@ -330,18 +331,20 @@ class AgentReviewCycle:
             "- Provide 1-3 clear action items that would improve the next iteration.",
             "- Note whether the agent addressed the previous focus items.",
             "",
-            "Respond ONLY with valid JSON using the following schema:",
-            "{",
-            '  "score": float between 0 and 10,',
-            '  "verdict": "short headline level summary",',
-            '  "strengths": ["bullet"],',
-            '  "issues": ["bullet"],',
-            '  "action_items": ["bullet"],',
-            '  "compliance": {',
-            '      "previous_focus_addressed": "yes" | "partial" | "no",',
-            '      "notes": "short note"',
-            "  }",
-            "}",
+            "Respond ONLY with valid YAML using the following schema:",
+            "```yaml",
+            "score: 0-10 scale",
+            "verdict: short headline level summary",
+            "strengths:",
+            "  - bullet",
+            "issues:",
+            "  - bullet",
+            "action_items:",
+            "  - bullet",
+            "compliance:",
+            "  previous_focus_addressed: yes | partial | no",
+            "  notes: short note",
+            "```",
         ]
         return "\n".join(prompt_lines)
 
@@ -374,7 +377,7 @@ class AgentReviewCycle:
         return result
 
 
-def parse_json_from_gemini(response_text: str, agent_key: str) -> dict:
+def parse_yaml_from_gemini(response_text: str, agent_key: str) -> dict:
     """
     Geminiレスポンスから柔軟にパース
     script_writer と japanese_purity_polisher はRAW出力を許可
@@ -382,7 +385,7 @@ def parse_json_from_gemini(response_text: str, agent_key: str) -> dict:
     # RAW出力を許可するエージェント
     RAW_OUTPUT_AGENTS = ["script_writer", "japanese_purity_polisher"]
 
-    # RAW出力許可エージェントの場合、JSONパース失敗を許容
+    # RAW出力許可エージェントの場合、YAMLパース失敗を許容
     if agent_key in RAW_OUTPUT_AGENTS:
         # プレーンテキストとして返す
         text = response_text.strip()
@@ -390,23 +393,26 @@ def parse_json_from_gemini(response_text: str, agent_key: str) -> dict:
             # Defer to structured parsing below.
             pass
         else:
-            candidate = extract_structured_json(response_text)
+            candidate = extract_structured_yaml(response_text)
             if candidate is None:
                 logger.info(f"{agent_key}: RAW text output detected")
                 return {"raw_output": text, "success": True}
             response_text = candidate
 
-    # JSON パース試行
+    # YAML パース試行
     try:
-        candidate = extract_structured_json(response_text)
+        candidate = extract_structured_yaml(response_text)
         if candidate is None:
-            raise json.JSONDecodeError("No JSON object found", response_text, 0)
-        return json.loads(candidate)
-    except json.JSONDecodeError as e:
+            raise ValueError("No YAML mapping found")
+        parsed = yaml.safe_load(candidate)
+        if isinstance(parsed, dict):
+            return parsed
+        raise ValueError("YAML payload was not a mapping")
+    except (yaml.YAMLError, ValueError) as e:
         if agent_key in RAW_OUTPUT_AGENTS:
             # RAW出力として許容
             return {"raw_output": response_text, "success": True}
-        logger.error(f"Failed to parse JSON from {agent_key}: {e}")
+        logger.error(f"Failed to parse YAML from {agent_key}: {e}")
         raise
 
 
