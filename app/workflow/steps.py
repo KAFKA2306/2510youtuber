@@ -424,6 +424,7 @@ class QualityAssuranceStep(WorkflowStep):
         if report.warnings():
             warning_names = ', '.join((check.name for check in report.warnings()))
             logger.warning(f'Media QA warnings: {warning_names}')
+        critical_failures = pipeline.critical_failures(report)
         blocking = pipeline.should_block(report, mode=context.mode)
         failures = report.blocking_failures()
         if failures and (not blocking):
@@ -431,7 +432,11 @@ class QualityAssuranceStep(WorkflowStep):
             logger.warning('Blocking QA failures detected but bypassed due to configuration: %s', failure_names)
         if blocking:
             failed_names = ', '.join((check.name for check in failures)) or 'unknown'
-            message = f'QA gate blocked publication due to: {failed_names}'
+            if critical_failures:
+                critical_names = ', '.join(check.name for check in critical_failures)
+                message = f'QA gate blocked publication due to critical failures: {critical_names}'
+            else:
+                message = f'QA gate blocked publication due to: {failed_names}'
             logger.error(message)
             if qa_config.gating.retry_attempts > 0:
                 context.set('qa_retry_request', {'start_step': qa_config.gating.retry_start_step, 'reason': message, 'attempt': attempt_count})

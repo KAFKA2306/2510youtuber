@@ -33,6 +33,15 @@ class MediaQAPipeline:
         self._ffmpeg_binary = getattr(cfg, "ffmpeg_path", "ffmpeg") or "ffmpeg"
         self._ffprobe_binary = "ffprobe"
         self._fraction_parser = fraction_parser or FractionParser()
+        gating = getattr(self.config, "gating", None)
+        critical_checks = []
+        if gating and getattr(gating, "critical_checks", None):
+            critical_checks = list(gating.critical_checks)
+        else:
+            critical_checks = ["audio_integrity", "video_compliance"]
+        self._critical_checks = {
+            str(check).strip() for check in critical_checks if str(check).strip()
+        }
 
     def run(
         self,
@@ -78,11 +87,21 @@ class MediaQAPipeline:
 
     def should_block(self, report: QualityGateReport, *, mode: str) -> bool:
         gating = self.config.gating
+        critical_failures = self.critical_failures(report)
+        if critical_failures and mode not in gating.skip_modes:
+            return True
         if not gating.enforce:
             return False
         if mode in gating.skip_modes:
             return False
         return bool(report.blocking_failures())
+
+    def critical_failures(self, report: QualityGateReport) -> list[MediaCheckResult]:
+        return [
+            check
+            for check in report.checks
+            if check.status == CheckStatus.FAILED and check.name in self._critical_checks
+        ]
 
     # ------------------------------------------------------------------
     # Individual domain checks

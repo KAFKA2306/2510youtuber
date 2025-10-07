@@ -102,6 +102,9 @@ class MediaQAGatingConfig(BaseModel):
     fail_on_missing_inputs: bool = True
     retry_attempts: int = 1
     retry_start_step: str = "script_generation"
+    critical_checks: List[str] = Field(
+        default_factory=lambda: ["audio_integrity", "video_compliance"]
+    )
 
 
 class AudioQAConfig(BaseModel):
