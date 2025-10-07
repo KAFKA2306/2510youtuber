@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from app.logging_config import get_log_session, setup_logging
+from app.notifications.interfaces import Notifier
 
 from .api_rotation import initialize_api_infrastructure
 from .config import cfg
@@ -18,6 +19,7 @@ from .sheets import sheets_manager
 from .workflow import (
     AlignSubtitlesStep,
     CollectNewsStep,
+    FailureBus,
     GenerateMetadataStep,
     GenerateScriptStep,
     GenerateThumbnailStep,
@@ -30,6 +32,7 @@ from .workflow import (
     UploadToDriveStep,
     UploadToYouTubeStep,
     WorkflowContext,
+    WorkflowFailureEvent,
     WorkflowStep,
 )
 
@@ -69,11 +72,15 @@ class YouTubeWorkflow:
         "youtube_upload": {"youtube_result", "video_id", "video_url"},
     }
 
-    def __init__(self):
+    def __init__(self, notifier: Optional[Notifier] = None):
         self.run_id = None
         self.mode = "daily"
         self.context: Optional[WorkflowContext] = None
         self._log_session = get_log_session()
+        self.notifier: Notifier = notifier or discord_notifier
+        self.failure_bus = FailureBus()
+        self.failure_bus.subscribe(self._handle_failure_event)
+        self.failure_bus.subscribe(self._cleanup_after_failure)
         self.steps: List[WorkflowStep] = [
             CollectNewsStep(),
             GenerateScriptStep(),
@@ -108,7 +115,11 @@ class YouTubeWorkflow:
             for index in range(start_index, len(self.steps)):
                 step = self.steps[index]
                 logger.info(f"Executing: {step.step_name}")
-                result = await step.execute(self.context)
+                try:
+                    result = await step.execute(self.context)
+                except Exception as exc:  # noqa: BLE001 - funnel via failure bus
+                    logger.exception("Step '%s' raised an exception", step.step_name)
+                    return await self._dispatch_failure(step.step_name, error=exc)
                 step_results[index] = result
                 if result.files_generated:
                     self.context.add_files(result.files_generated)
@@ -119,9 +130,7 @@ class YouTubeWorkflow:
                             retry_step_name = retry_request.get("start_step")
                             retry_index = self._resolve_step_index(retry_step_name)
                             if retry_index is None:
-                                failure = await self._handle_workflow_failure(step.step_name, result)
-                                self._cleanup_temp_files()
-                                return failure
+                                return await self._dispatch_failure(step.step_name, result=result)
                             reason = retry_request.get("reason")
                             if reason:
                                 logger.warning(reason)
@@ -136,9 +145,7 @@ class YouTubeWorkflow:
                             start_index = retry_index
                             retry_triggered = True
                             break
-                    failure = await self._handle_workflow_failure(step.step_name, result)
-                    self._cleanup_temp_files()
-                    return failure
+                    return await self._dispatch_failure(step.step_name, result=result)
             if retry_triggered:
                 continue
             final_results = [res for res in step_results if res is not None]
@@ -166,9 +173,7 @@ class YouTubeWorkflow:
         failure_index = max(start_index, 0)
         failure_step = self.steps[failure_index].step_name if failure_index < len(self.steps) else "unknown"
         failure_result = step_results[failure_index] if failure_index < len(step_results) else None
-        failure = await self._handle_workflow_failure(failure_step, failure_result)
-        self._cleanup_temp_files()
-        return failure
+        return await self._dispatch_failure(failure_step, result=failure_result)
 
     def _resolve_step_index(self, step_name: Optional[str]) -> Optional[int]:
         if not step_name:
@@ -192,6 +197,36 @@ class YouTubeWorkflow:
         for idx in range(start_index, len(step_results)):
             step_results[idx] = None
 
+    async def _dispatch_failure(
+        self,
+        step_name: str,
+        result: Optional[Any] = None,
+        error: Optional[BaseException] = None,
+    ) -> Dict[str, Any]:
+        event = WorkflowFailureEvent(
+            step_name=step_name,
+            context=self.context,
+            result=result,
+            error=error,
+        )
+        enriched_event = await self.failure_bus.notify(event)
+        if enriched_event.response is not None:
+            return enriched_event.response
+        failure_error = None
+        if result and hasattr(result, "error") and getattr(result, "error"):
+            failure_error = getattr(result, "error")
+        elif error:
+            failure_error = str(error)
+        else:
+            failure_error = "Unknown error"
+        enriched_event.response = {
+            "success": False,
+            "failed_step": step_name,
+            "error": failure_error,
+            "run_id": self.run_id,
+        }
+        return enriched_event.response
+
     def _initialize_run(self, mode: str) -> str:
         if sheets_manager:
             run_id = sheets_manager.create_run(mode)
@@ -205,10 +240,29 @@ class YouTubeWorkflow:
             self._log_session.bind_workflow_run(run_id, mode=mode)
         return run_id
 
-    async def _handle_workflow_failure(self, step_name: str, result: Any) -> Dict[str, Any]:
-        error_message = f"{step_name} failed: {result.error if hasattr(result, 'error') else 'Unknown error'}"
+    async def _handle_failure_event(self, event: WorkflowFailureEvent) -> None:
+        event.response = await self._handle_workflow_failure(event.step_name, event.result, event.error)
+
+    async def _cleanup_after_failure(self, _: WorkflowFailureEvent) -> None:
+        self._cleanup_temp_files()
+
+    async def _handle_workflow_failure(
+        self,
+        step_name: str,
+        result: Optional[Any],
+        error: Optional[BaseException] = None,
+    ) -> Dict[str, Any]:
+        error_detail: Optional[str] = None
+        if result and hasattr(result, "error") and getattr(result, "error"):
+            error_detail = getattr(result, "error")
+        elif error:
+            error_detail = str(error)
+        else:
+            error_detail = "Unknown error"
+        error_message = f"{step_name} failed: {error_detail}"
         logger.error(error_message)
-        await self._notify_workflow_error(RuntimeError(error_message))
+        exc_to_notify = error if isinstance(error, Exception) else RuntimeError(error_message)
+        await self._notify_workflow_error(exc_to_notify)
         self._update_run_status("failed", {"error": error_message})
         if self._log_session:
             self._log_session.mark_status(
@@ -220,7 +274,7 @@ class YouTubeWorkflow:
         return {
             "success": False,
             "failed_step": step_name,
-            "error": result.error if hasattr(result, "error") else str(result),
+            "error": error_detail or "Unknown error",
             "run_id": self.run_id,
         }
 
@@ -469,7 +523,7 @@ class YouTubeWorkflow:
 
     async def _notify_workflow_start(self, mode: str):
         message = f"YouTube動画生成ワークフローを開始しました\nモード: {mode}\nRun ID: {self.run_id}"
-        discord_notifier.notify(message, level="info", title="ワークフロー開始")
+        await self.notifier.notify(message, level="info", title="ワークフロー開始")
 
     async def _notify_workflow_success(self, result: Dict[str, Any]):
         execution_time = result.get("execution_time", 0)
@@ -480,11 +534,11 @@ class YouTubeWorkflow:
             "台本文字数": result.get("script_length", 0),
             "生成ファイル数": len(result.get("generated_files", [])),
         }
-        discord_notifier.notify(message, level="success", title="ワークフロー完了", fields=fields)
+        await self.notifier.notify(message, level="success", title="ワークフロー完了", fields=fields)
 
     async def _notify_workflow_error(self, error: Exception):
         message = f"YouTube動画生成でエラーが発生しました\nエラー: {str(error)}\nRun ID: {self.run_id}"
-        discord_notifier.notify(message, level="error", title="ワークフローエラー")
+        await self.notifier.notify(message, level="error", title="ワークフローエラー")
 
     def _update_run_status(self, status: str, result: Dict[str, Any]):
         if sheets_manager and self.run_id:

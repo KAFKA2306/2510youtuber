@@ -12,7 +12,7 @@ from app.drive import upload_video_package
 from app.metadata import generate_youtube_metadata
 from app.metadata_storage import metadata_storage
 from app.prompts import get_default_news_collection_prompt, get_default_script_generation_prompt
-from app.search_news import collect_news
+from app.search_news import collect_news as collect_news_sync
 from app.script_gen import ScriptGenerator, generate_dialogue
 from app.services.file_archival import FileArchivalManager
 from app.services.media.qa_pipeline import MediaQAPipeline
@@ -29,9 +29,13 @@ from app.utils import FileUtils
 from app.video import generate_video, video_generator
 from app.youtube import upload_video as youtube_upload
 from .base import StepResult, WorkflowContext, WorkflowStep
+from .ports import NewsCollectionPort, SyncNewsCollectionAdapter
 logger = logging.getLogger(__name__)
 
 class CollectNewsStep(WorkflowStep):
+
+    def __init__(self, news_port: NewsCollectionPort | None = None) -> None:
+        self._news_port = news_port or SyncNewsCollectionAdapter(collect_news_sync)
 
     @property
     def step_name(self) -> str:
@@ -43,7 +47,7 @@ class CollectNewsStep(WorkflowStep):
             prompt_a = self._get_prompt(context.mode)
             if sheets_manager and context.run_id:
                 sheets_manager.record_prompt_used(context.run_id, 'prompt_a', prompt_a)
-            news_items = collect_news(prompt_a, context.mode)
+            news_items = await self._news_port.collect_news(prompt_a, context.mode)
             if not news_items:
                 return self._failure('No news items collected')
             logger.info(f'Collected {len(news_items)} news items')
