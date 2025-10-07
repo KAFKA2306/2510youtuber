@@ -4,11 +4,12 @@ YouTube Analytics APIやDiscord経由で視聴者のフィードバックを収�
 背景テーマの継続的改善に活用します。
 """
 
-import json
 import logging
 import os
 from datetime import datetime
 from typing import Dict, Optional
+
+import yaml
 
 from .background_theme import get_theme_manager
 from .models.video_review import VideoReviewResult
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 class VideoFeedbackCollector:
     """動画フィードバック収集クラス"""
 
-    def __init__(self, feedback_file: str = "data/video_feedback.json"):
+    def __init__(self, feedback_file: str = "data/video_feedback.yaml"):
         self.feedback_file = feedback_file
         self.theme_manager = get_theme_manager()
         self._ensure_feedback_file()
@@ -29,13 +30,13 @@ class VideoFeedbackCollector:
         os.makedirs(os.path.dirname(self.feedback_file) if os.path.dirname(self.feedback_file) else ".", exist_ok=True)
         if not os.path.exists(self.feedback_file):
             with open(self.feedback_file, "w", encoding="utf-8") as f:
-                json.dump({}, f)
+                yaml.safe_dump({}, f)
 
     def record_video_metadata(self, video_id: str, theme_name: str, metadata: Dict):
         """動画メタデータを記録（どのテーマを使ったか）"""
         try:
             with open(self.feedback_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = yaml.safe_load(f) or {}
 
             data[video_id] = {
                 "theme_name": theme_name,
@@ -45,7 +46,7 @@ class VideoFeedbackCollector:
             }
 
             with open(self.feedback_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
 
             logger.info(f"Recorded metadata for video {video_id} with theme {theme_name}")
         except Exception as e:
@@ -69,7 +70,7 @@ class VideoFeedbackCollector:
         """
         try:
             with open(self.feedback_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = yaml.safe_load(f) or {}
 
             if video_id not in data:
                 logger.warning(f"Video {video_id} not found in feedback data")
@@ -79,7 +80,7 @@ class VideoFeedbackCollector:
             data[video_id]["updated_at"] = datetime.now().isoformat()
 
             with open(self.feedback_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
 
             # テーマのパフォーマンス指標を更新
             theme_name = data[video_id]["theme_name"]
@@ -113,7 +114,7 @@ class VideoFeedbackCollector:
         """
         try:
             with open(self.feedback_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = yaml.safe_load(f) or {}
 
             if video_id not in data:
                 logger.warning(f"Video {video_id} not found, creating new entry")
@@ -136,7 +137,7 @@ class VideoFeedbackCollector:
             )
 
             with open(self.feedback_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
 
             # テーマにフィードバックを反映
             theme_name = data[video_id]["theme_name"]
@@ -152,7 +153,7 @@ class VideoFeedbackCollector:
         """AIによる動画レビュー結果を保存"""
         try:
             with open(self.feedback_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = yaml.safe_load(f) or {}
 
             if video_id not in data:
                 data[video_id] = {
@@ -170,7 +171,7 @@ class VideoFeedbackCollector:
             data[video_id]["ai_review"] = ai_review_entry
 
             with open(self.feedback_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
 
             logger.info("Recorded AI review feedback for video %s", video_id)
         except Exception as e:
@@ -180,8 +181,9 @@ class VideoFeedbackCollector:
         """特定動画のフィードバックを取得"""
         try:
             with open(self.feedback_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data.get(video_id)
+                data = yaml.safe_load(f) or {}
+                if isinstance(data, dict):
+                    return data.get(video_id)
         except Exception as e:
             logger.error(f"Failed to get video feedback: {e}")
             return None
@@ -190,7 +192,7 @@ class VideoFeedbackCollector:
         """特定テーマのパフォーマンスサマリーを取得"""
         try:
             with open(self.feedback_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = yaml.safe_load(f) or {}
 
             theme_videos = [v for v in data.values() if v.get("theme_name") == theme_name]
 

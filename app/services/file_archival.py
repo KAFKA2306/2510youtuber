@@ -4,7 +4,6 @@ Manages structured storage of generated videos, audio, thumbnails, and scripts.
 Ensures files persist after workflow completion with predictable organization.
 """
 
-import json
 import logging
 import os
 import re
@@ -12,6 +11,8 @@ import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List
+
+import yaml
 
 from app.config.paths import ProjectPaths
 
@@ -133,9 +134,11 @@ class FileArchivalManager:
             "sanitized_title": sanitized_title,
         }
 
-        metadata_path = directory / ".archive_meta.json"
+        metadata_path = directory / ".archive_meta.yaml"
         try:
-            metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2))
+            metadata_path.write_text(
+                yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False)
+            )
         except OSError as exc:
             logger.debug("Unable to write archive metadata for %s: %s", directory, exc)
 
@@ -259,12 +262,18 @@ class FileArchivalManager:
             if not item.is_dir():
                 continue
 
-            metadata_file = item / ".archive_meta.json"
+            metadata_file = item / ".archive_meta.yaml"
             metadata: Dict[str, str] | None = None
             if metadata_file.exists():
                 try:
-                    metadata = json.loads(metadata_file.read_text())
-                except (OSError, json.JSONDecodeError) as exc:
+                    loaded = yaml.safe_load(metadata_file.read_text())
+                    if isinstance(loaded, dict):
+                        metadata = {
+                            key: str(value)
+                            for key, value in loaded.items()
+                            if isinstance(key, str)
+                        }
+                except (OSError, yaml.YAMLError) as exc:
                     logger.debug("Failed to read archive metadata for %s: %s", item, exc)
 
             timestamp: str | None = None

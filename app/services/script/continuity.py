@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import csv
-import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import yaml
 
 
 @dataclass
@@ -84,7 +85,7 @@ class ContinuityContextBuilder:
         data_dir = project_root / "data"
 
         self.metadata_csv_path = Path(metadata_csv_path or data_dir / "metadata_history.csv")
-        self.feedback_json_path = Path(feedback_json_path or data_dir / "video_feedback.json")
+        self.feedback_json_path = Path(feedback_json_path or data_dir / "video_feedback.yaml")
 
     def build_prompt_snippet(self) -> str:
         metadata = self._load_latest_metadata()
@@ -174,7 +175,7 @@ class ContinuityContextBuilder:
 
         try:
             with self.feedback_json_path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = yaml.safe_load(f)
             if isinstance(data, dict) and data:
                 return data
         except Exception:
