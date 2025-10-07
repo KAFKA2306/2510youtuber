@@ -58,6 +58,14 @@ class StepResult(BaseModel):
         json_encoders = {datetime: lambda v: v.isoformat()}
 
 
+class WorkflowArtifact(BaseModel):
+    """生成物のメタデータ"""
+
+    path: str = Field(..., description="ファイルパス")
+    persisted: bool = Field(default=False, description="クリーンアップ後も保持するか")
+    kind: Optional[str] = Field(default=None, description="ファイル種別/用途")
+
+
 class WorkflowState(BaseModel):
     """ワークフロー全体の状態管理"""
 
@@ -191,6 +199,7 @@ class WorkflowResult(BaseModel):
     total_cost: Optional[float] = Field(default=None, description="総コスト（$）")
 
     # ファイル
+    generated_artifacts: List[WorkflowArtifact] = Field(default_factory=list, description="生成されたファイルのメタデータ")
     generated_files: List[str] = Field(default_factory=list, description="生成されたファイル")
 
     # AIレビュー結果
@@ -246,6 +255,7 @@ class WorkflowResult(BaseModel):
             completed_steps=state.successful_steps_count,
             failed_steps=state.failed_steps_count,
             total_steps=len(state.step_results),
+            generated_artifacts=[WorkflowArtifact(path=path, persisted=False) for path in state.generated_files],
             generated_files=state.generated_files,
         )
 

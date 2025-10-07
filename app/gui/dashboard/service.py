@@ -142,7 +142,10 @@ class DashboardService:
         seen_paths: set[str] = set()
         if artefact.video and artefact.video.path:
             seen_paths.add(artefact.video.path)
-        for path in _iter_unique_files(result.generated_files):
+        artifact_paths = [artifact.path for artifact in getattr(result, "generated_artifacts", []) if artifact.path]
+        if not artifact_paths:
+            artifact_paths = list(result.generated_files or [])
+        for path in _iter_unique_files(artifact_paths):
             suffix = Path(path).suffix.lower()
             label = Path(path).name
             if suffix in AUDIO_EXTENSIONS and path not in seen_paths:

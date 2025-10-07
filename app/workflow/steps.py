@@ -12,7 +12,7 @@ from app.drive import upload_video_package
 from app.metadata import generate_youtube_metadata
 from app.metadata_storage import metadata_storage
 from app.prompts import get_default_news_collection_prompt, get_default_script_generation_prompt
-from app.search_news import collect_news
+from app.search_news import collect_news as collect_news_sync
 from app.script_gen import ScriptGenerator, generate_dialogue
 from app.services.file_archival import FileArchivalManager
 from app.services.media.qa_pipeline import MediaQAPipeline
@@ -28,10 +28,15 @@ from app.tts import synthesize_script
 from app.utils import FileUtils
 from app.video import generate_video, video_generator
 from app.youtube import upload_video as youtube_upload
+from .artifacts import GeneratedArtifact
 from .base import StepResult, WorkflowContext, WorkflowStep
+from .ports import NewsCollectionPort, SyncNewsCollectionAdapter
 logger = logging.getLogger(__name__)
 
 class CollectNewsStep(WorkflowStep):
+
+    def __init__(self, news_port: NewsCollectionPort | None = None) -> None:
+        self._news_port = news_port or SyncNewsCollectionAdapter(collect_news_sync)
 
     @property
     def step_name(self) -> str:
@@ -43,7 +48,7 @@ class CollectNewsStep(WorkflowStep):
             prompt_a = self._get_prompt(context.mode)
             if sheets_manager and context.run_id:
                 sheets_manager.record_prompt_used(context.run_id, 'prompt_a', prompt_a)
-            news_items = collect_news(prompt_a, context.mode)
+            news_items = await self._news_port.collect_news(prompt_a, context.mode)
             if not news_items:
                 return self._failure('No news items collected')
             logger.info(f'Collected {len(news_items)} news items')
@@ -327,7 +332,20 @@ class GenerateVideoStep(WorkflowStep):
             return self._failure('Missing audio_path or subtitle_path in context')
         try:
             broll_metadata = None
-            generated_files: List[str] = []
+            artifact_map: dict[str, GeneratedArtifact] = {}
+
+            def _track(path: str | None, *, persisted: bool = False, kind: str | None = None) -> None:
+                if not path:
+                    return
+                existing = artifact_map.get(path)
+                if existing:
+                    if persisted and not existing.persisted:
+                        artifact_map[path] = GeneratedArtifact(path=path, persisted=True, kind=existing.kind or kind)
+                    elif kind and not existing.kind:
+                        artifact_map[path] = GeneratedArtifact(path=path, persisted=existing.persisted, kind=kind)
+                    return
+                artifact_map[path] = GeneratedArtifact(path=path, persisted=persisted, kind=kind)
+
             should_attempt_broll = settings.enable_stock_footage and use_stock_override is not False and (not broll_path)
             if should_attempt_broll:
                 if not (settings.pexels_api_key or settings.pixabay_api_key):
@@ -388,10 +406,27 @@ class GenerateVideoStep(WorkflowStep):
             from app.video import video_generator
             generation_method = video_generator.last_generation_method
             logger.info(f'Generated and archived video: {archived_video} ({video_size} bytes)')
-            generated_files.append(video_path)
+            persisted_video = (
+                os.path.exists(video_path)
+                and os.path.exists(archived_video)
+                and os.path.samefile(video_path, archived_video)
+            )
+            _track(video_path, kind='video/raw', persisted=persisted_video)
             if broll_path and os.path.exists(broll_path):
-                generated_files.append(broll_path)
-            return self._success(data={'video_path': archived_video, 'file_size': video_size, 'generation_method': generation_method, 'used_stock_footage': video_generator.last_used_stock_footage, 'archived_files': archived_files, 'archived_broll_path': archived_files.get('broll'), 'broll_metadata': broll_metadata or video_generator.last_broll_metadata, 'broll_path': broll_path}, files=generated_files)
+                archived_broll = archived_files.get('broll')
+                persisted_broll = (
+                    archived_broll
+                    and os.path.exists(archived_broll)
+                    and os.path.samefile(broll_path, archived_broll)
+                )
+                _track(broll_path, kind='video/broll', persisted=bool(persisted_broll))
+            for label, archived_path in archived_files.items():
+                if not archived_path:
+                    continue
+                artifact_kind = f'archive/{label}'
+                _track(archived_path, persisted=True, kind=artifact_kind)
+            artifacts = list(artifact_map.values())
+            return self._success(data={'video_path': archived_video, 'file_size': video_size, 'generation_method': generation_method, 'used_stock_footage': video_generator.last_used_stock_footage, 'archived_files': archived_files, 'archived_broll_path': archived_files.get('broll'), 'broll_metadata': broll_metadata or video_generator.last_broll_metadata, 'broll_path': broll_path}, artifacts=artifacts)
         except Exception as e:
             logger.error(f'Step 8 failed: {e}')
             return self._failure(str(e))

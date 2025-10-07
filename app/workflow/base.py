@@ -1,11 +1,10 @@
-"""Base classes for workflow steps.
-
-Implements Strategy pattern for separating workflow logic into testable, composable steps.
-"""
+"""Base classes for workflow steps and shared workflow context."""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
+
+from .artifacts import GeneratedArtifact
 
 
 @dataclass
@@ -16,11 +15,16 @@ class StepResult:
     step_name: str
     data: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
-    files_generated: List[str] = field(default_factory=list)
+    artifacts: List[GeneratedArtifact] = field(default_factory=list)
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get data value (compatibility with dict API)."""
         return self.data.get(key, default)
+
+    @property
+    def files_generated(self) -> List[str]:
+        """Compatibility accessor returning artifact paths."""
+        return [artifact.path for artifact in self.artifacts]
 
 
 @dataclass
@@ -30,7 +34,7 @@ class WorkflowContext:
     run_id: str
     mode: str
     state: Dict[str, Any] = field(default_factory=dict)
-    generated_files: List[str] = field(default_factory=list)
+    artifacts: List[GeneratedArtifact] = field(default_factory=list)
 
     def set(self, key: str, value: Any) -> None:
         """Store value in context."""
@@ -40,9 +44,19 @@ class WorkflowContext:
         """Retrieve value from context."""
         return self.state.get(key, default)
 
-    def add_files(self, files: List[str]) -> None:
-        """Add generated files to tracking."""
-        self.generated_files.extend(files)
+    @property
+    def generated_files(self) -> List[str]:
+        """Return the paths for all tracked artifacts."""
+        return [artifact.path for artifact in self.artifacts]
+
+    def add_artifacts(self, artifacts: Iterable[GeneratedArtifact]) -> None:
+        """Track workflow artifacts with retention metadata."""
+        self.artifacts.extend(list(artifacts))
+
+    def add_files(self, files: Iterable[str], *, persisted: bool = False, kind: str | None = None) -> None:
+        """Backwards-compatible helper to add plain file paths."""
+        generated = [GeneratedArtifact(path=file_path, persisted=persisted, kind=kind) for file_path in files]
+        self.add_artifacts(generated)
 
 
 class WorkflowStep(ABC):
@@ -72,13 +86,23 @@ class WorkflowStep(ABC):
         """
         pass
 
-    def _success(self, data: Dict[str, Any] = None, files: List[str] = None) -> StepResult:
+    def _success(
+        self,
+        data: Dict[str, Any] = None,
+        files: Iterable[str] | None = None,
+        artifacts: Iterable[GeneratedArtifact] | None = None,
+    ) -> StepResult:
         """Create a success result."""
+        collected: List[GeneratedArtifact] = []
+        if files:
+            collected.extend(GeneratedArtifact(path=file_path) for file_path in files)
+        if artifacts:
+            collected.extend(list(artifacts))
         return StepResult(
             success=True,
             step_name=self.step_name,
             data=data or {},
-            files_generated=files or [],
+            artifacts=collected,
         )
 
     def _failure(self, error: str) -> StepResult:
