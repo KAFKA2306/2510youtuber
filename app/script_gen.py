@@ -18,13 +18,12 @@ logger = logging.getLogger(__name__)
 
 def _extract_script_from_llm_output(llm_output: str) -> str:
     """Extracts the script from the LLM output, which may contain extra text."""
-    # It could be a JSON blob
+    # It could be a YAML mapping
     try:
-        import json
-        data = json.loads(llm_output)
-        if "dialogues" in data and "title" in data:
+        data = yaml.safe_load(llm_output)
+        if isinstance(data, Mapping) and "dialogues" in data and "title" in data:
             return Script.model_validate(data).to_text()
-    except (json.JSONDecodeError, TypeError):
+    except yaml.YAMLError:
         pass
 
     # It could be a script with leading/trailing text

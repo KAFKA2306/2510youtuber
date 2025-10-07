@@ -1,8 +1,9 @@
-import json
 import logging
 import re
 from datetime import datetime
 from typing import Any, Dict, List
+
+import yaml
 import google.generativeai as genai
 from .api_rotation import get_rotation_manager
 from .config import cfg
@@ -46,7 +47,7 @@ class MetadataGenerator:
         success_examples = indent_lines(METADATA_TITLE_SUCCESS_EXAMPLES, prefix='  - ')
         avoid_examples = indent_lines(METADATA_TITLE_AVOID_EXAMPLES, prefix='  - ')
         other_policies = join_lines(METADATA_OTHER_POLICIES_LINES)
-        prompt = f"""\n以下の経済ニュース内容から、YouTube動画用のメタデータを生成してください。\n\n【動画タイプ】{mode_description}\n【配信日】{current_date}\n\n【ニュース内容】\n{news_summary}\n\n【台本抜粋】\n{(script_content[:500] if script_content else '台本データなし')}...\n\n【要件】\n{requirements}\n\n【タイトル作成の重要方針】\n{title_policy}\n\n✅ **成功例:**\n{success_examples}\n\n❌ **避けるべき例:**\n{avoid_examples}\n\n【その他の方針】\n{other_policies}\n\n以下のJSON形式で厳密に回答してください：\n```json\n{{\n  "title": "動画タイトル（50文字以内）",\n  "description": "動画説明文（改行を\\nで表現）",\n  "tags": ["タグ1", "タグ2", "タグ3", ...],\n  "category": "YouTube カテゴリ",\n  "thumbnail_text": "サムネイル用テキスト",\n  "seo_keywords": ["SEOキーワード1", "SEOキーワード2", ...],\n  "target_audience": "ターゲット視聴者層",\n  "estimated_watch_time": "推定視聴時間（分）"\n}}\n```\n\n注意事項：\n- 必ず有効なJSONフォーマットで回答\n- タイトルは魅力的だが誇張しない\n- 説明文には出典情報を含める\n- タグは具体的で検索性の高いものを選択\n"""
+        prompt = f"""\n以下の経済ニュース内容から、YouTube動画用のメタデータを生成してください。\n\n【動画タイプ】{mode_description}\n【配信日】{current_date}\n\n【ニュース内容】\n{news_summary}\n\n【台本抜粋】\n{(script_content[:500] if script_content else '台本データなし')}...\n\n【要件】\n{requirements}\n\n【タイトル作成の重要方針】\n{title_policy}\n\n✅ **成功例:**\n{success_examples}\n\n❌ **避けるべき例:**\n{avoid_examples}\n\n【その他の方針】\n{other_policies}\n\n以下のYAML形式で厳密に回答してください：\n```yaml\ntitle: 動画タイトル（50文字以内）\ndescription: "動画説明文（改行を\\nで表現）"\ntags: [タグ1, タグ2, タグ3]\ncategory: YouTube カテゴリ\nthumbnail_text: サムネイル用テキスト\nseo_keywords: [SEOキーワード1, SEOキーワード2]\ntarget_audience: ターゲット視聴者層\nestimated_watch_time: 推定視聴時間（分）\n```\n\n注意事項：\n- 必ず有効なYAMLマッピングで回答\n- タイトルは魅力的だが誇張しない\n- 説明文には出典情報を含める\n- タグは具体的で検索性の高いものを選択\n"""
         return prompt
 
     def _create_news_summary(self, news_items: List[Dict[str, Any]]) -> str:
@@ -93,20 +94,20 @@ class MetadataGenerator:
 
     def _parse_metadata_response(self, response: str) -> Dict[str, Any]:
         try:
-            match = re.search('```json\\n(.*?)\\n```', response, re.DOTALL)
+            match = re.search('```(?:yaml|yml)\\n(.*?)```', response, re.DOTALL)
             if match:
-                json_str = match.group(1)
+                yaml_str = match.group(1)
             else:
-                start = response.find('{')
-                end = response.rfind('}')
-                if start != -1 and end != -1:
-                    json_str = response[start:end + 1]
-                else:
-                    raise ValueError('No JSON structure found')
-            metadata = json.loads(json_str)
+                metadata = yaml.safe_load(response)
+                if not isinstance(metadata, dict):
+                    raise ValueError('No YAML mapping found')
+                return metadata
+            metadata = yaml.safe_load(yaml_str)
+            if not isinstance(metadata, dict):
+                raise ValueError('Metadata YAML must be a mapping')
             return metadata
-        except json.JSONDecodeError as e:
-            logger.error(f'Failed to parse metadata JSON: {e}')
+        except yaml.YAMLError as e:
+            logger.error(f'Failed to parse metadata YAML: {e}')
             logger.debug(f'Raw response: {response[:500]}...')
             return {}
         except Exception as e:
@@ -222,7 +223,7 @@ class MetadataGenerator:
         return {'title': fallback_title, 'description': f'\n【{current_date} 経済ニュース解説】\n\n本日の重要な経済ニュースを専門家が分かりやすく解説します。\n\n📈 今日のトピック：\n' + '\n'.join([f"• {item.get('title', '無題')}" for item in news_items[:3]]) + '\n\n🎯 この動画で学べること：\n• 最新の経済動向と市場への影響\n• 専門家による詳細分析と解説\n• 今後の注目ポイント\n\n⚠️ 免責事項：\n本動画の内容は情報提供を目的としており、投資勧誘ではありません。\n\n#経済ニュース #投資 #株式市場 #金融 #経済解説', 'tags': self._generate_fallback_tags(news_items), 'category': 'News & Politics', 'thumbnail_text': '経済ニュース解説', 'seo_keywords': ['経済ニュース', '投資', '株式市場', '金融'], 'target_audience': '経済に関心のある視聴者', 'estimated_watch_time': '15-30分', 'generated_at': datetime.now().isoformat(), 'news_count': len(news_items), 'fallback': True}
 
     def create_short_form_metadata(self, topic: str, duration_minutes: int=1) -> Dict[str, Any]:
-        prompt = f'\n以下のトピックについて、YouTube Shorts用のメタデータを生成してください：\n\nトピック: {topic}\n動画長: {duration_minutes}分\n\n要件：\n- タイトル: 30文字以内、インパクト重視\n- 説明文: 500文字以内、簡潔で興味を引く\n- タグ: ショート動画向け、10個程度\n- ハッシュタグ: トレンド性重視\n\nJSON形式で回答してください：\n{{\n  "title": "ショート動画タイトル",\n  "description": "簡潔な説明文",\n  "tags": ["タグ1", "タグ2", ...],\n  "hashtags": ["#ハッシュタグ1", "#ハッシュタグ2", ...],\n  "category": "News & Politics"\n}}\n'
+        prompt = f'\n以下のトピックについて、YouTube Shorts用のメタデータを生成してください：\n\nトピック: {topic}\n動画長: {duration_minutes}分\n\n要件：\n- タイトル: 30文字以内、インパクト重視\n- 説明文: 500文字以内、簡潔で興味を引く\n- タグ: ショート動画向け、10個程度\n- ハッシュタグ: トレンド性重視\n\nYAML形式で回答してください：\n```yaml\ntitle: ショート動画タイトル\ndescription: 簡潔な説明文\ntags: [タグ1, タグ2]\nhashtags: ["#ハッシュタグ1", "#ハッシュタグ2"]\ncategory: News & Politics\n```\n'
         try:
             response = self._call_gemini_for_metadata(prompt)
             metadata = self._parse_metadata_response(response)

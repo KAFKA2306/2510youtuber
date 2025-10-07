@@ -22,11 +22,11 @@
 
 ### 1. 構造化出力
 **現状の制御**
-- LLMへのシステムメッセージとユーザープロンプトで「JSONのみ」出力を強制し、余分なテキストを拒否します。【F:app/services/script/generator.py†L123-L200】
-- レスポンスは`_extract_json_block`で抽出し、Pydanticモデルでスキーマ検証後に品質レポートを再計算します。【F:app/services/script/generator.py†L202-L214】
+- LLMへのシステムメッセージとユーザープロンプトで「YAMLのみ」出力を強制し、余分なテキストを拒否します。【F:app/services/script/generator.py†L123-L200】
+- レスポンスは`_extract_yaml_block`で抽出し、Pydanticモデルでスキーマ検証後に品質レポートを再計算します。【F:app/services/script/generator.py†L202-L214】
 
 **検出とフォールバック**
-- JSON化に失敗した場合はテキストをスクリプトへ整形し、YAMLに直列化したうえで品質メタデータを付与します。【F:app/services/script/generator.py†L133-L150】
+- YAML化に失敗した場合はテキストをスクリプトへ整形し、YAMLに直列化したうえで品質メタデータを付与します。【F:app/services/script/generator.py†L133-L150】
 - それでも失敗すればバックアップ台本を生成し、最悪ケースでも構造化データを維持します。【F:app/services/script/generator.py†L181-L194】
 
 **破壊的改善方針**

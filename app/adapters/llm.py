@@ -5,12 +5,12 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import inspect
-import json
 import logging
 import re
 from typing import Any, Dict, Iterable, List, Optional, Type
 
 import litellm
+import yaml
 from crewai.llms.base_llm import BaseLLM
 from pydantic import BaseModel
 
@@ -30,7 +30,7 @@ _ALLOWED_GEN_ARGS = {
     "safety_settings",
 }
 
-_CODE_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.+?)```", re.IGNORECASE | re.DOTALL)
+_CODE_FENCE_PATTERN = re.compile(r"```(?:yaml|yml)?\s*(.+?)```", re.IGNORECASE | re.DOTALL)
 
 
 def _normalize_model(model: Optional[str]) -> str:
@@ -89,58 +89,8 @@ def _extract_message_text(response: Any) -> str:
         return str(response)
 
 
-def _find_json_bounds(text: str) -> Optional[str]:
-    """Return the first balanced JSON object or array in *text*."""
-
-    length = len(text)
-    for index in range(length):
-        start_char = text[index]
-        if start_char not in "{[":
-            continue
-
-        stack: List[str] = ["}" if start_char == "{" else "]"]
-        in_string = False
-        escape = False
-
-        for cursor in range(index + 1, length):
-            char = text[cursor]
-
-            if in_string:
-                if escape:
-                    escape = False
-                elif char == "\\":
-                    escape = True
-                elif char == '"':
-                    in_string = False
-                continue
-
-            if char == '"':
-                in_string = True
-                continue
-
-            if char in "{[":
-                stack.append("}" if char == "{" else "]")
-                continue
-
-            if char in "}]":
-                if not stack:
-                    break
-                expected = stack.pop()
-                if char != expected:
-                    break
-                if not stack:
-                    return text[index : cursor + 1].strip()
-        # If the stack did not empty correctly, keep scanning from next index
-    return None
-
-
-def extract_structured_json(text: str) -> Optional[str]:
-    """Extract a JSON object/array from LLM text output.
-
-    Gemini responses sometimes wrap valid JSON with Markdown fences or
-    explanatory prose. This helper strips common wrappers and returns the
-    first balanced JSON payload when possible.
-    """
+def extract_structured_yaml(text: str) -> Optional[str]:
+    """Extract a YAML mapping or sequence from LLM text output."""
 
     if not text:
         return None
@@ -154,9 +104,25 @@ def extract_structured_json(text: str) -> Optional[str]:
     candidates.append(text)
 
     for candidate in candidates:
-        snippet = _find_json_bounds(candidate.strip())
-        if snippet:
-            return snippet
+        snippet = candidate.strip()
+        if not snippet:
+            continue
+        try:
+            parsed = yaml.safe_load(snippet)
+        except yaml.YAMLError:
+            continue
+
+        if isinstance(parsed, (dict, list)):
+            return yaml.safe_dump(parsed, allow_unicode=True, sort_keys=False).strip()
+
+        if isinstance(parsed, str):
+            try:
+                nested = yaml.safe_load(parsed)
+            except yaml.YAMLError:
+                continue
+            if isinstance(nested, (dict, list)):
+                return yaml.safe_dump(nested, allow_unicode=True, sort_keys=False).strip()
+
     return None
 
 
@@ -392,13 +358,7 @@ class LLMClient:
         schema: Optional[Type[BaseModel]] = None,
         generation_config: Optional[Dict[str, Any]] = None,
     ) -> Any:
-        """Generate JSON-aligned output with light post-processing.
-
-        Crew-side utilities often expect Gemini adapters to expose a
-        ``generate_structured`` helper that attempts to coerce responses into
-        dictionaries or Pydantic models. This method keeps that contract so the
-        agent review cycle and other legacy callers remain functional.
-        """
+        """Generate YAML-aligned output with light post-processing."""
 
         raw = self.generate(prompt, generation_config=generation_config)
 
@@ -408,7 +368,11 @@ class LLMClient:
                     return raw
                 if isinstance(raw, dict):
                     return schema.model_validate(raw)
-                return schema.model_validate_json(str(raw))
+                if isinstance(raw, str):
+                    cleaned = extract_structured_yaml(raw) or raw.strip()
+                    parsed = yaml.safe_load(cleaned)
+                    return schema.model_validate(parsed)
+                return schema.model_validate(raw)
             except Exception as exc:  # pragma: no cover - best effort parsing
                 _LOGGER.debug("Schema validation failed in generate_structured: %s", exc)
 
@@ -418,12 +382,13 @@ class LLMClient:
             return raw
 
         if isinstance(raw, str):
-            cleaned = extract_structured_json(raw) or raw.strip()
+            cleaned = extract_structured_yaml(raw) or raw.strip()
             try:
-                return json.loads(cleaned)
-            except json.JSONDecodeError:
-                _LOGGER.debug("Failed to JSON-decode structured output; returning raw text")
+                parsed = yaml.safe_load(cleaned)
+            except yaml.YAMLError:
+                _LOGGER.debug("Failed to YAML-decode structured output; returning raw text")
                 return raw
+            return parsed
 
         return raw
 

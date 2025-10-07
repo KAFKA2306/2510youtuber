@@ -1,7 +1,7 @@
 from __future__ import annotations
-import json
 import logging
 import textwrap
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -121,7 +121,7 @@ class StructuredScriptGenerator:
         last_error: Optional[str] = None
         for attempt in range(1, self.max_attempts + 1):
             logger.info('Structured script generation attempt %s/%s', attempt, self.max_attempts)
-            response = self.client.completion(messages=[{'role': 'system', 'content': 'You craft finance YouTube dialogue scripts. Always return valid JSON only.'}, {'role': 'user', 'content': prompt}])
+            response = self.client.completion(messages=[{'role': 'system', 'content': 'You craft finance YouTube dialogue scripts. Always return a valid YAML mapping only.'}, {'role': 'user', 'content': prompt}])
             response_text = self._extract_message_text(response)
             logger.debug('LLM raw response (first 400 chars): %r', response_text[:400])
             try:
@@ -179,7 +179,7 @@ class StructuredScriptGenerator:
                 structured_yaml=structured_yaml,
             )
         if fallback_candidate:
-            logger.warning('Returning fallback script after all attempts failed to parse JSON')
+            logger.warning('Returning fallback script after all attempts failed to parse YAML')
             return fallback_candidate
         logger.error('Structured script generation exhausted all attempts: %s', last_error or 'unknown error')
         backup_script = self._build_backup_script(news_items, target_duration_minutes)
@@ -196,7 +196,7 @@ class StructuredScriptGenerator:
     def _build_prompt(self, news_digest: str, target_duration_minutes: Optional[int]) -> str:
         speaker_list = ', '.join(self._allowed_speakers)
         duration_hint = f'目標尺はおよそ{target_duration_minutes}分です。' if target_duration_minutes else ''
-        template = f'\n        以下の金融ニュース要約に基づき、視聴者が理解しやすい対話形式の台本を作成してください。\n\n        {duration_hint}\n\n        出力条件:\n        - 話者は必ず以下の名前のみを使用: {speaker_list}\n        - 各台詞は「{{speaker}}: {{line}}」形式にできる内容で、日本語で書く\n        - 行頭に話者名を付与し、会話を最低24ターン以上構成する\n        - 数値・視覚指示・行動提案を織り交ぜる\n        - JSON形式のみで回答し、余計な文章やコードブロックは付けない\n\n        出力JSONのスキーマ例:\n        {{\n          "title": "string",\n          "summary": "string",\n          "dialogues": [\n            {{ "speaker": "{self._allowed_speakers[0]}", "line": "対話文" }}\n          ],\n          "wow_score": 8.2,\n          "japanese_purity_score": 97.5,\n          "retention_prediction": 0.54\n        }}\n\n        ニュース要約:\n        {news_digest}\n        '
+        template = f'\n        以下の金融ニュース要約に基づき、視聴者が理解しやすい対話形式の台本を作成してください。\n\n        {duration_hint}\n\n        出力条件:\n        - 話者は必ず以下の名前のみを使用: {speaker_list}\n        - 各台詞は「{{speaker}}: {{line}}」形式にできる内容で、日本語で書く\n        - 行頭に話者名を付与し、会話を最低24ターン以上構成する\n        - 数値・視覚指示・行動提案を織り交ぜる\n        - YAML形式のマッピングのみで回答し、余計な文章やコードブロックは付けない\n\n        出力YAMLの例:\n        title: サンプルタイトル\n        summary: サマリー\n        dialogues:\n          - speaker: {self._allowed_speakers[0]}\n            line: 対話文\n        wow_score: 8.2\n        japanese_purity_score: 97.5\n        retention_prediction: 0.54\n\n        ニュース要約:\n        {news_digest}\n        '
         return textwrap.dedent(template).strip()
 
     def _parse_payload(self, response_text: str) -> StructuredScriptPayload:
@@ -210,109 +210,45 @@ class StructuredScriptGenerator:
             raise ValueError(f'Structured payload validation failed: {exc}') from exc
 
     @staticmethod
-    def _extract_json_block(text: str) -> Optional[str]:
-        stripped = text.strip()
-        if not stripped:
-            return None
-        if stripped.startswith('{') and StructuredScriptGenerator._is_balanced_json(stripped):
-            return stripped
-
-        search_start = 0
-        while True:
-            start = stripped.find('{', search_start)
-            if start == -1:
-                return None
-
-            slice_text = stripped[start:]
-            end_index = StructuredScriptGenerator._find_matching_brace(slice_text)
-            if end_index is None:
-                search_start = start + 1
-                if search_start >= len(stripped):
-                    return None
-                continue
-
-            candidate = slice_text[:end_index + 1]
-            if StructuredScriptGenerator._is_balanced_json(candidate):
-                return candidate
-
-            search_start = start + 1
-            if search_start >= len(stripped):
-                return None
-
-    @staticmethod
     def _extract_message_text(response: Dict[str, Any]) -> str:
         return adapter_extract_message_text(response)
 
     def _extract_structured_data(self, response_text: str) -> Dict[str, Any]:
         errors = []
-        json_blob = self._extract_json_block(response_text)
-        if json_blob:
-            try:
-                return self._load_json_object(json_blob, allow_wrapped=True)
-            except ValueError as exc:
-                errors.append(exc)
+        yaml_block = self._extract_yaml_block(response_text)
+        candidates = [candidate for candidate in (yaml_block, response_text) if candidate]
 
-        stripped = response_text.strip()
-        if stripped:
+        for candidate in candidates:
             try:
-                return self._load_json_object(stripped, allow_wrapped=True)
+                return self._load_yaml_mapping(candidate)
             except ValueError as exc:
                 errors.append(exc)
 
         if errors:
-            raise ValueError(f'No JSON object found in LLM response: {errors[-1]}')
-        raise ValueError('No JSON object found in LLM response')
+            raise ValueError(f'No YAML mapping found in LLM response: {errors[-1]}')
+        raise ValueError('No YAML mapping found in LLM response')
 
     @staticmethod
-    def _load_json_object(text: str, allow_wrapped: bool=False) -> Dict[str, Any]:
+    def _extract_yaml_block(text: str) -> Optional[str]:
+        match = re.search(r"```(?:yaml|yml)?\s*(.+?)```", text, flags=re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1)
+        return None
+
+    @staticmethod
+    def _load_yaml_mapping(text: str) -> Dict[str, Any]:
         try:
-            decoded = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f'Malformed JSON: {exc}') from exc
+            decoded = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            raise ValueError(f'Malformed YAML: {exc}') from exc
 
         if isinstance(decoded, dict):
             return decoded
 
-        if allow_wrapped and isinstance(decoded, str):
-            return StructuredScriptGenerator._load_json_object(decoded, allow_wrapped=False)
+        if isinstance(decoded, str):
+            return StructuredScriptGenerator._load_yaml_mapping(decoded)
 
-        raise ValueError(f'Unexpected JSON top-level type: {type(decoded).__name__}')
-
-    @staticmethod
-    def _find_matching_brace(text: str) -> Optional[int]:
-        depth = 0
-        in_string = False
-        escape = False
-        for idx, char in enumerate(text):
-            if in_string:
-                if escape:
-                    escape = False
-                    continue
-                if char == '\\':
-                    escape = True
-                    continue
-                if char == '"':
-                    in_string = False
-                continue
-            if char == '"':
-                in_string = True
-                continue
-            if char == '{':
-                depth += 1
-                continue
-            if char == '}':
-                depth -= 1
-                if depth == 0:
-                    return idx
-        return None
-
-    @staticmethod
-    def _is_balanced_json(text: str) -> bool:
-        try:
-            json.loads(text)
-            return True
-        except json.JSONDecodeError:
-            return False
+        raise ValueError(f'Unexpected YAML top-level type: {type(decoded).__name__}')
 
     def _build_script_from_text(self, response_text: str) -> Tuple[Script, ScriptQualityReport]:
         validation: Optional[ScriptValidationResult] = None
@@ -441,7 +377,7 @@ class StructuredScriptGenerator:
         return report.copy(update={'warnings': existing})
 
     def _dump_script_to_yaml(self, script: Script) -> str:
-        payload = script.model_dump(mode='json')
+        payload = script.model_dump(mode='python')
         yaml_blob = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
         try:
             loaded = yaml.safe_load(yaml_blob)

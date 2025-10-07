@@ -70,7 +70,7 @@ FastAPIバックエンドとTauriフロントをそれぞれ独立モジュー�
 │       └── history/                 # バージョン履歴 (タイムスタンプ付き)
 ├── state/
 │   └── gui/
-│       └── preferences.json         # ユーザ設定の保存 (ラジオ選択結果)
+│       └── preferences.yml          # ユーザ設定の保存 (ラジオ選択結果)
 ├── logs/
 │   └── gui_jobs/                    # ジョブごとのJSONLログ
 └── tauri-app/
@@ -94,8 +94,10 @@ FastAPIバックエンドとTauriフロントをそれぞれ独立モジュー�
     ├── src-tauri/
     │   ├── Cargo.toml
     │   └── src/main.rs              # コマンド登録・ウィンドウ設定
-    └── package.json
+    └── package.yaml
 ```
+
+Tauri フロントエンドのビルド前には `scripts/sync_tauri_configs.py` を実行して YAML 設定から JSON を生成してください。
 
 ### 2.1 Job Service (FastAPI)
 - `uvicorn` 常駐。RESTとWebSocket (ログ配信) を提供。
@@ -225,7 +227,7 @@ class PromptRepository:
 APIレイヤーは `PromptRepository` を介し、直接ファイル操作を避ける。
 
 ### 2.4 Preferences Service
-- `app/gui/core/preferences.py` が `settings.yml` と `preferences.json` をマージし、FastAPI依存性として提供。
+- `app/gui/core/preferences.py` が `settings.yml` と `preferences.yml` をマージし、FastAPI依存性として提供。
 - サーバ起動時にデフォルト値をロードし、ユーザ変更は都度JSONへ書き込み。ラジオボタンは `enabled`/`disabled` などの列挙値で保持。
 - 設定変更イベントは `asyncio.Event` を通じてジョブマネージャへ通知し、必要に応じてランナーの挙動を切り替える (例: 詳細ログONでログレベル上げる)。
 
@@ -386,7 +388,7 @@ class GuiSettings(BaseModel):
     container_profile: str | None
 ```
 
-設定は `/settings` API経由で取得/更新し、`preferences.json` と同期される。各値はUIのラジオボタンに対応する。
+設定は `/settings` API経由で取得/更新し、`preferences.yml` と同期される。各値はUIのラジオボタンに対応する。
 (`PositiveInt` はPydanticの制約型を利用)
 
 ## 5. ログ・監視

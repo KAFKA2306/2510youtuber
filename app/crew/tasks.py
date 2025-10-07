@@ -208,7 +208,7 @@ def create_wow_tasks(
         task_id="task4_script_writing",
         task_config={"agent_key": "script_writer"},
         prompt_task="script_writing",
-        expected_output="Pydantic Scriptモデルに準拠したJSON形式の動画スクリプト",
+        expected_output="Pydantic Scriptモデルに準拠したYAML形式の動画スクリプト",
         output_pydantic=Script,  # Pydantic Scriptモデルを期待
     )
 
