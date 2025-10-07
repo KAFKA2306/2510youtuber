@@ -28,6 +28,7 @@ from app.tts import synthesize_script
 from app.utils import FileUtils
 from app.video import generate_video, video_generator
 from app.youtube import upload_video as youtube_upload
+from .artifacts import GeneratedArtifact
 from .base import StepResult, WorkflowContext, WorkflowStep
 from .ports import NewsCollectionPort, SyncNewsCollectionAdapter
 logger = logging.getLogger(__name__)
@@ -331,7 +332,7 @@ class GenerateVideoStep(WorkflowStep):
             return self._failure('Missing audio_path or subtitle_path in context')
         try:
             broll_metadata = None
-            generated_files: List[str] = []
+            generated_files: List[GeneratedArtifact] = []
             should_attempt_broll = settings.enable_stock_footage and use_stock_override is not False and (not broll_path)
             if should_attempt_broll:
                 if not (settings.pexels_api_key or settings.pixabay_api_key):
@@ -392,10 +393,42 @@ class GenerateVideoStep(WorkflowStep):
             from app.video import video_generator
             generation_method = video_generator.last_generation_method
             logger.info(f'Generated and archived video: {archived_video} ({video_size} bytes)')
-            generated_files.append(video_path)
+            generated_files.append(
+                GeneratedArtifact(
+                    path=video_path,
+                    kind="video_raw",
+                    description="Pre-archive render output",
+                )
+            )
+            archived_broll = archived_files.get('broll')
             if broll_path and os.path.exists(broll_path):
-                generated_files.append(broll_path)
-            return self._success(data={'video_path': archived_video, 'file_size': video_size, 'generation_method': generation_method, 'used_stock_footage': video_generator.last_used_stock_footage, 'archived_files': archived_files, 'archived_broll_path': archived_files.get('broll'), 'broll_metadata': broll_metadata or video_generator.last_broll_metadata, 'broll_path': broll_path}, files=generated_files)
+                generated_files.append(
+                    GeneratedArtifact(
+                        path=broll_path,
+                        kind="broll_raw",
+                        description="Generated B-roll sequence",
+                    )
+                )
+            generated_files.append(
+                GeneratedArtifact(
+                    path=archived_video,
+                    persisted=True,
+                    cleanup=False,
+                    kind="video_archived",
+                    description="Archived video master",
+                )
+            )
+            if archived_broll:
+                generated_files.append(
+                    GeneratedArtifact(
+                        path=archived_broll,
+                        persisted=True,
+                        cleanup=False,
+                        kind="broll_archived",
+                        description="Archived B-roll sequence",
+                    )
+                )
+            return self._success(data={'video_path': archived_video, 'file_size': video_size, 'generation_method': generation_method, 'used_stock_footage': video_generator.last_used_stock_footage, 'archived_files': archived_files, 'archived_broll_path': archived_broll, 'broll_metadata': broll_metadata or video_generator.last_broll_metadata, 'broll_path': broll_path}, files=generated_files)
         except Exception as e:
             logger.error(f'Step 8 failed: {e}')
             return self._failure(str(e))

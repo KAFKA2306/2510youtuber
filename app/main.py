@@ -547,13 +547,19 @@ class YouTubeWorkflow:
     def _cleanup_temp_files(self):
         if not self.context:
             return
+        artifacts = self.context.artifacts
+        cleanup_targets = self.context.retention_policy.select_for_cleanup(artifacts)
         cleaned_count = 0
-        for file_path in self.context.generated_files:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                cleaned_count += 1
+        for artifact in cleanup_targets:
+            file_path = artifact.path
+            try:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    cleaned_count += 1
+            except OSError as exc:
+                logger.debug("Failed to remove artifact %s: %s", file_path, exc)
         if cleaned_count > 0:
-            logger.info(f"Cleaned up {cleaned_count} temporary files")
+            logger.info("Cleaned up %s temporary files", cleaned_count)
 
 
 def _get_workflow() -> YouTubeWorkflow:
