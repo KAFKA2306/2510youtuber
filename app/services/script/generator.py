@@ -283,6 +283,17 @@ class StructuredScriptGenerator:
             return False
 
     def _build_script_from_text(self, response_text: str) -> Tuple[Script, ScriptQualityReport]:
+        recovered_payload = self._recover_structured_payload(response_text)
+        if recovered_payload:
+            try:
+                script = recovered_payload.to_script()
+            except ValidationError as exc:
+                logger.debug('Recovered payload failed strict validation: %s', exc)
+            else:
+                logger.info('Recovered structured script payload from fallback text')
+                quality_report = self._compute_quality_report(script)
+                return (script, quality_report)
+
         validation: Optional[ScriptValidationResult] = None
         try:
             validation = ensure_dialogue_structure(response_text, allowed_speakers=self._allowed_speakers, min_dialogue_lines=10)
@@ -301,6 +312,55 @@ class StructuredScriptGenerator:
         script = Script(title=title, dialogues=dialogues)
         quality_report = self._build_quality_report_from_validation(validation, script)
         return (script, quality_report)
+
+    def _recover_structured_payload(self, response_text: str) -> Optional[StructuredScriptPayload]:
+        candidates: List[str] = []
+        json_candidate = self._extract_json_block(response_text)
+        if json_candidate:
+            candidates.append(json_candidate)
+
+        stripped = self._strip_markdown_fences(response_text)
+        if stripped and stripped != response_text:
+            nested_candidate = self._extract_json_block(stripped)
+            if nested_candidate:
+                candidates.append(nested_candidate)
+            candidates.append(stripped)
+
+        candidates.append(response_text)
+        seen: set[str] = set()
+        for candidate in candidates:
+            normalized = candidate.strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            for loader in (json.loads, yaml.safe_load):
+                try:
+                    data = loader(normalized)
+                except Exception:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                try:
+                    return StructuredScriptPayload.model_validate(data)
+                except ValidationError:
+                    continue
+        return None
+
+    @staticmethod
+    def _strip_markdown_fences(text: str) -> str:
+        if '```' not in text:
+            return text
+        segments = text.split('```')
+        rebuilt: List[str] = []
+        for index, segment in enumerate(segments):
+            if index % 2 == 1:
+                newline_index = segment.find('\n')
+                if newline_index != -1:
+                    segment = segment[newline_index + 1:]
+                else:
+                    segment = ''
+            rebuilt.append(segment)
+        return ''.join(rebuilt)
 
     def _dialogues_from_validation(self, validation: Optional[ScriptValidationResult]) -> List[DialogueEntry]:
         if not validation:
