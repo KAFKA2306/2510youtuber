@@ -105,8 +105,9 @@ class WorkflowState(BaseModel):
         if error:
             result.error = error
         if files:
-            result.files_generated = files
-            self.generated_files.extend(files)
+            normalized_files = [getattr(f, "path", str(f)) for f in files]
+            result.files_generated = normalized_files
+            self.generated_files.extend(normalized_files)
 
         # 共有データに追加
         if success and data:

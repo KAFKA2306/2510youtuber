@@ -12,7 +12,7 @@ from app.drive import upload_video_package
 from app.metadata import generate_youtube_metadata
 from app.metadata_storage import metadata_storage
 from app.prompts import get_default_news_collection_prompt, get_default_script_generation_prompt
-from app.search_news import collect_news
+from app.search_news import collect_news as collect_news_sync
 from app.script_gen import ScriptGenerator, generate_dialogue
 from app.services.file_archival import FileArchivalManager
 from app.services.media.qa_pipeline import MediaQAPipeline
@@ -29,9 +29,14 @@ from app.utils import FileUtils
 from app.video import generate_video, video_generator
 from app.youtube import upload_video as youtube_upload
 from .base import StepResult, WorkflowContext, WorkflowStep
+from .artifacts import GeneratedArtifact
+from .ports import NewsCollectionPort, SyncNewsCollectionAdapter
 logger = logging.getLogger(__name__)
 
 class CollectNewsStep(WorkflowStep):
+
+    def __init__(self, news_port: NewsCollectionPort | None = None) -> None:
+        self._news_port = news_port or SyncNewsCollectionAdapter(collect_news_sync)
 
     @property
     def step_name(self) -> str:
@@ -43,7 +48,7 @@ class CollectNewsStep(WorkflowStep):
             prompt_a = self._get_prompt(context.mode)
             if sheets_manager and context.run_id:
                 sheets_manager.record_prompt_used(context.run_id, 'prompt_a', prompt_a)
-            news_items = collect_news(prompt_a, context.mode)
+            news_items = await self._news_port.collect_news(prompt_a, context.mode)
             if not news_items:
                 return self._failure('No news items collected')
             logger.info(f'Collected {len(news_items)} news items')
@@ -327,7 +332,7 @@ class GenerateVideoStep(WorkflowStep):
             return self._failure('Missing audio_path or subtitle_path in context')
         try:
             broll_metadata = None
-            generated_files: List[str] = []
+            artifacts: List[GeneratedArtifact] = []
             should_attempt_broll = settings.enable_stock_footage and use_stock_override is not False and (not broll_path)
             if should_attempt_broll:
                 if not (settings.pexels_api_key or settings.pixabay_api_key):
@@ -370,6 +375,7 @@ class GenerateVideoStep(WorkflowStep):
             timestamp = context.get('output_timestamp') or datetime.now().strftime('%Y%m%d_%H%M%S')
             title = metadata.get('title', 'Untitled')
             thumbnail_path = context.get('thumbnail_path')
+            original_thumbnail_path = thumbnail_path
             files_to_archive = {'video': video_path, 'audio': audio_path, 'subtitle': subtitle_path, 'script': context.get('script_path')}
             if thumbnail_path and os.path.exists(thumbnail_path):
                 files_to_archive['thumbnail'] = thumbnail_path
@@ -378,20 +384,109 @@ class GenerateVideoStep(WorkflowStep):
             archived_files = archival_manager.archive_workflow_files(run_id=context.run_id, timestamp=timestamp, title=title, files=files_to_archive)
             archived_video = archived_files.get('video', video_path)
             context.set('video_path', archived_video)
-            context.set('archived_audio_path', archived_files.get('audio'))
-            context.set('archived_subtitle_path', archived_files.get('subtitle'))
+            archived_audio = archived_files.get('audio')
+            context.set('archived_audio_path', archived_audio)
+            if archived_audio and archived_audio == audio_path:
+                context.mark_artifact_persisted(audio_path)
+            archived_subtitle = archived_files.get('subtitle')
+            context.set('archived_subtitle_path', archived_subtitle)
+            if archived_subtitle and archived_subtitle == subtitle_path:
+                context.mark_artifact_persisted(subtitle_path)
             if 'broll' in archived_files:
                 context.set('archived_broll_path', archived_files['broll'])
             if 'thumbnail' in archived_files:
-                context.set('thumbnail_path', archived_files['thumbnail'])
+                new_thumbnail_path = archived_files['thumbnail']
+                context.set('thumbnail_path', new_thumbnail_path)
+                if original_thumbnail_path and new_thumbnail_path == original_thumbnail_path:
+                    context.mark_artifact_persisted(original_thumbnail_path)
             video_size = os.path.getsize(archived_video)
             from app.video import video_generator
             generation_method = video_generator.last_generation_method
             logger.info(f'Generated and archived video: {archived_video} ({video_size} bytes)')
-            generated_files.append(video_path)
+            persisted_video = archived_video == video_path
+            artifacts.append(
+                GeneratedArtifact(
+                    path=video_path,
+                    persisted=persisted_video,
+                    description='rendered_video',
+                )
+            )
+            if archived_video and archived_video != video_path:
+                artifacts.append(
+                    GeneratedArtifact(
+                        path=archived_video,
+                        persisted=True,
+                        description='archived_video',
+                    )
+                )
+            if archived_audio and archived_audio != audio_path:
+                artifacts.append(
+                    GeneratedArtifact(
+                        path=archived_audio,
+                        persisted=True,
+                        description='archived_audio',
+                    )
+                )
+            if archived_subtitle and archived_subtitle != subtitle_path:
+                artifacts.append(
+                    GeneratedArtifact(
+                        path=archived_subtitle,
+                        persisted=True,
+                        description='archived_subtitle',
+                    )
+                )
+            archived_script = archived_files.get('script')
+            script_path = context.get('script_path')
+            if archived_script and archived_script != script_path:
+                artifacts.append(
+                    GeneratedArtifact(
+                        path=archived_script,
+                        persisted=True,
+                        description='archived_script',
+                    )
+                )
+            archived_thumbnail = archived_files.get('thumbnail')
+            if archived_thumbnail and archived_thumbnail != original_thumbnail_path:
+                artifacts.append(
+                    GeneratedArtifact(
+                        path=archived_thumbnail,
+                        persisted=True,
+                        description='archived_thumbnail',
+                    )
+                )
+            elif archived_thumbnail and original_thumbnail_path and archived_thumbnail == original_thumbnail_path:
+                context.mark_artifact_persisted(original_thumbnail_path)
             if broll_path and os.path.exists(broll_path):
-                generated_files.append(broll_path)
-            return self._success(data={'video_path': archived_video, 'file_size': video_size, 'generation_method': generation_method, 'used_stock_footage': video_generator.last_used_stock_footage, 'archived_files': archived_files, 'archived_broll_path': archived_files.get('broll'), 'broll_metadata': broll_metadata or video_generator.last_broll_metadata, 'broll_path': broll_path}, files=generated_files)
+                archived_broll = archived_files.get('broll')
+                persisted_broll = archived_broll == broll_path if archived_broll else False
+                artifacts.append(
+                    GeneratedArtifact(
+                        path=broll_path,
+                        persisted=persisted_broll,
+                        description='broll_sequence',
+                    )
+                )
+                if archived_broll and archived_broll != broll_path:
+                    artifacts.append(
+                        GeneratedArtifact(
+                            path=archived_broll,
+                            persisted=True,
+                            description='archived_broll_sequence',
+                        )
+                    )
+            return self._success(
+                data={
+                    'video_path': archived_video,
+                    'file_size': video_size,
+                    'generation_method': generation_method,
+                    'used_stock_footage': video_generator.last_used_stock_footage,
+                    'archived_files': archived_files,
+                    'archived_broll_path': archived_files.get('broll'),
+                    'broll_metadata': broll_metadata or video_generator.last_broll_metadata,
+                    'broll_path': broll_path,
+                },
+                files=artifacts,
+            )
         except Exception as e:
             logger.error(f'Step 8 failed: {e}')
             return self._failure(str(e))

@@ -1,6 +1,9 @@
 """Workflow step abstraction for YouTube video generation pipeline."""
 
+from .artifacts import ArtifactRetentionPolicy, DefaultArtifactRetentionPolicy, GeneratedArtifact
 from .base import StepResult, WorkflowContext, WorkflowStep
+from .failure import FailureBus, WorkflowFailureEvent
+from .ports import NewsCollectionPort, SyncNewsCollectionAdapter
 from .steps import (
     AlignSubtitlesStep,
     CollectNewsStep,
@@ -21,6 +24,13 @@ __all__ = [
     "WorkflowContext",
     "WorkflowStep",
     "StepResult",
+    "GeneratedArtifact",
+    "ArtifactRetentionPolicy",
+    "DefaultArtifactRetentionPolicy",
+    "FailureBus",
+    "WorkflowFailureEvent",
+    "NewsCollectionPort",
+    "SyncNewsCollectionAdapter",
     "CollectNewsStep",
     "GenerateScriptStep",
     "GenerateVisualDesignStep",

@@ -303,7 +303,7 @@ def discord_webhook():
         message = data.get("message", "Test message")
         level = data.get("level", "info")
 
-        discord_notifier.notify(message, level=level)
+        discord_notifier.notify_blocking(message, level=level)
 
         return jsonify({"success": True, "message": "Notification sent"})
 

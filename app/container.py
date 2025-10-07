@@ -133,7 +133,7 @@ class AppContainer:
         if self._workflow is None:
             from app.main import YouTubeWorkflow
 
-            self._workflow = YouTubeWorkflow()
+            self._workflow = YouTubeWorkflow(notifier=self.discord_notifier)
             logger.debug("YouTubeWorkflow created")
         return self._workflow
 
