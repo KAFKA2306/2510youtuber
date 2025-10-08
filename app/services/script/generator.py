@@ -1,7 +1,8 @@
 from __future__ import annotations
+
 import logging
-import textwrap
 import re
+import textwrap
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -19,6 +20,7 @@ from app.services.script.validator import (
     ScriptValidationResult,
     ensure_dialogue_structure,
 )
+
 logger = logging.getLogger(__name__)
 
 class ScriptGenerationMetadata(BaseModel):

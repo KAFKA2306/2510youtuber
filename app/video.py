@@ -5,14 +5,18 @@ import os
 import textwrap
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
 import ffmpeg
 from pydub import AudioSegment
+
 from app.config.paths import ProjectPaths
 from app.config.settings import settings
 from app.services.file_archival import FileArchivalManager
-from app.utils import FileUtils
 from app.services.media.ffmpeg_support import ensure_ffmpeg_tooling
+from app.utils import FileUtils
+
 from .background_theme import BackgroundTheme, get_theme_manager
+
 _PIL_SPEC = importlib.util.find_spec('PIL')
 if _PIL_SPEC:
     from PIL import Image, ImageDraw, ImageFont
