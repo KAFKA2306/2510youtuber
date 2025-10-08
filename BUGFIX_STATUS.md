@@ -258,3 +258,181 @@ for index in range(run_state.start_index, len(self.steps)):
 2. 🔍 Investigate FFmpeg timeout issue (separate from this bugfix)
 3. Consider Phase 2 improvements (error handling hardening)
 4. Consider Phase 3 architecture improvements (circuit breakers)
+
+---
+
+## Root Cause Analysis: Why "All-Time Instability"?
+
+### Surface Issues (What We Fixed)
+1. ❌ YAML recursion removed during JSON→YAML migration (commit `6cf55df`)
+2. ❌ Sheets range changed from `A:Z` to `A1` (uncommitted local edit)
+3. ❌ Duplicate FFmpeg compilation added during debugging (uncommitted local edit)
+
+### Deeper Root Causes (Why These Happened)
+
+#### 1. Process Failures
+
+**No Pre-Commit Validation**
+- 2 out of 3 bugs were uncommitted local changes
+- No git hooks, no CI/CD checks before merge
+- Changes made during debugging/experiments without validation
+- **Impact:** Broke production without catching in dev
+
+**Refactoring Without Tests**
+- Commit `6cf55df`: Removed recursive parsing, no tests caught it
+- Commit `c4f968c`: Removed error handling to "surface failures"
+- Only 31 unit tests for 13-step pipeline
+- 0 integration tests for critical paths
+- **Impact:** Code changes break edge cases silently
+
+**Incomplete Understanding**
+- YAML recursion: Didn't understand LLM response wrapping edge cases
+- Sheets range: Didn't know Google Sheets API append semantics
+- FFmpeg compile: Didn't check if `ffmpeg.run()` already compiles internally
+- **Impact:** Changes made without reading docs or understanding data flow
+
+#### 2. Technical Failures
+
+**Weak Type Safety**
+```python
+# No validation catches this:
+range_name = f"{sheet_name}!A1"  # Should be "!A:Z" for append
+# String typing allows any value, no runtime checks
+```
+
+**Missing Defensive Programming**
+```python
+# Commit c4f968c removed error handling:
+- try:
+-     self._save_to_sheets(...)
+- except Exception as e:
+-     logger.warning(f"Failed: {e}")
++ self._save_to_sheets(...)  # Now crashes entire workflow
+```
+
+**Implicit API Contracts**
+```python
+# Google Sheets API behavior not documented:
+# ✅ "sheet!A:Z" = column range for append
+# ❌ "sheet!A1"  = single cell (breaks append)
+# No validation, no comments explaining this
+```
+
+#### 3. Architectural Failures
+
+**Sequential Workflow with No Resilience**
+```python
+# app/main.py:237-265
+for step in steps:
+    result = await step.execute()
+    if not result.success:
+        return FAILURE  # ← Throws away all 8 previous steps' work
+```
+**Problem:** Single failure kills entire 13-step pipeline, no partial recovery
+
+**Tight Coupling to External Services**
+```python
+# No circuit breakers or fallbacks:
+metadata_storage.log_execution()  # Crashes if Sheets unavailable
+video_generator.generate()        # Crashes if FFmpeg hangs
+```
+**Problem:** Critical path depends on optional services
+
+**Insufficient Error Boundaries**
+```python
+# LLM responses parsed without full validation:
+decoded = yaml.safe_load(text)
+if isinstance(decoded, dict):
+    return decoded
+# ← Missing: What if it's a string? (The bug we fixed)
+```
+**Problem:** Assumes external services return well-formed data
+
+#### 4. The Meta Root Cause
+
+**Why has the workflow been "all-time unstable"?**
+
+**Fragility Score:**
+```
+Fragility = (Pipeline Length) × (External Dependencies) / (Error Handling)
+          = 13 steps × 6 APIs / 1 layer
+          = High fragility
+```
+
+**Evidence from Production Logs:**
+- Session `20251008_183809`: Step 2 crash (recursion)
+- Session `20251008_184744`: Step 9 crash (FFmpeg)
+- Session `20251008_223257`: Step 9 crash (FFmpeg)
+- **Pattern:** 4/5 recent runs failed at different steps with different errors
+- **Conclusion:** Not isolated bugs, but systemic fragility
+
+**Design Philosophy Problem:**
+- ✅ Optimized for: Feature velocity, happy path performance
+- ❌ Not optimized for: Operational resilience, error recovery
+- **Result:** Every "improvement" adds brittleness
+
+**Insufficient Quality Infrastructure:**
+```
+Testing Coverage:
+- Unit tests: 31 (mostly parsing logic)
+- Integration tests: 0 (critical path untested)
+- E2E tests: 0 (no full workflow validation)
+- Pre-commit checks: None
+- Staging validation: None
+```
+**Result:** Production = testing environment
+
+**Accumulation of Technical Debt:**
+```
+Phase 1: JSON parsing worked reliably
+  ↓
+Phase 2: Migrated to YAML → broke edge cases (commit 6cf55df)
+  ↓
+Phase 3: "Surfaced failures" → removed safety nets (commit c4f968c)
+  ↓
+Present: Sequential fragile pipeline with no error recovery
+```
+
+### What Would Actually Fix Long-Term Stability?
+
+**Our bugfixes improved stability (+7 steps), but didn't address architectural fragility.**
+
+#### Phase 2: Hardening (Recommended Next)
+- [ ] Add try-catch protection back to metadata_storage.py with CSV fallback
+- [ ] Implement retry logic for script generation (3 attempts with backoff)
+- [ ] Add circuit breakers for external services (Sheets, YouTube API)
+- [ ] Improve FFmpeg error logging (capture actual stderr, not just "error occurred")
+- [ ] Add timeout handling for long-running steps
+
+#### Phase 3: Resilience (Long-term Fix)
+- [ ] **Checkpointing:** Save progress after each step, resume from failure point
+- [ ] **Separate critical vs. optional:** News→Script→Video (must succeed) vs. Sheets/YouTube (can fail)
+- [ ] **Comprehensive test suite:**
+  - Integration tests for each step
+  - E2E test with mocked APIs
+  - Regression tests for known failure modes
+- [ ] **Pre-commit validation:**
+  - Git hooks running unit tests
+  - Linting checks (ruff)
+  - Type checking (mypy)
+- [ ] **Observability:**
+  - Metrics dashboard (step success rates)
+  - Alerts on failure rate >20%
+  - Structured logging for debugging
+
+#### Phase 4: Re-architecture (If Time Permits)
+- [ ] Event-driven architecture (pub/sub for steps)
+- [ ] Queue-based retry with dead letter queue
+- [ ] Parallel execution where possible (news collection, thumbnail gen)
+- [ ] Graceful degradation (proceed without Sheets if unavailable)
+
+### The Real Lesson
+
+**These weren't 3 isolated bugs. They were symptoms of:**
+1. **Process:** No validation before commit
+2. **Design:** Sequential pipeline optimized for speed, not resilience
+3. **Culture:** "Move fast, fix later" without investing in stability
+
+**The workflow is "all-time unstable" because it was built for feature velocity, not operational reliability.**
+
+Our fixes provide immediate relief, but long-term stability requires architectural investment.
