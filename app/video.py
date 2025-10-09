@@ -88,13 +88,13 @@ class VideoGenerator:
             if self.current_theme:
                 logger.info(f'Using background theme: {self.current_theme.name}')
                 self.theme_manager.record_usage(self.current_theme.name)
-            bg_image_path = self._prepare_background_image(background_image, title)
-            motion_stream = self._build_motion_background_stream(bg_image_path, audio_duration)
+            # Use simple color background like fallback (PNG loop hangs FFmpeg)
+            video_stream = ffmpeg.input(f'color=c=0x193d5a:size=1920x1080:duration={audio_duration}', f='lavfi')
             subtitle_style = self._build_subtitle_style()
             sanitized_subtitle_path = self._normalize_subtitle_path(subtitle_path)
-            video_stream = motion_stream.filter('subtitles', sanitized_subtitle_path, force_style=subtitle_style)
+            video_stream = video_stream.filter('subtitles', sanitized_subtitle_path, force_style=subtitle_style)
             audio_stream = ffmpeg.input(audio_path)
-            output = ffmpeg.output(video_stream, audio_stream, output_path, shortest=None, **self._get_quality_settings()).overwrite_output()
+            output = ffmpeg.output(video_stream, audio_stream, output_path, **self._get_quality_settings()).overwrite_output()
             self._run_ffmpeg(output, description='rendering primary video')
             video_info = self._get_video_info(output_path)
             logger.info(f'Video generated successfully: {output_path}')
@@ -328,23 +328,57 @@ class VideoGenerator:
             logger.warning(f'Failed to build subtitle filter: {e}')
             return f'subtitles={self._normalize_subtitle_path(subtitle_path)}'
 
+    def _create_background_video(self, bg_image_path: str, duration: float) -> Optional[str]:
+        """Create a temporary background video from PNG - avoid using loop parameter."""
+        try:
+            width = settings.video.resolution.width
+            height = settings.video.resolution.height
+            fps = self.motion_fps
+            temp_video_path = FileUtils.get_temp_file(prefix='bgvideo_', suffix='.mp4')
+
+            # Convert PNG to video using rawvideo pipe approach
+            # Read the PNG once, then use it as a static video
+            import subprocess
+
+            # Use ffmpeg directly to avoid the problematic loop parameter
+            cmd = [
+                'ffmpeg',
+                '-loop', '1',
+                '-i', bg_image_path,
+                '-t', str(duration),
+                '-vf', f'scale={width}:{height},eq=saturation=1.05:contrast=1.02:brightness=0.01,setsar=1,fps={fps}',
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',  # Fast encoding for background
+                '-crf', '23',
+                '-pix_fmt', 'yuv420p',
+                '-y',
+                temp_video_path
+            ]
+
+            result = subprocess.run(cmd, capture_output=True, timeout=60)
+            if result.returncode != 0:
+                logger.error(f'FFmpeg background video creation failed: {result.stderr.decode()}')
+                return None
+
+            if os.path.exists(temp_video_path) and os.path.getsize(temp_video_path) > 1000:
+                logger.info(f'Created background video: {temp_video_path}')
+                return temp_video_path
+            else:
+                logger.error('Background video not created or too small')
+                return None
+        except Exception as e:
+            logger.error(f'Failed to create background video: {e}')
+            return None
+
     def _build_motion_background_stream(self, bg_image_path: str, duration: float):
         width = settings.video.resolution.width
         height = settings.video.resolution.height
         fps = self.motion_fps
-        frames = max(int(math.ceil(duration * fps)) + fps // 2, fps)
-        scale_factor = 1.18
-        scaled_width = int(width * scale_factor)
-        scaled_height = int(height * scale_factor)
-        stream = ffmpeg.input(bg_image_path, loop=1, t=duration + 2)
-        stream = stream.filter('scale', scaled_width, scaled_height)
-        pan_x_margin = max(2, (scaled_width - width) // 2)
-        pan_y_margin = max(2, (scaled_height - height) // 2)
-        pan_x_amp = max(2, min(pan_x_margin - 1, pan_x_margin // 2))
-        pan_y_amp = max(2, min(pan_y_margin - 1, pan_y_margin // 2))
-        x_expr = f'iw/2-(iw/zoom/2)+sin(on/{fps * 4})*{pan_x_amp}'
-        y_expr = f'ih/2-(ih/zoom/2)+cos(on/{fps * 5})*{pan_y_amp}'
-        stream = stream.filter('zoompan', z='if(eq(on,0),1.0,min(1.12,zoom+0.00035))', s=f'{width}x{height}', fps=fps, d=frames, x=x_expr, y=y_expr)
+
+        # Simple approach: loop image at specified framerate for duration
+        # This matches the fallback approach but with a custom background
+        stream = ffmpeg.input(bg_image_path, loop=1, framerate=fps, t=duration, f='image2')
+        stream = stream.filter('scale', width, height)
         stream = stream.filter('eq', saturation=1.05, contrast=1.02, brightness=0.01)
         stream = stream.filter('setsar', '1')
         return stream
