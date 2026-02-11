@@ -1,23 +1,15 @@
 """Legacy script generation helpers with lightweight dependency injection."""
-
 from __future__ import annotations
-
 import logging
 from collections.abc import Callable, Mapping
 from typing import Any, Optional
-
 import yaml
-
 from app.crew.flows import create_wow_script_crew
 from app.crew.tools.ai_clients import GeminiClient
 from app.services.script.validator import Script
-
 logger = logging.getLogger(__name__)
-
-
 class ScriptGenerator:
     """Facilitates Gemini-powered script creation with optional CrewAI support."""
-
     def __init__(
         self,
         api_key: str | None = None,
@@ -30,15 +22,13 @@ class ScriptGenerator:
             client = GeminiClient(api_key=api_key, model=model)
         if client is not None and hasattr(client, "generate"):
             client = client.generate
-        self._generate: Optional[Callable[[str, dict[str, Any] | None], str]] = client  # type: ignore[assignment]
+        self._generate: Optional[Callable[[str, dict[str, Any] | None], str]] = client
         self._crew_runner: Callable[..., Script | Mapping[str, Any]] = crew_runner or create_wow_script_crew
-
     def generate_with_crewai(self, news_items: list, *, target_duration_minutes: int | None = None) -> Script:
         return self.generate_crewai_payload(
             news_items,
             target_duration_minutes=target_duration_minutes,
         )["script_model"]
-
     def generate_crewai_payload(
         self,
         news_items: list,
@@ -62,44 +52,36 @@ class ScriptGenerator:
             "structured_script": structured_payload,
             "structured_script_yaml": structured_yaml,
         }
-
     def _run(self, label: str, operation: Callable[[], Any]) -> Any:
         try:
             return operation()
-        except Exception as exc:  # pragma: no cover - just logging
+        except Exception as exc:
             logger.error("%s failed: %s", label, exc)
             raise
-
     @staticmethod
     def ensure_script(payload: Script | Mapping[str, Any]) -> Script:
         if isinstance(payload, Script):
             return payload
         if not isinstance(payload, Mapping):
             raise TypeError(f"Unsupported CrewAI payload type: {type(payload)}")
-
         candidate = payload.get("final_script") or payload.get("script")
         if isinstance(candidate, Script):
             return candidate
         if isinstance(candidate, Mapping):
             return Script.model_validate(candidate)
-
         raise TypeError("CrewAI result did not contain a Script payload")
-
     @staticmethod
     def ensure_structured_payload(script: Script, yaml_blob: str | None) -> tuple[dict[str, Any], str]:
         if isinstance(yaml_blob, str):
             try:
                 payload = yaml.safe_load(yaml_blob) or {}
-            except yaml.YAMLError as exc:  # pragma: no cover - best effort logging
+            except yaml.YAMLError as exc:
                 logger.warning("Failed to parse structured script YAML: %s", exc)
             else:
                 return payload, yaml_blob
-
         payload = script.model_dump(mode="json")
         fallback_yaml = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
         return payload, fallback_yaml
-
-
 def generate_dialogue(
     news_items: list[dict[str, Any]],
     prompt: str,
@@ -108,10 +90,8 @@ def generate_dialogue(
     use_quality_check: bool = True,
 ) -> str:
     """Generate a dialogue script using the configured quality pipeline."""
-
     if use_quality_check:
         from app.script_quality import generate_high_quality_script
-
         result = generate_high_quality_script(
             news_items,
             prompt,
@@ -126,9 +106,7 @@ def generate_dialogue(
             if isinstance(final_script, str):
                 return final_script
         raise RuntimeError(result.get("error") or "Three-stage script generation failed")
-
     from app.services.script.generator import StructuredScriptGenerator
-
     structured = StructuredScriptGenerator().generate(
         news_items,
         target_duration_minutes,

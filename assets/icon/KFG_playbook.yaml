@@ -1,0 +1,164 @@
+meta:
+  name: "KFG Operational Playbook"
+  version: "2025-10-07"
+  pillars: ["構造を見る", "数字で確かめる", "段階で動く", "税後で考える"]
+  note: "政局シナリオ別にサテライトだけを傾け、コアは維持。数値KPI連動・段階執行。"
+
+core_policy:
+  allocation:
+    core_buckets:
+      - "世界/米国広範指数（S&P500/NDX系）"
+      - "日本株広範指数（TOPIX/JPX150系）"
+      - "世界インフラ/REIT（配当系含む）"
+      - "金（GLDM/IAU）"
+      - "BTC（少量）"
+      - "現金バッファ"
+    satellite_max_pct: 0.25     # サテライト総量の上限（25%）
+    single_name_max_pct: 0.05   # 単一商品の上限（5%）
+  tax_after:
+    nisa_rules:
+      allow: ["指数ETF", "配当ETF", "分散テーマETF"]
+      ban: ["集中個別（単銘柄）", "超短期回転"]
+    loss_harvest:
+      enable: true
+      frequency: "monthly"
+    crypto_tax_log: true
+
+instruments:
+  # 使用予定の代表インストゥルメント（例示）。実運用では銘柄コードを自身の保有に合わせて更新。
+  core:
+    us_equity: ["VOO", "QQQ"]
+    jp_equity: ["159A", "1306", "TOPIX系ETF"]
+    infra_reit: ["VNQ", "IGF", "NF J-REIT 1343"]
+    gold: ["GLDM", "IAU"]
+    btc: ["現物または主要ETP"]
+  satellites:
+    semiconductors:
+      jp_broad: "200A"     # NEXT FUNDS 日経半導体株指数
+      jp_top10: "282A"     # GX Japan Semiconductor Top10
+      rule: "トレード主体なら 282A、分散主体なら 200A を一本化して採用（サブ0本）。"
+    china:
+      a_shares_broad: "2530"  # MAXIS 中国A株180
+      a_shares_mid:   "2553"  # One ETF CSI500
+      tech_theme:     "380A"  # GX China Tech（ハイβ・新設注意）
+      rule: "乖離取りの一本は 2530 または 2553。tech系は“専用戦術”で別枠、一本化の主軸にしない。"
+    nuclear_chain: ["224A"]    # GXウラニウム等（採掘〜燃料）
+    cooling_powergrid: ["6367", "6501"]  # 例：ダイキン・日立（個別はサテライト扱い）
+
+consolidation_rules:
+  seasoning_filter:
+    min_months_listed: 6
+    min_aum_jpy_billion: 5    # 50億円
+  switch_rule:
+    ter_advantage_threshold: 0.0015  # 0.15%pt 以上低いときのみ検討
+    require_same_or_better_liquidity: true
+    tranche: [0.33, 0.33, 0.34]
+  execution:
+    order_type: "limit"
+    preferred_hours_jst: "12:30-14:30"
+    avoid_thin_book: true
+
+scenarios:
+  A_stable_takaichi:
+    hypothesis: "成長投資×安保強化、円弱め、JGBじり高"
+    indicators:
+      usdjpy_band: [155, 165]
+      jgb10y_target: [1.3, 1.6]
+      budget_signals: ["半導体", "防衛", "送配電", "原発/SMR"]
+    actions:
+      stage1_policy_outline:
+        add:
+          - bucket: "nuclear_chain"
+            size_pct_of_portfolio: 0.01   # 1%（段階1）
+          - bucket: "cooling_powergrid"
+            size_pct_of_portfolio: 0.005
+          - bucket: "semiconductors"
+            size_pct_of_portfolio: 0.01
+      stage2_budget_details:
+        add_to_reach_two_thirds: true
+        add_condition: "10yJGB <= 1.6"
+        hedge_duration_if_jgb_ge: 1.6
+      overheat_take_profit:
+        rsi_threshold: 70
+        take_profit_tranche: 0.33
+
+  B_cdp_led_conf_supply:
+    hypothesis: "家計可処分所得重視、円やや強含み、内需・省エネ寄り"
+    indicators:
+      policy_kpi: ["トリガー条項/ガソリン対策", "給付付き税額控除"]
+      fx_move: "USDJPY -5~-10"
+    actions:
+      when_mou_kpi_released:
+        add:
+          - bucket: "省エネ/蓄電/配電自動化ETF"
+            size_pct_of_portfolio: 0.01
+          - bucket: "住宅断熱・リフォーム関連"
+            size_pct_of_portfolio: 0.005
+      if_jpy_appreciates:
+        increase_foreign_growth_etf:
+          hedge_split: {"unhedged": 0.5, "hedged": 0.5}
+      utilities_policy_cap:
+        hold_for_dividend_only: true
+
+  C_gridlock_zezefi:
+    hypothesis: "小刻み前進・レンジ/ボラ高め"
+    indicators:
+      low_pass_rate_bills: true
+      volatility_up: true
+    actions:
+      tactical_only:
+        allow_trend_following: false
+        mean_reversion_only: true
+        stop_loss_pct: [0.08, 0.12]
+      defense_tilt:
+        increase: ["インフラ高配", "ディフェンシブ配当"]
+      hedges:
+        gold_btc_cap_total_pct: 0.15
+
+  D_political_shock:
+    hypothesis: "イベントドリブンの歪み、同時荒れ"
+    indicators:
+      watch: ["解散/不信任/与党離脱", "為替介入観測", "先物建玉偏り"]
+    actions:
+      raise_cash_buffer: true
+      negative_correlation_hedges: ["gold", "puts_or_inverse_small"]
+      three_step_buy:
+        tranche: [0.25, 0.35, 0.40]
+        step2_timing: "恐怖指数ピークの翌営業日-1日"
+        step3_timing: "政策再提示/ロードマップ掲示後"
+
+fx_and_rates_common:
+  fx_policy:
+    add_hedge_if_usdjpy_ge: 150
+    reduce_hedge_if_usdjpy_le: 140
+  rates_policy:
+    add_domestic_duration_if_10y_jgb_le: 1.6
+    watch_curve_flattening_2s10s: true
+    defensives_on_flattening: true
+
+risk_management:
+  satellite_total_max: 0.25
+  single_name_max: 0.05
+  leverage_products:
+    total_max: 0.05
+    time_stop_days: 10
+    loss_cut_pct: 0.15
+  china_bucket:
+    total_max: 0.05
+    kpi: ["クレジット脈動", "住宅販売/在庫", "政策バズーカ有無"]
+  reit_rule:
+    review_if_jgb10y_ge: 1.6
+
+execution_rules:
+  tranche_default: [0.33, 0.33, 0.34]
+  take_profit_rsi: 70
+  reason_to_hold_memo_required: true
+  exit_if_thesis_invalid: true
+
+review_and_logging:
+  weekly_dashboard: ["USDJPY", "10Y JGB", "TOPIX相対セクター", "政策ヘッドラインKPI"]
+  trigger_table: "各シナリオの買い/利確/撤退ライン（％と日付）を記録"
+  tax_log: ["売却益/配当/仮想通貨の損益通算", "住民税/国保影響", "NISA残量"]
+  governance:
+    no_exceptions_rule: true
+    change_control: "ルール変更は『理由・日付・影響』をログ化"

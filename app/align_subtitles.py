@@ -14,9 +14,7 @@ else:
     HAS_JAPANESE_QUALITY_CHECK = False
     logger.warning('Japanese quality check not available for subtitles')
 from app.services.script.speakers import get_speaker_registry
-
 class SubtitleAligner:
-
     def __init__(self):
         self.min_similarity_threshold = 60
         self.max_subtitle_length = 25
@@ -28,7 +26,6 @@ class SubtitleAligner:
         registry = get_speaker_registry()
         self.speaker_alias_map = registry.alias_map
         self.speaker_pattern: Optional[Pattern[str]] = self._compile_speaker_pattern(self.speaker_alias_map.keys())
-
     def align_script_with_stt(self, script_text: str, stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         try:
             script_sentences = self._extract_sentences_from_script(script_text)
@@ -53,7 +50,6 @@ class SubtitleAligner:
         except Exception as e:
             logger.error(f'Subtitle alignment failed: {e}')
             return self._generate_fallback_subtitles(script_text, stt_words)
-
     def _extract_sentences_from_script(self, script_text: str) -> List[Dict[str, Any]]:
         sentences = []
         lines = script_text.split('\n')
@@ -82,7 +78,6 @@ class SubtitleAligner:
                 if sub_sentence.strip():
                     sentences.append({'text': sub_sentence.strip(), 'speaker': speaker})
         return sentences
-
     def _compile_speaker_pattern(self, aliases: Iterable[str]) -> Optional[Pattern[str]]:
         alias_list = [alias for alias in aliases if alias]
         if not alias_list:
@@ -90,7 +85,6 @@ class SubtitleAligner:
         alias_list.sort(key=len, reverse=True)
         pattern = '|'.join((re.escape(alias) for alias in alias_list))
         return re.compile(f'^({pattern})[:：]\\s*(.+)')
-
     def _split_long_sentence(self, sentence: str) -> List[str]:
         if len(sentence) <= self.max_subtitle_length:
             return [sentence]
@@ -114,7 +108,6 @@ class SubtitleAligner:
         if current_part:
             result.append(current_part.rstrip('、'))
         return result
-
     def _wrap_subtitle_two_lines(self, text: str) -> str:
         if len(text) <= self.max_subtitle_length:
             return None
@@ -137,7 +130,6 @@ class SubtitleAligner:
                 if len(line1) <= self.max_subtitle_length and len(line2) <= self.max_subtitle_length:
                     return f'{line1}\\N{line2}'
         return None
-
     def _find_matching_word_range(self, sentence: str, stt_words: List[Dict[str, Any]], start_index: int) -> Tuple[Optional[List[Dict[str, Any]]], int]:
         if not stt_words or start_index >= len(stt_words):
             return (None, start_index)
@@ -166,7 +158,6 @@ class SubtitleAligner:
             estimated_word_count = max(len(sentence_words), 3)
             estimated_end = min(start_index + estimated_word_count, len(stt_words))
             return (stt_words[start_index:estimated_end], estimated_end)
-
     def _create_subtitle_items(self, sentence: str, start_time: float, end_time: float, speaker: Optional[str]) -> List[Dict[str, Any]]:
         audio_duration = end_time - start_time
         text_length = len(sentence)
@@ -186,7 +177,6 @@ class SubtitleAligner:
                     items.append({'start': part_start, 'end': part_end, 'text': part, 'speaker': speaker, 'confidence': 0.9})
                 return items
         return [{'start': start_time, 'end': end_time, 'text': sentence, 'speaker': speaker, 'confidence': 0.9}]
-
     def _estimate_timing_for_sentence(self, sentence: str, existing_subtitles: List[Dict[str, Any]], speaker: Optional[str]) -> Optional[Dict[str, Any]]:
         if not existing_subtitles:
             return {'start': 0.0, 'end': len(sentence) * 0.1, 'text': sentence, 'speaker': speaker, 'confidence': 0.3}
@@ -194,7 +184,6 @@ class SubtitleAligner:
         estimated_start = last_subtitle['end'] + 0.2
         estimated_duration = max(len(sentence) * 0.08, self.min_display_duration)
         return {'start': estimated_start, 'end': estimated_start + estimated_duration, 'text': sentence, 'speaker': speaker, 'confidence': 0.3}
-
     def _post_process_subtitles(self, subtitles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if not subtitles:
             return []
@@ -225,7 +214,6 @@ class SubtitleAligner:
             subtitle['index'] = len(processed) + 1
             processed.append(subtitle)
         return processed
-
     def _generate_fallback_subtitles(self, script_text: str, stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         sentences = self._extract_sentences_from_script(script_text)
         fallback_subtitles = []
@@ -240,7 +228,6 @@ class SubtitleAligner:
             fallback_subtitles.append({'index': i + 1, 'start': start_time, 'end': end_time, 'text': sentence_data['text'], 'speaker': sentence_data.get('speaker'), 'confidence': 0.2})
         logger.warning(f'Generated {len(fallback_subtitles)} fallback subtitles')
         return fallback_subtitles
-
     def to_srt_format(self, subtitles: List[Dict[str, Any]]) -> str:
         srt_content = ''
         for subtitle in subtitles:
@@ -250,7 +237,6 @@ class SubtitleAligner:
             srt_content += f'{start_time} --> {end_time}\n'
             srt_content += f"{subtitle['text']}\n\n"
         return srt_content
-
     def _format_srt_timestamp(self, seconds: float) -> str:
         delta = timedelta(seconds=seconds)
         total_seconds = int(delta.total_seconds())
@@ -259,7 +245,6 @@ class SubtitleAligner:
         secs = total_seconds % 60
         millis = int(seconds % 1 * 1000)
         return f'{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}'
-
     def to_vtt_format(self, subtitles: List[Dict[str, Any]]) -> str:
         vtt_content = 'WEBVTT\n\n'
         for subtitle in subtitles:
@@ -268,7 +253,6 @@ class SubtitleAligner:
             vtt_content += f'{start_time} --> {end_time}\n'
             vtt_content += f"{subtitle['text']}\n\n"
         return vtt_content
-
     def _format_vtt_timestamp(self, seconds: float) -> str:
         delta = timedelta(seconds=seconds)
         total_seconds = int(delta.total_seconds())
@@ -277,7 +261,6 @@ class SubtitleAligner:
         secs = total_seconds % 60
         millis = int(seconds % 1 * 1000)
         return f'{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}'
-
     def get_subtitle_stats(self, subtitles: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not subtitles:
             return {}
@@ -287,18 +270,14 @@ class SubtitleAligner:
         avg_confidence = sum(confidence_scores) / len(confidence_scores)
         return {'total_subtitles': len(subtitles), 'total_duration_sec': total_duration, 'avg_duration_per_subtitle': total_duration / len(subtitles), 'total_text_length': total_text_length, 'avg_text_length': total_text_length / len(subtitles), 'avg_confidence': avg_confidence, 'speakers': list(set((sub.get('speaker') for sub in subtitles if sub.get('speaker'))))}
 subtitle_aligner = SubtitleAligner()
-
 def align_script_with_stt(script_text: str, stt_words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return subtitle_aligner.align_script_with_stt(script_text, stt_words)
-
 def to_srt_format(subtitles: List[Dict[str, Any]]) -> str:
     return subtitle_aligner.to_srt_format(subtitles)
-
 def export_srt(subtitles: List[Dict[str, Any]], output_path: str):
     srt_content = to_srt_format(subtitles)
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(srt_content)
-
 def to_vtt_format(subtitles: List[Dict[str, Any]]) -> str:
     return subtitle_aligner.to_vtt_format(subtitles)
 if __name__ == '__main__':

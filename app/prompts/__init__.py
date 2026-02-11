@@ -1,5 +1,4 @@
 """Prompt loading utilities for centralized prompt definitions."""
-
 from .workflow import (
     build_news_collection_prompt,
     get_default_news_collection_prompt,
@@ -7,7 +6,6 @@ from .workflow import (
     get_news_collection_system_message,
     get_sheet_prompt_defaults,
 )
-
 __all__ = [
     "build_news_collection_prompt",
     "get_default_news_collection_prompt",

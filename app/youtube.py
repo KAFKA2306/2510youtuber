@@ -13,16 +13,13 @@ from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 from app.config.settings import settings
 logger = logging.getLogger(__name__)
-
 class YouTubeManager:
     SCOPES = ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube', 'https://www.googleapis.com/auth/youtube.force-ssl']
-
     def __init__(self):
         self.service = None
         self.credentials = None
         self.client_secrets = settings.api_keys.get('youtube')
         self._setup_service()
-
     def _setup_service(self):
         try:
             if not self.client_secrets:
@@ -35,7 +32,6 @@ class YouTubeManager:
         except Exception as e:
             logger.error(f'Failed to initialize YouTube service: {e}')
             raise
-
     def _get_authenticated_credentials(self) -> Credentials:
         creds = None
         token_file = 'token.pickle'
@@ -56,7 +52,6 @@ class YouTubeManager:
                 with open(token_file, 'wb') as token:
                     pickle.dump(creds, token)
         return creds
-
     def _run_oauth_flow(self) -> Credentials:
         try:
             if isinstance(self.client_secrets, str):
@@ -82,7 +77,6 @@ class YouTubeManager:
         except Exception as e:
             logger.error(f'OAuth flow failed: {e}')
             return None
-
     def upload_video(self, video_path: str, metadata: Dict[str, Any], thumbnail_path: str=None, subtitle_path: str=None, privacy_status: str='private') -> Dict[str, Any]:
         try:
             if not os.path.exists(video_path):
@@ -112,7 +106,6 @@ class YouTubeManager:
         except Exception as e:
             logger.error(f'Video upload failed: {e}')
             return {'error': str(e), 'video_path': video_path, 'upload_failed_at': datetime.now().isoformat()}
-
     def _prepare_upload_metadata(self, metadata: Dict[str, Any], privacy_status: str) -> Dict[str, Any]:
         title = str(metadata.get('title', 'Untitled Video'))[:100]
         description = str(metadata.get('description', ''))[:5000]
@@ -127,11 +120,9 @@ class YouTubeManager:
         category_id = self._get_category_id(metadata.get('category', 'News & Politics'))
         upload_body = {'snippet': {'title': title, 'description': description, 'tags': tags, 'categoryId': category_id}, 'status': {'privacyStatus': privacy_status, 'selfDeclaredMadeForKids': False}}
         return upload_body
-
     def _get_category_id(self, category_name: str) -> str:
         category_mapping = {'News & Politics': '25', 'Education': '27', 'Business': '25', 'Finance': '25', 'Economics': '25', 'Entertainment': '24', 'Technology': '28', 'Science': '28'}
         return category_mapping.get(category_name, '25')
-
     def _execute_upload(self, insert_request) -> Dict[str, Any]:
         import random
         import time
@@ -159,7 +150,6 @@ class YouTubeManager:
                 logger.error(f'Unexpected error: {e}')
                 raise
         raise Exception('Max retries exceeded for video upload')
-
     def _upload_thumbnail(self, video_id: str, thumbnail_path: str) -> Dict[str, Any]:
         try:
             request = self.service.thumbnails().set(videoId=video_id, media_body=MediaFileUpload(thumbnail_path, mimetype='image/png'))
@@ -176,7 +166,6 @@ class YouTubeManager:
         except Exception as e:
             logger.error(f'Thumbnail upload failed for {video_id}: {e}')
             return {'uploaded': False, 'error': str(e), 'thumbnail_path': thumbnail_path}
-
     def _upload_caption(self, video_id: str, subtitle_path: str, language: str='ja') -> Dict[str, Any]:
         try:
             caption_body = {'snippet': {'videoId': video_id, 'language': language, 'name': 'Japanese' if language == 'ja' else language, 'isDraft': False}}
@@ -194,7 +183,6 @@ class YouTubeManager:
         except Exception as e:
             logger.error(f'Caption upload failed for {video_id}: {e}')
             return {'uploaded': False, 'error': str(e), 'subtitle_path': subtitle_path}
-
     def update_video(self, video_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         try:
             current_video = self.service.videos().list(part='snippet,status', id=video_id).execute()
@@ -216,7 +204,6 @@ class YouTubeManager:
         except Exception as e:
             logger.error(f'Video update failed for {video_id}: {e}')
             return {'updated': False, 'error': str(e), 'video_id': video_id}
-
     def get_video_info(self, video_id: str) -> Dict[str, Any]:
         try:
             response = self.service.videos().list(part='snippet,status,statistics', id=video_id).execute()
@@ -228,7 +215,6 @@ class YouTubeManager:
         except Exception as e:
             logger.error(f'Failed to get video info for {video_id}: {e}')
             return {'error': str(e), 'video_id': video_id}
-
     def list_channel_videos(self, max_results: int=50) -> List[Dict[str, Any]]:
         try:
             channel_response = self.service.channels().list(part='contentDetails', mine=True).execute()
@@ -245,7 +231,6 @@ class YouTubeManager:
         except Exception as e:
             logger.error(f'Failed to list channel videos: {e}')
             return []
-
     def schedule_video(self, video_id: str, publish_time: datetime) -> Dict[str, Any]:
         try:
             scheduled_time = publish_time.isoformat() + 'Z'
@@ -256,7 +241,6 @@ class YouTubeManager:
         except Exception as e:
             logger.error(f'Failed to schedule video {video_id}: {e}')
             return {'scheduled': False, 'error': str(e), 'video_id': video_id}
-
     def get_upload_quota(self) -> Dict[str, Any]:
         try:
             quota_info = {'daily_upload_limit_mb': 128 * 1024, 'max_video_length_hours': 12, 'max_file_size_mb': 256 * 1024, 'estimated_remaining_quota': 'Unknown', 'reset_time': 'Daily at midnight PT'}
@@ -265,21 +249,18 @@ class YouTubeManager:
             logger.error(f'Failed to get upload quota: {e}')
             return {'error': str(e)}
 youtube_manager = YouTubeManager() if settings.api_keys.get('youtube') else None
-
 def upload_video(video_path: str, metadata: Dict[str, Any], thumbnail_path: str=None, subtitle_path: str=None, privacy_status: str='private') -> Dict[str, Any]:
     if youtube_manager:
         return youtube_manager.upload_video(video_path, metadata, thumbnail_path, subtitle_path, privacy_status)
     else:
         logger.warning('YouTube manager not available')
         return {'error': 'YouTube manager not configured'}
-
 def update_video(video_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
     if youtube_manager:
         return youtube_manager.update_video(video_id, updates)
     else:
         logger.warning('YouTube manager not available')
         return {'error': 'YouTube manager not configured'}
-
 def get_video_info(video_id: str) -> Dict[str, Any]:
     if youtube_manager:
         return youtube_manager.get_video_info(video_id)
@@ -300,7 +281,7 @@ if __name__ == '__main__':
             videos = manager.list_channel_videos(max_results=5)
             for video in videos[:3]:
                 print(f"  {video['title']} ({video['video_id']})")
-            test_metadata = {'title': 'テスト動画 - 経済ニュース解説', 'description': 'これはテスト用の動画アップロードです。\n\n#テスト #経済ニュース', 'tags': ['テスト', '経済ニュース', '解説'], 'category': 'News & Politics'}
+            test_metadata = {'title': 'テスト動画 - 経済ニュース解説', 'description': 'これはテスト用の動画アップロードです。\n\n
             print('\n=== Test Metadata ===')
             print(f"Title: {test_metadata['title']}")
             print(f"Tags: {test_metadata['tags']}")

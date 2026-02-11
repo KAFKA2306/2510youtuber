@@ -5,10 +5,8 @@ import re
 import time
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Sequence
-
 from app.logging_config import get_log_session, setup_logging
 from app.notifications.interfaces import Notifier
-
 from .api_rotation import initialize_api_infrastructure
 from .config import cfg
 from .discord import discord_notifier
@@ -37,33 +35,23 @@ from .workflow import (
     WorkflowStep,
 )
 from .workflow_runtime import AttemptOutcome, AttemptStatus, ScriptInsights, WorkflowRunState
-
 log_level_str = os.getenv("LOG_LEVEL", "INFO")
 log_level = getattr(logging, log_level_str.upper(), logging.INFO)
 _LOG_SESSION = setup_logging(log_level=log_level)
 logger = logging.getLogger(__name__)
-
-
 _BOOTSTRAP_FFMPEG_PATH: Optional[str] = None
 _BOOTSTRAP_COMPLETED = False
-
-
 def _bootstrap_runtime() -> str:
     """Ensure heavy-weight dependencies are initialized exactly once."""
-
     global _BOOTSTRAP_COMPLETED, _BOOTSTRAP_FFMPEG_PATH
-
     if _BOOTSTRAP_COMPLETED and _BOOTSTRAP_FFMPEG_PATH:
         return _BOOTSTRAP_FFMPEG_PATH
-
     initialize_api_infrastructure()
     logger.info("API infrastructure initialized")
     _BOOTSTRAP_FFMPEG_PATH = ensure_ffmpeg_tooling(cfg.ffmpeg_path)
     _BOOTSTRAP_COMPLETED = True
     logger.info("FFmpeg binary validated: %s", _BOOTSTRAP_FFMPEG_PATH)
     return _BOOTSTRAP_FFMPEG_PATH
-
-
 RETRY_CLEANUP_MAP: Dict[str, Sequence[str]] = {
     "script_generation": ("script_content", "script_path"),
     "visual_design_generation": ("visual_design", "visual_design_dict"),
@@ -93,11 +81,8 @@ RETRY_CLEANUP_MAP: Dict[str, Sequence[str]] = {
     "drive_upload": ("drive_result",),
     "youtube_upload": ("youtube_result", "video_id", "video_url"),
 }
-
-
 def _default_workflow_steps() -> List[WorkflowStep]:
     """Instantiate the standard set of workflow steps."""
-
     return [
         CollectNewsStep(),
         GenerateScriptStep(),
@@ -113,11 +98,8 @@ def _default_workflow_steps() -> List[WorkflowStep]:
         UploadToYouTubeStep(),
         ReviewVideoStep(),
     ]
-
-
 class YouTubeWorkflow:
     """High-level orchestrator that runs the YouTube production workflow."""
-
     def __init__(
         self,
         steps: Optional[Iterable[WorkflowStep]] = None,
@@ -133,21 +115,16 @@ class YouTubeWorkflow:
         self.failure_bus = FailureBus()
         self.failure_bus.subscribe(self._handle_failure_event)
         self.failure_bus.subscribe(self._cleanup_after_failure)
-
     async def execute_full_workflow(self, mode: str = "daily") -> Dict[str, Any]:
         """Run every workflow step (with QA-driven retries) and return the payload."""
-
         run_state, max_attempts = self._initialize_run_state(mode)
         await self._notify_workflow_start(mode)
-
         for attempt_number in range(1, max_attempts + 1):
             run_state.begin_attempt(attempt_number)
             logger.info("🚀 Workflow attempt %s/%s", attempt_number, max_attempts)
             outcome = await self._run_attempt(run_state, max_attempts)
-
             if outcome.status is AttemptStatus.SUCCESS:
                 return await self._finalize_success(run_state, max_attempts)
-
             if outcome.status is AttemptStatus.RETRY and outcome.restart_index is not None:
                 next_attempt = attempt_number + 1
                 if next_attempt > max_attempts:
@@ -177,7 +154,6 @@ class YouTubeWorkflow:
                 )
                 run_state.request_retry(outcome.restart_index)
                 continue
-
             failure_step = outcome.failure_step or "unknown"
             failure = await self._dispatch_failure(
                 failure_step,
@@ -189,7 +165,6 @@ class YouTubeWorkflow:
                 else None,
             )
             return failure
-
         logger.error("Workflow failed after exhausting QA retries")
         failure_index = max(run_state.start_index, 0)
         failure_step = (
@@ -208,18 +183,14 @@ class YouTubeWorkflow:
             error=failure_result if isinstance(failure_result, BaseException) else None,
         )
         return failure
-
     def _initialize_run_state(self, mode: str) -> tuple[WorkflowRunState, int]:
         """Create the mutable run state and determine QA retry budget."""
-
         _bootstrap_runtime()
         self.mode = mode
         self.run_id = self._initialize_run(mode)
         self.context = WorkflowContext(run_id=self.run_id, mode=mode)
-
         qa_gating = getattr(getattr(cfg, "media_quality", None), "gating", None)
         max_attempts = 1 + max(0, getattr(qa_gating, "retry_attempts", 0))
-
         run_state = WorkflowRunState(
             run_id=self.run_id,
             mode=mode,
@@ -228,18 +199,16 @@ class YouTubeWorkflow:
             retry_cleanup_map=RETRY_CLEANUP_MAP,
         )
         return run_state, max_attempts
-
     async def _run_attempt(
         self, run_state: WorkflowRunState, max_attempts: int
     ) -> AttemptOutcome:
         """Execute steps once and describe the resulting state."""
-
         for index in range(run_state.start_index, len(self.steps)):
             step = self.steps[index]
             logger.info("Executing: %s", step.step_name)
             try:
                 result = await step.execute(run_state.context)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.exception("Step '%s' raised an exception", step.step_name)
                 return AttemptOutcome(
                     status=AttemptStatus.FAILURE,
@@ -247,48 +216,38 @@ class YouTubeWorkflow:
                     failure_result=exc,
                 )
             run_state.register_result(index, result)
-
             if getattr(result, "success", False):
                 continue
-
             if isinstance(step, QualityAssuranceStep):
                 retry_directive = self._evaluate_retry_request(run_state, max_attempts)
                 if retry_directive is not None:
                     retry_directive.failure_step = step.step_name
                     retry_directive.failure_result = result
                     return retry_directive
-
             return AttemptOutcome(
                 status=AttemptStatus.FAILURE,
                 failure_step=step.step_name,
                 failure_result=result,
             )
-
         return AttemptOutcome(status=AttemptStatus.SUCCESS)
-
     def _evaluate_retry_request(
         self, run_state: WorkflowRunState, max_attempts: int
     ) -> Optional[AttemptOutcome]:
         """Translate QA retry metadata into an actionable directive."""
-
         if run_state.context is None or run_state.attempt >= max_attempts:
             return None
-
         retry_request = run_state.context.get("qa_retry_request")
         if not retry_request:
             return None
-
         retry_step_name = retry_request.get("start_step")
         retry_index = self._resolve_step_index(retry_step_name)
         if retry_index is None:
             return None
-
         return AttemptOutcome(
             status=AttemptStatus.RETRY,
             restart_index=retry_index,
             reason=retry_request.get("reason"),
         )
-
     def _resolve_step_index(self, step_name: Optional[str]) -> Optional[int]:
         if not step_name:
             return None
@@ -296,7 +255,6 @@ class YouTubeWorkflow:
             if step.step_name == step_name:
                 return idx
         return None
-
     async def _dispatch_failure(
         self,
         step_name: str,
@@ -314,13 +272,10 @@ class YouTubeWorkflow:
         if enriched_event.response is not None:
             return enriched_event.response
         return await self._handle_workflow_failure(step_name, result, error)
-
     async def _handle_failure_event(self, event: WorkflowFailureEvent) -> None:
         event.response = await self._handle_workflow_failure(event.step_name, event.result, event.error)
-
     async def _cleanup_after_failure(self, _: WorkflowFailureEvent) -> None:
         self._cleanup_temp_files()
-
     def _initialize_run(self, mode: str) -> str:
         if sheets_manager:
             run_id = sheets_manager.create_run(mode)
@@ -333,7 +288,6 @@ class YouTubeWorkflow:
         if self._log_session:
             self._log_session.bind_workflow_run(run_id, mode=mode)
         return run_id
-
     async def _handle_workflow_failure(
         self,
         step_name: str,
@@ -367,8 +321,6 @@ class YouTubeWorkflow:
             "error": error_detail or "Unknown error",
             "run_id": self.run_id,
         }
-
-
     async def _finalize_success(
         self, run_state: WorkflowRunState, max_attempts: int
     ) -> Dict[str, Any]:
@@ -377,10 +329,8 @@ class YouTubeWorkflow:
         if video_url:
             metadata_storage.update_video_stats(run_id=run_state.run_id, video_url=video_url)
             logger.info("Updated metadata storage with video URL")
-
         execution_time = run_state.execution_time_seconds()
         result = self._compile_final_result(run_state, step_results, execution_time)
-
         if self._log_session:
             self._log_session.mark_status(
                 "succeeded",
@@ -391,12 +341,10 @@ class YouTubeWorkflow:
                 video_url=video_url,
                 news_count=result.get("news_count"),
             )
-
         await self._notify_workflow_success(result)
         self._update_run_status("completed", result)
         self._cleanup_temp_files()
         return result
-
     def _get_step_result(
         self, results: List[Optional[Any]], target_step: str
     ) -> Optional[Any]:
@@ -404,7 +352,6 @@ class YouTubeWorkflow:
             if step.step_name == target_step:
                 return result
         return None
-
     def _compile_final_result(
         self,
         run_state: WorkflowRunState,
@@ -415,7 +362,6 @@ class YouTubeWorkflow:
         news_step = self._get_step_result(step_results, 'news_collection')
         script_step = self._get_step_result(step_results, 'script_generation')
         metadata_step = self._get_step_result(step_results, 'metadata_generation')
-
         insights = ScriptInsights.from_step(script_step)
         news_count = news_step.get("count", 0) if news_step else 0
         script_length = script_step.get("length", 0) if script_step else 0
@@ -427,7 +373,6 @@ class YouTubeWorkflow:
         title = metadata.get("title")
         video_review_data = context.get("video_review")
         video_review_summary, video_review_actions = self._extract_video_review(video_review_data)
-
         workflow_result = WorkflowResult(
             success=True,
             run_id=run_state.run_id,
@@ -456,7 +401,6 @@ class YouTubeWorkflow:
             video_review_actions=video_review_actions,
         )
         metadata_storage.log_execution(workflow_result)
-
         serialized_steps = {}
         for step, step_result in zip(self.steps, step_results):
             if step_result is None:
@@ -465,7 +409,6 @@ class YouTubeWorkflow:
                 "success": getattr(step_result, "success", False),
                 **(getattr(step_result, "data", {}) or {}),
             }
-
         result: Dict[str, Any] = {
             "success": True,
             "run_id": run_state.run_id,
@@ -498,7 +441,6 @@ class YouTubeWorkflow:
             },
         }
         return result
-
     def _extract_video_review(
         self, review_data: Optional[Dict[str, Any]]
     ) -> tuple[Optional[str], List[str]]:
@@ -516,7 +458,6 @@ class YouTubeWorkflow:
         else:
             actions = []
         return summary, actions
-
     def _determine_hook_type(
         self,
         script_step: Any,
@@ -534,7 +475,6 @@ class YouTubeWorkflow:
         if script_step and hasattr(script_step, "data"):
             script_content = script_step.data.get("script", "")
         return self._classify_hook_from_content(script_content)
-
     def _classify_hook_from_content(self, script_content: str) -> str:
         if not script_content:
             return "その他"
@@ -548,7 +488,6 @@ class YouTubeWorkflow:
         if re.search(r"(知らない|隠された|裏側|真実)", first_segment):
             return "隠された真実"
         return "その他"
-
     def _extract_topic(self, news_step: Any) -> str:
         if not news_step or not hasattr(news_step, "data"):
             return "一般"
@@ -568,7 +507,6 @@ class YouTubeWorkflow:
     async def _notify_workflow_start(self, mode: str):
         message = f"YouTube動画生成ワークフローを開始しました\nモード: {mode}\nRun ID: {self.run_id}"
         await self.notifier.notify(message, level="info", title="ワークフロー開始")
-
     async def _notify_workflow_success(self, result: Dict[str, Any]):
         execution_time = result.get("execution_time", 0)
         video_url = result.get("video_url", "N/A")
@@ -579,15 +517,12 @@ class YouTubeWorkflow:
             "生成ファイル数": len(result.get("generated_files", [])),
         }
         await self.notifier.notify(message, level="success", title="ワークフロー完了", fields=fields)
-
     async def _notify_workflow_error(self, error: Exception):
         message = f"YouTube動画生成でエラーが発生しました\nエラー: {str(error)}\nRun ID: {self.run_id}"
         await self.notifier.notify(message, level="error", title="ワークフローエラー")
-
     def _update_run_status(self, status: str, result: Dict[str, Any]):
         if sheets_manager and self.run_id:
             sheets_manager.update_run(self.run_id, status=status, error_log=str(result))
-
     def _cleanup_temp_files(self):
         if not self.context:
             return
@@ -598,37 +533,21 @@ class YouTubeWorkflow:
                 cleaned_count += 1
         if cleaned_count > 0:
             logger.info(f"Cleaned up {cleaned_count} temporary files")
-
-
 def _get_workflow() -> YouTubeWorkflow:
     from .container import get_container
-
     return get_container().workflow
-
-
 class _WorkflowProxy:
     def __getattr__(self, name):
         return getattr(_get_workflow(), name)
-
-
 workflow = _WorkflowProxy()
-
-
 async def run_daily_workflow() -> Dict[str, Any]:
     return await _get_workflow().execute_full_workflow("daily")
-
-
 async def run_special_workflow() -> Dict[str, Any]:
     return await _get_workflow().execute_full_workflow("special")
-
-
 async def run_test_workflow() -> Dict[str, Any]:
     return await _get_workflow().execute_full_workflow("test")
-
-
 if __name__ == "__main__":
     import sys
-
     async def main():
         mode = sys.argv[1] if len(sys.argv) > 1 else "test"
         logger.info(f"🚀 Starting YouTube Workflow ({mode} mode)")
@@ -642,5 +561,4 @@ if __name__ == "__main__":
         else:
             logger.error(f"❌ Workflow failed: {result.get('error', 'Unknown error')}")
             sys.exit(1)
-
     asyncio.run(main())

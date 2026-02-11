@@ -19,9 +19,7 @@ if _PIL_SPEC:
 else:
     Image = ImageDraw = ImageFont = None
 logger = logging.getLogger(__name__)
-
 class VideoGenerator:
-
     def __init__(self):
         self.video_quality = settings.video.quality_preset
         self.output_format = 'mp4'
@@ -37,7 +35,6 @@ class VideoGenerator:
         self.archival_manager = FileArchivalManager()
         self.ffmpeg_path = ensure_ffmpeg_tooling(settings.ffmpeg_path)
         logger.info('Video generator initialized with theme management and stock footage support')
-
     def generate_video(self, audio_path: str, subtitle_path: str, background_image: str=None, title: str='Economic News Analysis', output_path: str=None, theme_name: str=None, enable_ab_test: bool=True, script_content: str='', news_items: List[Dict]=None, use_stock_footage: bool=None, broll_path: Optional[str]=None) -> str:
         try:
             self._validate_input_files(audio_path, subtitle_path, background_image)
@@ -106,7 +103,6 @@ class VideoGenerator:
                     os.remove(bg_image_path)
                 except (OSError, FileNotFoundError) as e:
                     logger.debug(f'Could not remove background image {bg_image_path}: {e}')
-
     def prepare_broll_assets(self, *, audio_path: str, script_content: str='', news_items: Optional[List[Dict]]=None) -> Optional[Dict[str, Any]]:
         if not audio_path or not os.path.exists(audio_path):
             logger.warning('Audio path missing for B-roll preparation')
@@ -123,7 +119,6 @@ class VideoGenerator:
             self.last_broll_metadata = {}
             return None
         return self._build_broll_from_stock(audio_duration=audio_duration, script_content=script_content, news_items=news_items or [])
-
     def _validate_input_files(self, audio_path: str, subtitle_path: str, background_image: str=None):
         if not os.path.exists(audio_path):
             raise FileNotFoundError(f'Audio file not found: {audio_path}')
@@ -135,12 +130,10 @@ class VideoGenerator:
             AudioSegment.from_file(audio_path)
         except Exception as e:
             raise ValueError(f'Invalid audio file format: {e}')
-
     def _prepare_background_image(self, background_image: str=None, title: str='News Analysis') -> str:
         if background_image and os.path.exists(background_image):
             return background_image
         return self._create_default_background(title)
-
     def _create_default_background(self, title: str) -> str:
         if Image is None or ImageDraw is None:
             logger.error('PIL is required to generate default backgrounds')
@@ -254,7 +247,6 @@ class VideoGenerator:
         except Exception as e:
             logger.warning(f'Failed to create professional background: {e}')
             return self._create_simple_background()
-
     def _get_japanese_font_for_background(self, size: int):
         if ImageFont is None:
             logger.warning('PIL ImageFont is unavailable; cannot load Japanese fonts')
@@ -272,7 +264,6 @@ class VideoGenerator:
         except (OSError, IOError) as e:
             logger.warning(f'Could not load default font: {e}')
             return None
-
     def _create_simple_background(self) -> str:
         if Image is None:
             logger.error('PIL is required to generate backgrounds')
@@ -285,7 +276,6 @@ class VideoGenerator:
         except Exception as e:
             logger.error(f'Failed to create simple background: {e}')
             return None
-
     def _get_audio_duration(self, audio_path: str) -> float:
         try:
             audio = AudioSegment.from_file(audio_path)
@@ -293,18 +283,15 @@ class VideoGenerator:
         except Exception as e:
             logger.warning(f'Failed to get audio duration: {e}')
             return 60.0
-
     def _get_quality_settings(self) -> Dict[str, Any]:
         presets = settings.video_quality_presets
         quality_settings = presets.get(self.video_quality, presets['medium'])
         quality_settings.update({'c:a': 'aac', 'b:a': '128k', 'ar': '44100', 'pix_fmt': 'yuv420p', 'movflags': '+faststart'})
         return quality_settings
-
     def _normalize_subtitle_path(self, subtitle_path: str) -> str:
         if os.name == 'nt':
             return subtitle_path.replace('\\', '\\\\').replace(':', '\\:')
         return subtitle_path
-
     def _build_subtitle_style(self) -> str:
         japanese_fonts = ['Noto Sans CJK JP Bold', 'Yu Gothic Bold', 'Hiragino Sans W6', 'IPAGothic', 'Meiryo Bold', 'MS Gothic']
         font_name = self._find_available_font(japanese_fonts)
@@ -314,7 +301,6 @@ class VideoGenerator:
         style_str = ''.join(style)
         logger.info('Using subtitle font %s with margins (V:%spx, H:%spx)', font_name, subtitle_margin_v, subtitle_margin_h)
         return style_str
-
     def _build_subtitle_filter(self, subtitle_path: str) -> str:
         try:
             normalized = self._normalize_subtitle_path(subtitle_path)
@@ -323,7 +309,6 @@ class VideoGenerator:
         except Exception as e:
             logger.warning(f'Failed to build subtitle filter: {e}')
             return f'subtitles={self._normalize_subtitle_path(subtitle_path)}'
-
     def _build_motion_background_stream(self, bg_image_path: str, duration: float):
         width = settings.video.resolution.width
         height = settings.video.resolution.height
@@ -344,7 +329,6 @@ class VideoGenerator:
         stream = stream.filter('eq', saturation=1.05, contrast=1.02, brightness=0.01)
         stream = stream.filter('setsar', '1')
         return stream
-
     def _find_available_font(self, font_candidates: list) -> str:
         import subprocess
         for font_name in font_candidates:
@@ -357,7 +341,6 @@ class VideoGenerator:
                 continue
         logger.warning('No Japanese font found, using default font')
         return 'Arial'
-
     def _get_video_info(self, video_path: str) -> Dict[str, Any]:
         try:
             probe = ffmpeg.probe(video_path)
@@ -368,17 +351,14 @@ class VideoGenerator:
         except Exception as e:
             logger.warning(f'Failed to get video info: {e}')
             return {'file_size_mb': 0, 'error': str(e)}
-
     def _can_use_stock_footage(self) -> bool:
         return bool(settings.pexels_api_key or settings.pixabay_api_key)
-
     def _ensure_stock_services(self):
         if self._stock_manager is None:
             from .services.media import BRollGenerator, StockFootageManager, VisualMatcher
             self._stock_manager = StockFootageManager(pexels_api_key=settings.pexels_api_key, pixabay_api_key=settings.pixabay_api_key)
             self._visual_matcher = VisualMatcher()
             self._broll_generator = BRollGenerator(ffmpeg_path=self.ffmpeg_path)
-
     def _generate_with_stock_footage(self, audio_path: str, subtitle_path: str, audio_duration: float, script_content: str, news_items: List[Dict], output_path: str) -> Optional[str]:
         broll_assets = self._build_broll_from_stock(audio_duration=audio_duration, script_content=script_content, news_items=news_items or [])
         if not broll_assets:
@@ -390,7 +370,6 @@ class VideoGenerator:
             self.last_generation_method = 'stock_footage'
             return rendered_path
         return None
-
     def _build_broll_from_stock(self, *, audio_duration: float, script_content: str, news_items: Optional[List[Dict]]=None) -> Optional[Dict[str, Any]]:
         if not self._can_use_stock_footage():
             logger.info('Stock footage disabled or missing API keys; skipping B-roll generation')
@@ -424,7 +403,6 @@ class VideoGenerator:
         metadata = {'broll_path': broll_path, 'clip_paths': clip_paths, 'keywords': keywords, 'footage_results': footage_results, 'audio_duration': audio_duration, 'transition_duration': 1.0, 'source': 'stock_footage'}
         self.last_broll_metadata = metadata
         return metadata
-
     def _render_final_video(self, *, video_source_path: str, audio_path: str, subtitle_path: str, output_path: str, source_label: str='video') -> Optional[str]:
         if not video_source_path or not os.path.exists(video_source_path):
             logger.warning(f'Video source not found for rendering: {video_source_path}')
@@ -444,20 +422,17 @@ class VideoGenerator:
         except Exception as e:
             logger.error(f'Failed to render final video from {source_label}: {e}')
         return None
-
     def _get_subtitle_style_string(self) -> str:
         try:
             return self._build_subtitle_style()
         except Exception as e:
             logger.warning(f'Failed to retrieve subtitle style: {e}')
             return ''
-
     @staticmethod
     def _decode_ffmpeg_output(data: Optional[bytes]) -> str:
         if not data:
             return ''
         return data.decode('utf-8', errors='replace').strip()
-
     def _run_ffmpeg(self, stream, *, description: str) -> None:
         cmd = self.ffmpeg_path or 'ffmpeg'
         try:
@@ -475,7 +450,6 @@ class VideoGenerator:
         except Exception:
             logger.exception('Unexpected ffmpeg failure while %s using %s', description, cmd)
             raise
-
     def _generate_fallback_video(self, audio_path: str, subtitle_path: str, title: str) -> str:
         try:
             logger.warning('Generating fallback video...')
@@ -501,17 +475,13 @@ class VideoGenerator:
         except Exception as e:
             logger.error(f'Fallback video generation error: {e}')
             return None
-
 def _get_video_generator() -> VideoGenerator:
     from app.container import get_container
     return get_container().video_generator
-
 class _VideoGeneratorProxy:
-
     def __getattr__(self, name):
         return getattr(_get_video_generator(), name)
 video_generator = _VideoGeneratorProxy()
-
 def generate_video(audio_path: str, subtitle_path: str, background_image: str=None, title: str='Economic News', script_content: str='', **kwargs) -> str:
     return _get_video_generator().generate_video(audio_path, subtitle_path, background_image, title, script_content=script_content, **kwargs)
 if __name__ == '__main__':

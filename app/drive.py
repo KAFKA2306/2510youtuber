@@ -13,15 +13,12 @@ from googleapiclient.http import MediaFileUpload
 from app.config.paths import ProjectPaths
 from .config import cfg
 logger = logging.getLogger(__name__)
-
 class DriveManager:
-
     def __init__(self):
         self.service = None
         self.folder_id = cfg.google_drive_folder_id
         self.credentials = cfg.google_credentials_json
         self._setup_service()
-
     def _setup_service(self):
         try:
             if not self.credentials:
@@ -42,7 +39,6 @@ class DriveManager:
         except Exception as e:
             logger.error(f'Failed to initialize Google Drive service: {e}')
             raise
-
     def _verify_folder_access(self):
         try:
             folder_info = self.service.files().get(fileId=self.folder_id, fields='id,name,mimeType', supportsAllDrives=True).execute()
@@ -51,7 +47,6 @@ class DriveManager:
             logger.info(f"Verified access to folder: {folder_info.get('name')}")
         except Exception as e:
             logger.warning(f'Could not verify folder access: {e}')
-
     def upload_file(self, file_path: str, folder_id: str=None, custom_name: str=None, make_public: bool=True) -> Dict[str, Any]:
         try:
             file_path_obj = ProjectPaths.resolve_relative(file_path)
@@ -81,7 +76,6 @@ class DriveManager:
                 logger.warning('Skipping Drive upload due to storage quota limitation (file: %s): %s', file_name, reason)
                 return {'skipped': True, 'reason': 'storage_quota_exceeded', 'file_path': file_path, 'file_name': file_name, 'file_size': file_size, 'message': 'File not uploaded to Drive due to service account storage limitation. Use shared drive or local backup.', 'analysis': analysis}
             return self._get_upload_error_info(file_path, error_str, analysis)
-
     @staticmethod
     def _analyze_drive_error(error: Exception) -> Dict[str, Any]:
         analysis: Dict[str, Any] = {'status': None, 'reason': None, 'message': str(error), 'classification': None, 'suggestions': []}
@@ -115,7 +109,6 @@ class DriveManager:
             analysis.setdefault('suggestions', [])
             analysis['suggestions'].append('Check that the service account has access to the target folder or shared drive.')
         return analysis
-
     def _get_mime_type(self, file_path: str) -> str:
         import mimetypes
         mime_type, _ = mimetypes.guess_type(file_path)
@@ -124,7 +117,6 @@ class DriveManager:
         ext = Path(file_path).suffix.lower()
         mime_mappings = {'.mp4': 'video/mp4', '.avi': 'video/x-msvideo', '.mov': 'video/quicktime', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.srt': 'text/plain', '.txt': 'text/plain', '.json': 'application/json'}
         return mime_mappings.get(ext, 'application/octet-stream')
-
     def _make_file_public(self, file_id: str):
         try:
             permission = {'type': 'anyone', 'role': 'reader'}
@@ -132,7 +124,6 @@ class DriveManager:
             logger.debug(f'Made file public: {file_id}')
         except Exception as e:
             logger.warning(f'Failed to make file public: {e}')
-
     def upload_video_package(self, video_path: str, thumbnail_path: str=None, subtitle_path: str=None, metadata: Dict[str, Any]=None) -> Dict[str, Any]:
         try:
             package_folder_id = self._create_package_folder(metadata)
@@ -180,7 +171,6 @@ class DriveManager:
         except Exception as e:
             logger.error(f'Video package upload failed: {e}')
             return {'error': str(e), 'uploaded_files': [], 'upload_failed_at': datetime.now().isoformat()}
-
     def _create_package_folder(self, metadata: Dict[str, Any]=None) -> str:
         try:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -197,7 +187,6 @@ class DriveManager:
         except Exception as e:
             logger.error(f'Failed to create package folder: {e}')
             return self.folder_id
-
     def _create_metadata_file(self, metadata: Dict[str, Any], folder_id: str) -> str:
         try:
             temp_dir = ProjectPaths.temp_path()
@@ -210,7 +199,6 @@ class DriveManager:
         except Exception as e:
             logger.error(f'Failed to create metadata file: {e}')
             return None
-
     def _get_folder_link(self, folder_id: str) -> str:
         try:
             folder_info = self.service.files().get(fileId=folder_id, fields='webViewLink', supportsAllDrives=True).execute()
@@ -218,10 +206,8 @@ class DriveManager:
         except Exception as e:
             logger.warning(f'Failed to get folder link: {e}')
             return f'https://drive.google.com/drive/folders/{folder_id}'
-
     def _get_upload_error_info(self, file_path: str, error_msg: str, analysis: Dict[str, Any] | None=None) -> Dict[str, Any]:
         return {'error': error_msg, 'file_path': file_path, 'file_exists': os.path.exists(file_path), 'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else 0, 'upload_failed_at': datetime.now().isoformat(), 'analysis': analysis or {}}
-
     def _create_local_backup_folder(self, metadata: Dict[str, Any]=None) -> str:
         try:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -236,7 +222,6 @@ class DriveManager:
         except Exception as e:
             logger.error(f'Failed to create local backup folder: {e}')
             return None
-
     def _save_local_copy(self, source_path: str, dest_dir: str, dest_filename: str):
         try:
             source = ProjectPaths.resolve_relative(source_path)
@@ -249,7 +234,6 @@ class DriveManager:
             logger.info(f'Saved local copy: {dest_path}')
         except Exception as e:
             logger.warning(f'Failed to save local copy: {e}')
-
     def list_files(self, folder_id: str=None, limit: int=100) -> List[Dict[str, Any]]:
         try:
             target_folder_id = folder_id or self.folder_id
@@ -264,7 +248,6 @@ class DriveManager:
         except Exception as e:
             logger.error(f'Failed to list files: {e}')
             return []
-
     def delete_file(self, file_id: str) -> bool:
         try:
             self.service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
@@ -273,7 +256,6 @@ class DriveManager:
         except Exception as e:
             logger.error(f'Failed to delete file {file_id}: {e}')
             return False
-
     def cleanup_old_files(self, days_old: int=30) -> int:
         try:
             cutoff_date = datetime.now() - timedelta(days=days_old)
@@ -292,7 +274,6 @@ class DriveManager:
         except Exception as e:
             logger.error(f'Failed to cleanup old files: {e}')
             return 0
-
     def get_storage_usage(self) -> Dict[str, Any]:
         try:
             about_info = self.service.about().get(fields='storageQuota').execute()
@@ -305,14 +286,12 @@ class DriveManager:
             logger.error(f'Failed to get storage usage: {e}')
             return {}
 drive_manager = DriveManager() if cfg.google_credentials_json else None
-
 def upload_file(file_path: str, folder_id: str=None, make_public: bool=True) -> Dict[str, Any]:
     if drive_manager:
         return drive_manager.upload_file(file_path, folder_id, make_public=make_public)
     else:
         logger.warning('Drive manager not available')
         return {'error': 'Drive manager not configured'}
-
 def upload_video_package(video_path: str, thumbnail_path: str=None, subtitle_path: str=None, metadata: Dict[str, Any]=None) -> Dict[str, Any]:
     if drive_manager:
         return drive_manager.upload_video_package(video_path, thumbnail_path, subtitle_path, metadata)

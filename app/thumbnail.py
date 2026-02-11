@@ -14,9 +14,7 @@ else:
     Image = ImageDraw = ImageEnhance = ImageFont = None
 HAS_PIL = _PIL_SPEC is not None
 logger = logging.getLogger(__name__)
-
 class ThumbnailGenerator:
-
     def __init__(self):
         self.output_size = (1280, 720)
         self.font_paths = self._get_available_fonts()
@@ -27,7 +25,6 @@ class ThumbnailGenerator:
             logger.info('Thumbnail generator initialized with PIL')
         else:
             logger.warning('PIL not available, thumbnail generation will be limited')
-
     def _get_available_fonts(self) -> Dict[str, str]:
         font_paths = {}
         font_candidates = ['/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf', '/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf', '/usr/share/fonts/truetype/fonts-japanese-gothic.ttf', '/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc', '/System/Library/Fonts/ヒラギノ角ゴシック W8.ttc', 'C:/Windows/Fonts/msgothic.ttc', 'C:/Windows/Fonts/meiryo.ttc', 'C:/Windows/Fonts/YuGothB.ttc', 'C:/Windows/Fonts/YuGothM.ttc', '/usr/share/fonts/truetype/noto-cjk/NotoSansCJK-Bold.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf', '/System/Library/Fonts/Arial.ttf', 'C:/Windows/Fonts/arial.ttf']
@@ -37,10 +34,8 @@ class ThumbnailGenerator:
                 font_paths[font_name] = font_path
         logger.info(f'Found {len(font_paths)} available fonts (Japanese priority)')
         return font_paths
-
     def _load_color_schemes(self) -> Dict[str, Dict[str, Any]]:
         return {'economic_blue': {'background': (10, 20, 40), 'primary': (0, 120, 215), 'secondary': (255, 255, 255), 'accent': (255, 215, 0), 'text': (255, 255, 255), 'shadow': (0, 0, 0, 220), 'highlight': (255, 69, 0)}, 'financial_green': {'background': (5, 30, 15), 'primary': (0, 180, 80), 'secondary': (255, 255, 255), 'accent': (255, 215, 0), 'text': (255, 255, 255), 'shadow': (0, 0, 0, 220), 'highlight': (255, 193, 7)}, 'market_red': {'background': (40, 5, 5), 'primary': (255, 50, 50), 'secondary': (255, 255, 255), 'accent': (255, 215, 0), 'text': (255, 255, 255), 'shadow': (0, 0, 0, 220), 'highlight': (255, 140, 0)}, 'youtube_style': {'background': (20, 20, 30), 'primary': (255, 0, 0), 'secondary': (255, 255, 255), 'accent': (255, 215, 0), 'text': (255, 255, 255), 'shadow': (0, 0, 0, 230), 'highlight': (0, 255, 255)}}
-
     def generate_thumbnail(self, title: str, news_items: List[Dict[str, Any]]=None, mode: str='daily', style: str='economic_blue', output_path: str=None, layout: str='v2', icon_path: str=None) -> str:
         if layout == 'v2':
             return self._generate_v2_layout(title, icon_path, news_items, mode, output_path)
@@ -61,7 +56,6 @@ class ThumbnailGenerator:
         except Exception as e:
             logger.error(f'Thumbnail generation failed: {e}')
             return self._generate_fallback_thumbnail(title, output_path)
-
     def _add_background_effects(self, image, style: str, mode: str):
         draw = ImageDraw.Draw(image)
         colors = self.color_schemes[style]
@@ -85,7 +79,6 @@ class ThumbnailGenerator:
         except Exception as e:
             logger.warning(f'Failed to add background effects: {e}')
         return image
-
     def _add_geometric_patterns(self, draw, colors: Dict, mode: str):
         width, height = self.output_size
         try:
@@ -103,7 +96,6 @@ class ThumbnailGenerator:
                     draw.rectangle([x, y, x + 100, y + 60], outline=(*colors['primary'], 60), width=2)
         except Exception as e:
             logger.warning(f'Failed to add geometric patterns: {e}')
-
     def _draw_text_elements(self, image, title: str, news_items: List[Dict], style: str, mode: str):
         draw = ImageDraw.Draw(image)
         colors = self.color_schemes[style]
@@ -121,7 +113,6 @@ class ThumbnailGenerator:
         except Exception as e:
             logger.warning(f'Failed to draw text elements: {e}')
         return image
-
     def _prepare_main_title(self, title: str, mode: str) -> str:
         import re
         title = re.sub('(\\d+[%％円ドル年月日])', '【\\1】', title)
@@ -136,7 +127,6 @@ class ThumbnailGenerator:
             else:
                 return title[:25] + '...'
         return title
-
     def _draw_main_title(self, draw, title: str, colors: Dict, mode: str):
         width, height = self.output_size
         if len(title) <= 10:
@@ -166,7 +156,6 @@ class ThumbnailGenerator:
                         draw.text((x + dx, y + dy), line, font=font, fill=outline_color)
             text_color = colors.get('highlight', colors['accent']) if mode == 'breaking' else colors['accent']
             draw.text((x, y), line, font=font, fill=text_color)
-
     def _draw_date(self, draw, date_text: str, colors: Dict):
         font = self._get_font(24)
         bbox = draw.textbbox((0, 0), date_text, font=font)
@@ -175,7 +164,6 @@ class ThumbnailGenerator:
         y = 20
         draw.rectangle([x - 10, y - 5, x + text_width + 10, y + 30], fill=(*colors['primary'], 180))
         draw.text((x, y), date_text, font=font, fill=colors['secondary'])
-
     def _draw_mode_badge(self, draw, mode_text: str, colors: Dict, mode: str):
         font = self._get_font(20)
         x, y = (20, 20)
@@ -190,7 +178,6 @@ class ThumbnailGenerator:
         text_height = bbox[3] - bbox[1]
         draw.rounded_rectangle([x, y, x + text_width + 20, y + text_height + 10], radius=10, fill=badge_color)
         draw.text((x + 10, y + 5), mode_text, font=font, fill=(255, 255, 255))
-
     def _draw_keywords(self, draw, keywords: List[str], colors: Dict):
         if not keywords:
             return
@@ -203,11 +190,9 @@ class ThumbnailGenerator:
             text_width = bbox[2] - bbox[0]
             draw.rounded_rectangle([x, y_start, x + text_width + 16, y_start + 25], radius=5, fill=(*colors['accent'], 150))
             draw.text((x + 8, y_start + 4), keyword, font=font, fill=colors['text'])
-
     def _get_mode_text(self, mode: str) -> str:
         mode_texts = {'daily': '今日のニュース', 'special': '特集', 'breaking': '緊急', 'test': 'テスト'}
         return mode_texts.get(mode, 'ニュース')
-
     def _extract_thumbnail_keywords(self, news_items: List[Dict]) -> List[str]:
         keywords = []
         economic_keywords = ['株価', '日経平均', '為替', '円安', '円高', '金利', 'インフレ', 'GDP', '決算', '企業', '投資', '市場']
@@ -219,7 +204,6 @@ class ThumbnailGenerator:
                     if len(keywords) >= 4:
                         break
         return keywords
-
     def _get_font(self, size: int):
         japanese_font_names = ['ipag', 'ipagp', 'msgothic', 'meiryo', 'yugothb', 'yugothm', 'notosanscjk']
         for font_name, font_path in self.font_paths.items():
@@ -240,7 +224,6 @@ class ThumbnailGenerator:
         except (OSError, IOError) as e:
             logger.error(f'Could not load any font: {e}')
             return None
-
     def _add_decorative_elements(self, image, style: str, mode: str):
         draw = ImageDraw.Draw(image)
         colors = self.color_schemes[style]
@@ -260,7 +243,6 @@ class ThumbnailGenerator:
         except Exception as e:
             logger.warning(f'Failed to add decorative elements: {e}')
         return image
-
     def _optimize_image_quality(self, image):
         try:
             enhancer = ImageEnhance.Contrast(image)
@@ -272,7 +254,6 @@ class ThumbnailGenerator:
         except Exception as e:
             logger.warning(f'Image optimization failed: {e}')
         return image
-
     def _generate_fallback_thumbnail(self, title: str, output_path: str=None) -> str:
         try:
             if not self.has_pil:
@@ -305,7 +286,6 @@ class ThumbnailGenerator:
         except Exception as e:
             logger.error(f'Fallback thumbnail generation failed: {e}')
             return None
-
     def create_batch_thumbnails(self, titles: List[str], styles: List[str]=None, modes: List[str]=None) -> List[str]:
         generated_thumbnails = []
         for i, title in enumerate(titles):
@@ -320,7 +300,6 @@ class ThumbnailGenerator:
                 logger.error(f'Failed to generate thumbnail {i + 1}: {e}')
                 continue
         return generated_thumbnails
-
     def _generate_v2_layout(self, title: str, icon_path: str=None, news_items: List[Dict[str, Any]]=None, mode: str='daily', output_path: str=None) -> str:
         if not self.has_pil:
             return self._generate_fallback_thumbnail(title, output_path)
@@ -338,7 +317,6 @@ class ThumbnailGenerator:
         except Exception as e:
             logger.error(f'V2 thumbnail generation failed: {e}')
             return self._generate_fallback_thumbnail(title, output_path)
-
     def _create_modern_background(self, mode: str):
         width, height = self.output_size
         bg_schemes = {'daily': ((15, 25, 45), (35, 55, 95)), 'special': ((45, 15, 65), (85, 35, 115)), 'breaking': ((50, 10, 10), (100, 25, 25))}
@@ -362,7 +340,6 @@ class ThumbnailGenerator:
             overlay_draw.line([(center_x + offset, 0), (center_x + offset, height)], fill=(255, 255, 255, alpha), width=1)
         image = Image.alpha_composite(image.convert('RGBA'), overlay).convert('RGB')
         return image
-
     def _add_right_icon(self, image, icon_path: str):
         width, height = self.output_size
         try:
@@ -390,7 +367,6 @@ class ThumbnailGenerator:
         except Exception as e:
             logger.error(f'Failed to add icon: {e}')
         return image
-
     def _add_left_catchcopy(self, image, title: str, mode: str):
         draw = ImageDraw.Draw(image)
         width, height = self.output_size
@@ -424,7 +400,6 @@ class ThumbnailGenerator:
             draw.text((x, y), line, font=copy_font, fill=text_color)
         self._add_v2_date_badge(draw)
         return image
-
     def _create_wow_catchcopy(self, title: str) -> str:
         wow_keywords = {'暴落': '大暴落\n警報!', '急落': '急落\n速報!', '急騰': '急騰\n来た!', '高騰': '高騰\n注目!', '速報': '緊急\n速報!', '利上げ': '利上げ\nショック', '円安': '円安\n加速!', '円高': '円高\n急騰!', '株価': '株価\n激変!', '金利': '金利\n衝撃!', 'AI': 'AI\n革命!', 'ビットコイン': 'BTC\n爆上げ', '仮想通貨': '暗号資産\n祭り!'}
         for keyword, copy in wow_keywords.items():
@@ -445,11 +420,9 @@ class ThumbnailGenerator:
             first_part = words[:5]
             return f'{first_part}\n速報!'
         return '超注目\n情報!'
-
     def _get_v2_text_color(self, mode: str) -> tuple:
         colors = {'daily': (255, 223, 0), 'special': (255, 105, 180), 'breaking': (255, 69, 0)}
         return colors.get(mode, (255, 223, 0))
-
     def _add_v2_date_badge(self, draw):
         font = self._get_font(size=36)
         if not font:
@@ -458,7 +431,6 @@ class ThumbnailGenerator:
         x, y = (40, self.output_size[1] - 90)
         draw.ellipse([x - 5, y - 5, x + 110, y + 50], fill=(255, 69, 0))
         draw.text((x + 15, y), date_text, font=font, fill=(255, 255, 255))
-
     def _enhance_v2_for_mobile(self, image):
         enhancer = ImageEnhance.Contrast(image)
         image = enhancer.enhance(1.35)
@@ -468,10 +440,8 @@ class ThumbnailGenerator:
         image = enhancer.enhance(1.3)
         return image
 thumbnail_generator = ThumbnailGenerator()
-
 def generate_thumbnail(title: str, news_items: List[Dict[str, Any]]=None, mode: str='daily', style: str='economic_blue', layout: str='v2', icon_path: str=None, output_path: str=None) -> str:
     return thumbnail_generator.generate_thumbnail(title, news_items, mode, style, output_path, layout=layout, icon_path=icon_path)
-
 def create_batch_thumbnails(titles: List[str], styles: List[str]=None, modes: List[str]=None) -> List[str]:
     return thumbnail_generator.create_batch_thumbnails(titles, styles, modes)
 if __name__ == '__main__':

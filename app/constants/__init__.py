@@ -1,6 +1,5 @@
 """Shared constant values for prompt construction and language policy."""
-
-from .prompts import (  # noqa: F401
+from .prompts import (
     DEFAULT_VIDEO_MODE_CONTEXT,
     JAPANESE_ALLOWED_ECONOMIC_ACRONYMS,
     JAPANESE_ALLOWED_PATTERNS,

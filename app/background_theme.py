@@ -1,9 +1,7 @@
 """背景テーマ管理・フィードバック改善システム
-
 動画背景デザインのバリエーション管理、A/Bテスト、
 視聴者フィードバックに基づく継続的改善を実現します。
 """
-
 import json
 import logging
 import os
@@ -11,64 +9,44 @@ import random
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
-
 logger = logging.getLogger(__name__)
-
-
 @dataclass
 class BackgroundTheme:
     """背景テーマの設定"""
-
     name: str
     description: str
-
-    # グラデーション設定（4段階）
-    gradient_stops: List[float]  # [0.25, 0.60, 0.80, 1.0]
-    gradient_colors: List[Tuple[int, int, int]]  # [(r,g,b), ...]
-
-    # 装飾要素
-    accent_circles: List[Dict]  # [{"pos": (x, y), "size": r, "color": (r,g,b,a)}, ...]
+    gradient_stops: List[float]
+    gradient_colors: List[Tuple[int, int, int]]
+    accent_circles: List[Dict]
     grid_enabled: bool
     grid_spacing: int
     grid_opacity: int
     diagonal_lines: bool
-
-    # ロボットアイコン設定
     robot_icon_enabled: bool
-    robot_icon_position: str  # "top-left", "top-right", "bottom-left", "bottom-right"
+    robot_icon_position: str
     robot_icon_size: Tuple[int, int]
     robot_icon_opacity: float
-
-    # タイトル設定
     title_font_size: int
     title_position_y: int
     title_shadow_layers: int
     title_glow_enabled: bool
     accent_lines_enabled: bool
-
-    # 字幕ゾーン設定
-    subtitle_zone_height_ratio: float  # 0.80 = 下部20%
+    subtitle_zone_height_ratio: float
     subtitle_zone_separator: bool
-
-    # パフォーマンス指標（フィードバック用）
     usage_count: int = 0
     positive_feedback: int = 0
     negative_feedback: int = 0
     avg_view_duration: float = 0.0
     avg_retention_rate: float = 0.0
     last_used: Optional[str] = None
-
-
 class BackgroundThemeManager:
     """背景テーマの管理とA/Bテスト"""
-
     def __init__(self, themes_file: str = "config/background_themes.json"):
         self.themes_file = themes_file
         self.themes: Dict[str, BackgroundTheme] = {}
         self.analytics_file = "data/background_analytics.json"
         self._load_themes()
         self._load_analytics()
-
     def _load_themes(self):
         """テーマ定義を読み込み"""
         if os.path.exists(self.themes_file):
@@ -76,7 +54,6 @@ class BackgroundThemeManager:
                 with open(self.themes_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     for name, theme_data in data.items():
-                        # Convert lists to tuples where needed
                         if "gradient_colors" in theme_data:
                             theme_data["gradient_colors"] = [tuple(c) for c in theme_data["gradient_colors"]]
                         if "robot_icon_size" in theme_data:
@@ -88,10 +65,8 @@ class BackgroundThemeManager:
                 self._create_default_themes()
         else:
             self._create_default_themes()
-
     def _create_default_themes(self):
         """デフォルトテーマを作成"""
-        # テーマ1: プロフェッショナルブルー（現在のデザイン）
         self.themes["professional_blue"] = BackgroundTheme(
             name="professional_blue",
             description="深い青のプロフェッショナルデザイン",
@@ -118,8 +93,6 @@ class BackgroundThemeManager:
             subtitle_zone_height_ratio=0.80,
             subtitle_zone_separator=True,
         )
-
-        # テーマ2: エレガントパープル
         self.themes["elegant_purple"] = BackgroundTheme(
             name="elegant_purple",
             description="高級感のある紫グラデーション",
@@ -146,8 +119,6 @@ class BackgroundThemeManager:
             subtitle_zone_height_ratio=0.82,
             subtitle_zone_separator=True,
         )
-
-        # テーマ3: ダイナミックグリーン
         self.themes["dynamic_green"] = BackgroundTheme(
             name="dynamic_green",
             description="活発な印象の緑系デザイン",
@@ -174,8 +145,6 @@ class BackgroundThemeManager:
             subtitle_zone_height_ratio=0.78,
             subtitle_zone_separator=True,
         )
-
-        # テーマ4: ミニマルグレー
         self.themes["minimal_gray"] = BackgroundTheme(
             name="minimal_gray",
             description="シンプルで洗練されたグレートーン",
@@ -201,9 +170,7 @@ class BackgroundThemeManager:
             subtitle_zone_height_ratio=0.83,
             subtitle_zone_separator=False,
         )
-
         self._save_themes()
-
     def _save_themes(self):
         """テーマをファイルに保存"""
         os.makedirs(os.path.dirname(self.themes_file) if os.path.dirname(self.themes_file) else ".", exist_ok=True)
@@ -211,17 +178,14 @@ class BackgroundThemeManager:
             data = {}
             for name, theme in self.themes.items():
                 theme_dict = asdict(theme)
-                # Convert tuples to lists for JSON serialization
                 theme_dict["gradient_colors"] = [list(c) for c in theme_dict["gradient_colors"]]
                 theme_dict["robot_icon_size"] = list(theme_dict["robot_icon_size"])
                 data[name] = theme_dict
-
             with open(self.themes_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             logger.info(f"Saved {len(self.themes)} themes to {self.themes_file}")
         except Exception as e:
             logger.error(f"Failed to save themes: {e}")
-
     def _load_analytics(self):
         """アナリティクスデータを読み込み"""
         if os.path.exists(self.analytics_file):
@@ -240,7 +204,6 @@ class BackgroundThemeManager:
                 logger.info(f"Loaded analytics for {len(analytics)} themes")
             except Exception as e:
                 logger.error(f"Failed to load analytics: {e}")
-
     def _save_analytics(self):
         """アナリティクスデータを保存"""
         os.makedirs(
@@ -257,52 +220,37 @@ class BackgroundThemeManager:
                     "avg_retention_rate": theme.avg_retention_rate,
                     "last_used": theme.last_used,
                 }
-
             with open(self.analytics_file, "w", encoding="utf-8") as f:
                 json.dump(analytics, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logger.error(f"Failed to save analytics: {e}")
-
     def get_theme(self, name: str) -> Optional[BackgroundTheme]:
         """テーマを取得"""
         return self.themes.get(name)
-
     def get_best_performing_theme(self) -> BackgroundTheme:
         """最もパフォーマンスが良いテーマを取得"""
         if not self.themes:
             return None
-
-        # スコア計算: (positive - negative) * retention_rate
         best_theme = None
         best_score = -float("inf")
-
         for theme in self.themes.values():
-            if theme.usage_count < 3:  # 最低3回使用されたテーマのみ評価
+            if theme.usage_count < 3:
                 continue
-
             feedback_score = theme.positive_feedback - theme.negative_feedback
             retention_weight = theme.avg_retention_rate / 100.0 if theme.avg_retention_rate > 0 else 0.5
             score = feedback_score * retention_weight
-
             if score > best_score:
                 best_score = score
                 best_theme = theme
-
-        # すべてのテーマが未使用の場合はデフォルトを返す
         return best_theme or self.themes.get("professional_blue")
-
     def select_theme_for_ab_test(self) -> BackgroundTheme:
         """A/Bテスト用にテーマを選択（ランダム or weighted）"""
-        # 80%の確率でベストパフォーマンステーマ、20%で新しいテーマを試す
         if random.random() < 0.8:
             theme = self.get_best_performing_theme()
             if theme:
                 return theme
-
-        # ランダム選択（未使用または使用回数が少ないテーマを優先）
         sorted_themes = sorted(self.themes.values(), key=lambda t: t.usage_count)
         return sorted_themes[0] if sorted_themes else self.themes["professional_blue"]
-
     def record_usage(self, theme_name: str):
         """テーマ使用を記録"""
         if theme_name in self.themes:
@@ -311,7 +259,6 @@ class BackgroundThemeManager:
             theme.last_used = datetime.now().isoformat()
             self._save_analytics()
             logger.info(f"Recorded usage for theme: {theme_name} (total: {theme.usage_count})")
-
     def record_feedback(self, theme_name: str, positive: bool):
         """フィードバックを記録"""
         if theme_name in self.themes:
@@ -322,26 +269,21 @@ class BackgroundThemeManager:
                 theme.negative_feedback += 1
             self._save_analytics()
             logger.info(f"Recorded {'positive' if positive else 'negative'} feedback for: {theme_name}")
-
     def update_performance_metrics(self, theme_name: str, view_duration: float, retention_rate: float):
         """パフォーマンス指標を更新"""
         if theme_name in self.themes:
             theme = self.themes[theme_name]
-
-            # 移動平均で更新
             if theme.usage_count > 0:
-                alpha = 0.3  # 重み（新しいデータへの反映度）
+                alpha = 0.3
                 theme.avg_view_duration = (1 - alpha) * theme.avg_view_duration + alpha * view_duration
                 theme.avg_retention_rate = (1 - alpha) * theme.avg_retention_rate + alpha * retention_rate
             else:
                 theme.avg_view_duration = view_duration
                 theme.avg_retention_rate = retention_rate
-
             self._save_analytics()
             logger.info(
                 f"Updated metrics for {theme_name}: duration={view_duration:.1f}s, retention={retention_rate:.1f}%"
             )
-
     def get_theme_rankings(self) -> List[Dict]:
         """テーマのランキングを取得"""
         rankings = []
@@ -352,7 +294,6 @@ class BackgroundThemeManager:
                 feedback_score = theme.positive_feedback - theme.negative_feedback
                 retention_weight = theme.avg_retention_rate / 100.0 if theme.avg_retention_rate > 0 else 0.5
                 score = feedback_score * retention_weight
-
             rankings.append(
                 {
                     "name": theme.name,
@@ -365,17 +306,13 @@ class BackgroundThemeManager:
                     "last_used": theme.last_used,
                 }
             )
-
-        # スコア順にソート
         rankings.sort(key=lambda x: x["score"], reverse=True)
         return rankings
-
     def print_analytics_report(self):
         """アナリティクスレポートを出力"""
         print("\n" + "=" * 70)
         print("背景テーマ パフォーマンスレポート")
         print("=" * 70)
-
         rankings = self.get_theme_rankings()
         for i, rank in enumerate(rankings, 1):
             print(f"\n{i}. {rank['name']} - {rank['description']}")
@@ -386,45 +323,26 @@ class BackgroundThemeManager:
             print(f"   総合スコア: {rank['score']:.2f}")
             if rank["last_used"]:
                 print(f"   最終使用: {rank['last_used']}")
-
         print("\n" + "=" * 70)
-
-
-# グローバルインスタンス
 theme_manager = BackgroundThemeManager()
-
-
 def get_theme_manager() -> BackgroundThemeManager:
     """テーママネージャーを取得"""
     return theme_manager
-
-
 if __name__ == "__main__":
-    # テストコード
     manager = BackgroundThemeManager()
-
-    # テーマ一覧
     print("\n利用可能なテーマ:")
     for name, theme in manager.themes.items():
         print(f"  - {name}: {theme.description}")
-
-    # A/Bテストシミュレーション
     print("\nA/Bテストシミュレーション:")
     for i in range(10):
         theme = manager.select_theme_for_ab_test()
-        print(f"  動画#{i+1}: {theme.name}")
+        print(f"  動画
         manager.record_usage(theme.name)
-
-        # ランダムフィードバック（シミュレーション）
         if random.random() > 0.3:
             manager.record_feedback(theme.name, positive=True)
         else:
             manager.record_feedback(theme.name, positive=False)
-
-        # パフォーマンス指標（シミュレーション）
         view_duration = random.uniform(120, 600)
         retention_rate = random.uniform(40, 85)
         manager.update_performance_metrics(theme.name, view_duration, retention_rate)
-
-    # レポート出力
     manager.print_analytics_report()

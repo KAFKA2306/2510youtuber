@@ -1,19 +1,13 @@
 """Runtime helpers for orchestrating the Crew-based workflow."""
-
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional, Sequence
-
 from .workflow import WorkflowContext, WorkflowStep
-
-
 @dataclass
 class ScriptInsights:
     """Container object for metrics extracted from the script generation step."""
-
     wow_score: Optional[float] = None
     surprise_points: Optional[int] = None
     emotion_peaks: Optional[int] = None
@@ -29,22 +23,18 @@ class ScriptInsights:
     emotion_highlights: Optional[List[str]] = None
     visual_guidelines: Optional[List[str]] = None
     visual_shot_list: Optional[List[str]] = None
-
     @classmethod
     def from_step(cls, script_step: Any) -> "ScriptInsights":
         if not script_step or not hasattr(script_step, "data"):
             return cls()
-
         data = script_step.data or {}
         metrics = data.get("script_metrics", {}) or {}
-
         def _as_list(value: Any) -> List[str]:
             if isinstance(value, list):
                 return [str(item) for item in value if item is not None]
             if value:
                 return [str(value)]
             return []
-
         return cls(
             wow_score=metrics.get("wow_score"),
             surprise_points=metrics.get("surprise_points"),
@@ -67,31 +57,22 @@ class ScriptInsights:
             visual_guidelines=_as_list(data.get("visual_guidelines")) or None,
             visual_shot_list=_as_list(data.get("visual_shot_list")) or None,
         )
-
-
 class AttemptStatus(Enum):
     """Possible outcomes for a single workflow attempt."""
-
     SUCCESS = "success"
     RETRY = "retry"
     FAILURE = "failure"
-
-
 @dataclass
 class AttemptOutcome:
     """High-level summary describing how an attempt finished."""
-
     status: AttemptStatus
     restart_index: Optional[int] = None
     reason: Optional[str] = None
     failure_step: Optional[str] = None
     failure_result: Optional[Any] = None
-
-
 @dataclass
 class WorkflowRunState:
     """State tracker for a single workflow execution attempt."""
-
     run_id: str
     mode: str
     context: WorkflowContext
@@ -102,34 +83,25 @@ class WorkflowRunState:
     start_index: int = 0
     results: List[Optional[Any]] = field(init=False)
     retry_requested: bool = False
-
     def __post_init__(self) -> None:
         self.results = [None] * len(self.steps)
-
     def begin_attempt(self, attempt_number: int) -> None:
         """Record the current attempt number and reset retry flags."""
-
         self.attempt = attempt_number
         self.retry_requested = False
-
     def register_result(self, index: int, result: Any) -> None:
         """Store the result for a step and capture any generated files."""
-
         self.results[index] = result
         files = getattr(result, "files_generated", None)
         if files:
             self.context.add_files(files)
-
     def request_retry(self, start_index: int) -> None:
         """Prepare to rerun from a specific step on the next attempt."""
-
         self.retry_requested = True
         self.start_index = start_index
         self._clear_state_from(start_index)
-
     def _clear_state_from(self, start_index: int) -> None:
         """Drop cached step outputs and context keys beyond the restart point."""
-
         for idx in range(start_index, len(self.results)):
             self.results[idx] = None
         for step in self.steps[start_index:]:
@@ -137,13 +109,9 @@ class WorkflowRunState:
             for key in keys_to_remove:
                 if key in self.context.state:
                     self.context.state.pop(key, None)
-
     def completed_results(self) -> List[Any]:
         """Return all step results recorded so far."""
-
         return [result for result in self.results if result is not None]
-
     def execution_time_seconds(self) -> float:
         """Compute the total runtime in seconds since the state was created."""
-
         return (datetime.now() - self.start_time).total_seconds()

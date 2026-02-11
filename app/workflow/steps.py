@@ -3,7 +3,6 @@ import os
 from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Any, Dict, List
-
 import yaml
 from app.align_subtitles import align_script_with_stt, export_srt
 from app.config import cfg
@@ -31,16 +30,12 @@ from app.youtube import upload_video as youtube_upload
 from .base import StepResult, WorkflowContext, WorkflowStep
 from .ports import NewsCollectionPort, SyncNewsCollectionAdapter
 logger = logging.getLogger(__name__)
-
 class CollectNewsStep(WorkflowStep):
-
     def __init__(self, news_port: NewsCollectionPort | None = None) -> None:
         self._news_port = news_port or SyncNewsCollectionAdapter(collect_news_sync)
-
     @property
     def step_name(self) -> str:
         return 'news_collection'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 1: Starting {self.step_name}...')
         try:
@@ -56,7 +51,6 @@ class CollectNewsStep(WorkflowStep):
         except Exception as e:
             logger.error(f'Step 1 failed: {e}')
             return self._failure(str(e))
-
     def _get_prompt(self, mode: str) -> str:
         try:
             if sheets_manager:
@@ -65,12 +59,9 @@ class CollectNewsStep(WorkflowStep):
         except Exception:
             pass
         return self._default_prompt()
-
     def _default_prompt(self) -> str:
         return get_default_news_collection_prompt()
-
 class GenerateScriptStep(WorkflowStep):
-
     def __init__(
         self,
         *,
@@ -79,11 +70,9 @@ class GenerateScriptStep(WorkflowStep):
     ) -> None:
         self._script_generator: ScriptGenerator | None = script_generator
         self._legacy_generator = legacy_generator or generate_dialogue
-
     @property
     def step_name(self) -> str:
         return 'script_generation'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 2: Starting {self.step_name}...')
         news_items = context.get('news_items')
@@ -144,7 +133,6 @@ class GenerateScriptStep(WorkflowStep):
         except Exception as e:
             logger.error(f'Step 2 failed: {e}')
             return self._failure(str(e))
-
     async def _generate_with_crewai(self, news_items: List[Dict[str, Any]]) -> Dict[str, Any]:
         logger.info('🚀 Using CrewAI WOW Script Creation Crew...')
         payload = self._get_script_generator().generate_crewai_payload(
@@ -153,7 +141,6 @@ class GenerateScriptStep(WorkflowStep):
         )
         logger.info('Script preview (first 200 chars): %r', payload['script'][:200])
         return payload
-
     async def _generate_legacy(self, context: WorkflowContext, news_items: List[Dict[str, Any]]) -> str:
         logger.info(f"3-stage quality check: {('ENABLED' if cfg.use_three_stage_quality_check else 'DISABLED')}")
         prompt_b = self._get_prompt(context.mode)
@@ -165,7 +152,6 @@ class GenerateScriptStep(WorkflowStep):
             target_duration_minutes=cfg.max_video_duration_minutes,
             use_quality_check=cfg.use_three_stage_quality_check,
         )
-
     def _get_prompt(self, mode: str) -> str:
         try:
             if sheets_manager:
@@ -174,21 +160,16 @@ class GenerateScriptStep(WorkflowStep):
         except Exception:
             pass
         return self._default_prompt()
-
     def _default_prompt(self) -> str:
         return get_default_script_generation_prompt()
-
     def _get_script_generator(self) -> ScriptGenerator:
         if self._script_generator is None:
             self._script_generator = ScriptGenerator(api_key=settings.api_keys.get('gemini'))
         return self._script_generator
-
 class GenerateVisualDesignStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'visual_design_generation'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 2.5: Starting {self.step_name}...')
         news_items = context.get('news_items')
@@ -214,13 +195,10 @@ class GenerateVisualDesignStep(WorkflowStep):
         context.set('visual_design_dict', design.to_dict())
         logger.info(f'Generated visual design: theme={design.theme_name}, sentiment={design.sentiment}, primary={design.primary_color}')
         return self._success(data={'theme_name': design.theme_name, 'sentiment': design.sentiment, 'primary_color': design.primary_color})
-
 class SynthesizeAudioStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'audio_synthesis'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 5: Starting {self.step_name}...')
         script_content = context.get('script_content')
@@ -261,13 +239,10 @@ class SynthesizeAudioStep(WorkflowStep):
         except Exception as e:
             logger.error(f'Step 5 failed: {e}')
             return self._failure(str(e))
-
 class TranscribeAudioStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'audio_transcription'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 6: Starting {self.step_name}...')
         audio_path = context.get('audio_path')
@@ -283,13 +258,10 @@ class TranscribeAudioStep(WorkflowStep):
         except Exception as e:
             logger.error(f'Step 6 failed: {e}')
             return self._failure(str(e))
-
 class AlignSubtitlesStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'subtitle_alignment'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 7: Starting {self.step_name}...')
         script_content = context.get('script_content')
@@ -311,13 +283,10 @@ class AlignSubtitlesStep(WorkflowStep):
         except Exception as e:
             logger.error(f'Step 7 failed: {e}')
             return self._failure(str(e))
-
 class GenerateVideoStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'video_generation'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 8: Starting {self.step_name}...')
         audio_path = context.get('audio_path')
@@ -399,13 +368,10 @@ class GenerateVideoStep(WorkflowStep):
         except Exception as e:
             logger.error(f'Step 8 failed: {e}')
             return self._failure(str(e))
-
 class QualityAssuranceStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'media_quality_assurance'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 9: Starting {self.step_name}...')
         qa_config = getattr(cfg, 'media_quality', None)
@@ -438,13 +404,10 @@ class QualityAssuranceStep(WorkflowStep):
             return self._failure(message)
         context.set('qa_retry_request', None)
         return self._success(data={'qa_passed': report.passed, 'qa_report_path': report.report_path, 'qa_blocking': blocking})
-
 class GenerateMetadataStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'metadata_generation'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 3: Starting {self.step_name}...')
         news_items = context.get('news_items')
@@ -465,13 +428,10 @@ class GenerateMetadataStep(WorkflowStep):
             fallback_metadata = {'title': f"経済ニュース解説 - {datetime.now().strftime('%Y/%m/%d')}", 'description': '経済ニュースの解説動画です。', 'tags': ['経済ニュース', '投資', '株式市場'], 'category': 'News & Politics'}
             context.set('metadata', fallback_metadata)
             return self._success(data={'metadata': fallback_metadata, 'title': fallback_metadata['title'], 'fallback': True})
-
 class GenerateThumbnailStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'thumbnail_generation'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 4: Starting {self.step_name}...')
         metadata = context.get('metadata')
@@ -494,13 +454,10 @@ class GenerateThumbnailStep(WorkflowStep):
         except Exception as e:
             logger.warning(f'Step 4 warning: {e}')
             return self._success(data={'thumbnail_path': None, 'error': str(e)})
-
 class UploadToDriveStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'drive_upload'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 10: Starting {self.step_name}...')
         video_path = context.get('video_path')
@@ -519,13 +476,10 @@ class UploadToDriveStep(WorkflowStep):
         except Exception as e:
             logger.warning(f'Step 10 warning: {e}')
             return self._success(data={'drive_result': {'error': str(e)}, 'error': str(e)})
-
 class UploadToYouTubeStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'youtube_upload'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 11: Starting {self.step_name}...')
         video_path = context.get('video_path')
@@ -548,13 +502,10 @@ class UploadToYouTubeStep(WorkflowStep):
         except Exception as e:
             logger.warning(f'Step 11 warning: {e}')
             return self._success(data={'youtube_result': {'error': str(e)}, 'error': str(e)})
-
 class ReviewVideoStep(WorkflowStep):
-
     @property
     def step_name(self) -> str:
         return 'video_review'
-
     async def execute(self, context: WorkflowContext) -> StepResult:
         logger.info(f'Step 12: Starting {self.step_name}...')
         review_config = getattr(cfg, 'video_review', None)

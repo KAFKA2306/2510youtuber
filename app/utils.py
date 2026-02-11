@@ -2,17 +2,13 @@ import os
 import re
 import tempfile
 from pathlib import Path
-
 from app.config.paths import ProjectPaths
-
-
 class FileUtils:
     @staticmethod
     def ensure_directory(path: str | Path) -> str:
         resolved = ProjectPaths.resolve_relative(str(path))
         resolved.mkdir(parents=True, exist_ok=True)
         return str(resolved)
-
     @staticmethod
     def safe_filename(filename: str, max_length: int = 100) -> str:
         safe_name = re.sub(r'[<>:"/\\|?*]', "_", filename)
@@ -22,7 +18,6 @@ class FileUtils:
             name, ext = os.path.splitext(safe_name)
             safe_name = name[: max_length - len(ext)] + ext
         return safe_name or "untitled"
-
     @staticmethod
     def get_temp_file(prefix: str = "temp_", suffix: str = ".tmp") -> str:
         temp_dir = ProjectPaths.TEMP_DIR

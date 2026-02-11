@@ -1,7 +1,5 @@
 """Command execution strategies for GUI jobs."""
-
 from __future__ import annotations
-
 import asyncio
 import os
 import selectors
@@ -9,16 +7,11 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Mapping, Protocol
-
 from app.gui.core.settings import GuiSettings
 from app.gui.jobs.registry import Command
-
-
 class LogWriter(Protocol):
-    async def write_event(self, payload: Mapping[str, Any]) -> None:  # pragma: no cover - protocol definition
+    async def write_event(self, payload: Mapping[str, Any]) -> None:
         ...
-
-
 def _read_streams(
     process: subprocess.Popen[str],
     writer: Callable[[Mapping[str, Any]], None],
@@ -33,7 +26,6 @@ def _read_streams(
             streams.pop(name)
             continue
         selector.register(stream, selectors.EVENT_READ, name)
-
     while selector.get_map():
         for key, _ in selector.select():
             stream_name = key.data
@@ -49,8 +41,6 @@ def _read_streams(
             else:
                 selector.unregister(stream)
                 stream.close()
-
-
 def _spawn_process_blocking(
     command: Iterable[str],
     *,
@@ -75,8 +65,6 @@ def _spawn_process_blocking(
             process.stdout.close()
         if process.stderr:
             process.stderr.close()
-
-
 async def _run_subprocess(
     command: Iterable[str],
     *,
@@ -85,11 +73,9 @@ async def _run_subprocess(
     writer: LogWriter,
 ) -> int:
     loop = asyncio.get_running_loop()
-
     def emit(payload: Mapping[str, Any]) -> None:
         future = asyncio.run_coroutine_threadsafe(writer.write_event(dict(payload)), loop)
         future.result()
-
     return await asyncio.to_thread(
         _spawn_process_blocking,
         command,
@@ -97,15 +83,11 @@ async def _run_subprocess(
         env=env,
         writer=emit,
     )
-
-
 def _resolve_cwd(command: Command) -> Path | None:
     if not command.working_directory:
         return None
     path = Path(command.working_directory)
     return path if path.is_absolute() else Path.cwd() / path
-
-
 async def run_python_module(
     *,
     command: Command,
@@ -122,8 +104,6 @@ async def run_python_module(
     executable = sys.executable
     cmd = [executable, "-m", module, *args]
     return await _run_subprocess(cmd, cwd=_resolve_cwd(command), env=os.environ.copy(), writer=writer)
-
-
 async def run_process(
     *,
     command: Command,
@@ -138,14 +118,10 @@ async def run_process(
         rendered = [*rendered, "--verbose"]
     env = os.environ.copy()
     return await _run_subprocess(rendered, cwd=_resolve_cwd(command), env=env, writer=writer)
-
-
 RUNNERS: Dict[str, callable] = {
     "python_module": run_python_module,
     "process": run_process,
 }
-
-
 async def execute_command(*, command: Command, params: Mapping[str, str], settings: GuiSettings, writer) -> int:
     runner = RUNNERS.get(command.runner)
     if not runner:

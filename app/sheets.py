@@ -9,14 +9,11 @@ from googleapiclient.errors import HttpError
 from app.config_prompts.settings import settings
 from app.prompts import get_sheet_prompt_defaults
 logger = logging.getLogger(__name__)
-
 class SheetsManager:
-
     def __init__(self):
         self.service = None
         self.sheet_id = settings.google_sheet_id
         self._connect()
-
     def _connect(self):
         try:
             creds_dict = settings.google_credentials_json
@@ -31,7 +28,6 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Failed to connect to Google Sheets: {e}')
             self.service = None
-
     def _rate_limit_retry(self, func, *args, **kwargs):
         import random
         import time
@@ -58,7 +54,6 @@ class SheetsManager:
                     continue
                 raise
         return None
-
     def create_run(self, mode: str='daily') -> str:
         if not self.service:
             logger.warning('Sheets service not available, returning dummy run_id')
@@ -73,7 +68,6 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Failed to create run: {e}')
             raise
-
     def update_run(self, run_id: str, **fields) -> bool:
         if not self.service:
             logger.debug(f'Sheets service unavailable, skipping update for run {run_id}')
@@ -119,7 +113,6 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Failed to update run {run_id}: {e}')
             return False
-
     def load_prompts(self, mode: str='daily') -> Dict[str, str]:
         prompt_manager = settings.prompt_manager
         if not self.service:
@@ -134,6 +127,7 @@ class SheetsManager:
         try:
             result = self._rate_limit_retry(self.service.spreadsheets().values().get, spreadsheetId=self.sheet_id, range='prompts!A1:E10').execute()
             rows = result.get('values', [])
+            logger.info(f"Loaded {len(rows)} rows from prompts sheet: {rows}")
             if len(rows) >= 2:
                 headers = rows[0]
                 mode_row_index = self._find_mode_row(rows, mode)
@@ -166,7 +160,6 @@ class SheetsManager:
                     return cached_prompts
             logger.warning('No cache available, returning default prompts')
             return self._get_default_prompts()
-
     def _find_mode_row(self, rows: List[List[str]], mode: str) -> Optional[int]:
         mode_column_index = 0
         for i, row in enumerate(rows[1:], start=1):
@@ -174,7 +167,6 @@ class SheetsManager:
                 logger.info(f"Found mode-specific prompts for '{mode}' at row {i + 1}")
                 return i
         return None
-
     def update_prompt(self, prompt_name: str, prompt_content: str, mode: str='daily') -> bool:
         if not self.service:
             logger.warning('Sheets service not available')
@@ -209,11 +201,9 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Failed to update prompt: {e}')
             return False
-
     def record_prompt_used(self, run_id: str, prompt_name: str, prompt_content: str) -> bool:
         field_name = prompt_name
         return self.update_run(run_id, **{field_name: prompt_content})
-
     def get_prompt_analytics(self) -> Dict[str, Any]:
         if not self.service:
             logger.warning('Sheets service not available')
@@ -236,7 +226,6 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Failed to get prompt analytics: {e}')
             return {}
-
     def create_prompt_version(self, prompt_name: str, version_note: str='') -> bool:
         if not self.service:
             logger.warning('Sheets service not available')
@@ -259,10 +248,8 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Failed to create prompt version: {e}')
             return False
-
     def _get_default_prompts(self) -> Dict[str, str]:
         return get_sheet_prompt_defaults()
-
     def get_recent_runs(self, limit: int=10) -> List[Dict[str, Any]]:
         try:
             result = self._rate_limit_retry(self.service.spreadsheets().values().get, spreadsheetId=self.sheet_id, range='runs!A:S').execute()
@@ -284,7 +271,6 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Failed to get recent runs: {e}')
             return []
-
     def setup_sheets(self) -> bool:
         try:
             spreadsheet = self._rate_limit_retry(self.service.spreadsheets().get, spreadsheetId=self.sheet_id).execute()
@@ -298,7 +284,6 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Failed to setup sheets: {e}')
             return False
-
     def _create_sheet(self, sheet_name: str, headers: List[str]):
         request_body = {'requests': [{'addSheet': {'properties': {'title': sheet_name}}}]}
         self._rate_limit_retry(self.service.spreadsheets().batchUpdate, spreadsheetId=self.sheet_id, body=request_body).execute()
@@ -306,7 +291,6 @@ class SheetsManager:
         if sheet_name == 'prompts':
             self._initialize_default_prompt_modes()
         logger.info(f"Created sheet '{sheet_name}' with headers")
-
     def _initialize_default_prompt_modes(self):
         try:
             default_prompts = self._get_default_prompts()
@@ -316,24 +300,20 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Failed to initialize default prompt modes: {e}')
 sheets_manager = SheetsManager() if settings.google_sheet_id else None
-
 def get_sheets() -> Optional[SheetsManager]:
     return sheets_manager
-
 def create_run(mode: str='daily') -> str:
     if sheets_manager:
         return sheets_manager.create_run(mode)
     else:
         import time
         return f'fallback_{int(time.time())}'
-
 def update_run(run_id: str, **fields) -> bool:
     if sheets_manager:
         return sheets_manager.update_run(run_id, **fields)
     else:
         logger.warning(f'Sheets not available, skipping update for {run_id}')
         return False
-
 def load_prompts(mode: str='daily') -> Dict[str, str]:
     if sheets_manager:
         return sheets_manager.load_prompts(mode)

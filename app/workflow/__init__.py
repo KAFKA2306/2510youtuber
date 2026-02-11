@@ -1,5 +1,4 @@
 """Workflow step abstraction for YouTube video generation pipeline."""
-
 from .base import StepResult, WorkflowContext, WorkflowStep
 from .failure import FailureBus, WorkflowFailureEvent
 from .ports import NewsCollectionPort, SyncNewsCollectionAdapter
@@ -18,7 +17,6 @@ from .steps import (
     UploadToDriveStep,
     UploadToYouTubeStep,
 )
-
 __all__ = [
     "WorkflowContext",
     "WorkflowStep",

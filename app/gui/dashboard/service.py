@@ -1,18 +1,13 @@
 """Data aggregation helpers for the dashboard endpoints."""
-
 from __future__ import annotations
-
 import csv
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Iterator, List, Optional
-
 from pydantic import ValidationError
-
 from app.models.workflow import WorkflowResult
-
 from .models import (
     ArtifactKind,
     DashboardMetrics,
@@ -22,16 +17,12 @@ from .models import (
     RunArtifacts,
     RunMetrics,
 )
-
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
 TEXT_EXTENSIONS = {".txt", ".md", ".json", ".yaml", ".yml", ".srt", ".vtt"}
-
-
 @dataclass(slots=True)
 class MetadataSnapshot:
     """Subset of metadata history values used by the dashboard."""
-
     run_id: str
     timestamp: Optional[datetime]
     mode: Optional[str]
@@ -43,35 +34,27 @@ class MetadataSnapshot:
     comment_count: Optional[int]
     ctr: Optional[float]
     avg_view_duration: Optional[float]
-
-
 class DashboardService:
     """Collects artefact and QA metric information for the GUI."""
-
     def __init__(self, execution_log_path: Path, metadata_history_path: Path, *, history_limit: int = 200) -> None:
         self._execution_log_path = execution_log_path
         self._metadata_history_path = metadata_history_path
         self._history_limit = history_limit
-
     def get_artifacts(self, *, limit: int = 10) -> List[RunArtifacts]:
         """Return artefact bundles for the most recent workflow runs."""
-
         results = self._load_results(limit)
         metadata_index = {entry.run_id: entry for entry in self._load_metadata(limit=self._history_limit)}
         artefacts: List[RunArtifacts] = []
         for result in results:
             artefacts.append(self._build_run_artifacts(result, metadata_index.get(result.run_id)))
         return artefacts
-
     def get_metrics(self, *, limit: int = 20) -> DashboardMetrics:
         """Return QA metrics for recent runs along with aggregate summary."""
-
         results = self._load_results(limit)
         metadata_index = {entry.run_id: entry for entry in self._load_metadata(limit=self._history_limit)}
         runs: List[RunMetrics] = [self._build_run_metrics(result, metadata_index.get(result.run_id)) for result in results]
         summary = self._compute_summary(runs)
         return DashboardMetrics(summary=summary, runs=runs)
-
     def _load_results(self, limit: int) -> List[WorkflowResult]:
         if not self._execution_log_path.exists():
             return []
@@ -88,7 +71,6 @@ class DashboardService:
             except ValidationError:
                 continue
         return results
-
     def _load_metadata(self, *, limit: int) -> List[MetadataSnapshot]:
         if not self._metadata_history_path.exists():
             return []
@@ -115,7 +97,6 @@ class DashboardService:
                 )
             )
         return snapshots
-
     def _build_run_artifacts(self, result: WorkflowResult, metadata: MetadataSnapshot | None) -> RunArtifacts:
         created_at = metadata.timestamp if metadata else _infer_timestamp_from_run_id(result.run_id)
         title = result.title or (metadata.title if metadata else None)
@@ -161,7 +142,6 @@ class DashboardService:
                 )
                 seen_paths.add(path)
         return artefact
-
     def _build_run_metrics(self, result: WorkflowResult, metadata: MetadataSnapshot | None) -> RunMetrics:
         created_at = metadata.timestamp if metadata else _infer_timestamp_from_run_id(result.run_id)
         title = result.title or (metadata.title if metadata else None)
@@ -189,7 +169,6 @@ class DashboardService:
             metrics.ctr = metadata.ctr
             metrics.avg_view_duration = metadata.avg_view_duration
         return metrics
-
     def _compute_summary(self, runs: Iterable[RunMetrics]) -> DashboardSummary:
         runs_list = list(runs)
         total = len(runs_list)
@@ -203,8 +182,6 @@ class DashboardService:
             average_view_count=_mean(run.view_count for run in runs_list),
             average_ctr=_mean(run.ctr for run in runs_list),
         )
-
-
 def _mean(values: Iterable[Optional[float | int]]) -> Optional[float]:
     numeric_values: List[float] = []
     for value in values:
@@ -214,8 +191,6 @@ def _mean(values: Iterable[Optional[float | int]]) -> Optional[float]:
     if not numeric_values:
         return None
     return sum(numeric_values) / len(numeric_values)
-
-
 def _parse_timestamp(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
@@ -223,8 +198,6 @@ def _parse_timestamp(value: Optional[str]) -> Optional[datetime]:
         return datetime.fromisoformat(value)
     except ValueError:
         return None
-
-
 def _parse_int(value: Optional[str]) -> Optional[int]:
     if not value:
         return None
@@ -232,8 +205,6 @@ def _parse_int(value: Optional[str]) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return None
-
-
 def _parse_percentage(value: Optional[str]) -> Optional[float]:
     if not value:
         return None
@@ -242,8 +213,6 @@ def _parse_percentage(value: Optional[str]) -> Optional[float]:
         return float(cleaned)
     except ValueError:
         return None
-
-
 def _parse_duration(value: Optional[str]) -> Optional[float]:
     if not value:
         return None
@@ -254,8 +223,6 @@ def _parse_duration(value: Optional[str]) -> Optional[float]:
         return float(cleaned)
     except ValueError:
         return None
-
-
 def _infer_timestamp_from_run_id(run_id: str) -> Optional[datetime]:
     fragments = run_id.split("_")
     candidates = [fragments[-1], run_id]
@@ -266,8 +233,6 @@ def _infer_timestamp_from_run_id(run_id: str) -> Optional[datetime]:
             except ValueError:
                 continue
     return None
-
-
 def _iter_unique_files(files: Optional[Iterable[str]]) -> Iterator[str]:
     seen: set[str] = set()
     if not files:

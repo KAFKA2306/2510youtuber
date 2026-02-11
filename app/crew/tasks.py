@@ -1,29 +1,19 @@
 """CrewAI タスク定義
-
 エージェントに割り当てるタスクを設定駆動で生成
 """
-
 import logging
 from typing import Any, Dict, List, Optional
-
 from crewai import Agent, Task
-
 from app.config_prompts.settings import settings
 from app.services.script.continuity import get_continuity_prompt_snippet
 from app.services.script.validator import Script
-
 logger = logging.getLogger(__name__)
-
-
 class TaskFactory:
     """タスクファクトリー
-
     プロンプトYAMLからタスクを動的に生成
     """
-
     def __init__(self):
         self.prompt_manager = settings.prompt_manager
-
     def create_task(
         self,
         task_name: str,
@@ -36,26 +26,21 @@ class TaskFactory:
         **override_params,
     ) -> Task:
         """単一タスクを生成
-
         Args:
             task_name: タスク名（YAML内のキー）
             agent: 担当エージェント
             context_data: プロンプトに渡すデータ
             context_tasks: 依存する先行タスク
             **override_params: パラメータ上書き
-
         Returns:
             Taskインスタンス
         """
         try:
-            # YAMLタスク定義を取得
             template_task_key = prompt_task
             if template_task_key is None and task_config and "prompt_task" in task_config:
                 template_task_key = task_config["prompt_task"]
-
             task_definition: Dict[str, Any] = {}
             description_template = ""
-
             if template_task_key:
                 try:
                     task_definition = self.prompt_manager.get_task_definition(task_name, template_task_key)
@@ -68,69 +53,53 @@ class TaskFactory:
                 except KeyError:
                     logger.debug("Falling back to raw template for %s", task_name)
                     description_template = self.prompt_manager.get_prompt_template(task_name)
-
             if not description_template:
                 description_template = str(task_definition.get("description", ""))
-
             context_payload = dict(context_data or {})
             context_payload.setdefault("agent_improvement_notes", "")
             description = self.prompt_manager.render_text(description_template, context_payload)
-
             default_expected_output = str(task_definition.get("expected_output", "")) if task_definition else ""
             expected_output_override = override_params.pop("expected_output", None)
             expected_output = (
                 default_expected_output if expected_output_override is None else expected_output_override
             )
-
             combined_config: Dict[str, Any] = {}
             override_config = override_params.pop("config", None)
             if isinstance(override_config, dict):
                 combined_config.update(override_config)
             if isinstance(task_config, dict):
                 combined_config.update(task_config)
-
             task_kwargs: Dict[str, Any] = {
                 "description": description,
                 "expected_output": expected_output,
                 "agent": agent,
                 "context": context_tasks or [],
             }
-
             explicit_name = task_id or override_params.pop("name", None)
             if explicit_name:
                 task_kwargs["name"] = explicit_name
-
             if combined_config:
                 task_kwargs["config"] = combined_config
-
             task = Task(**task_kwargs, **override_params)
-
             logger.debug(f"Created task: {task_name}")
             return task
-
         except Exception as e:
             logger.error(f"Failed to create task '{task_name}': {e}")
             raise
-
-
 def create_wow_tasks(
     agents: Dict[str, Agent],
     news_items: List[Dict[str, Any]],
     improvement_notes: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Task]:
     """WOW Script Creation Crewの全タスクを生成
-
     Args:
         agents: エージェント辞書
         news_items: ニュース項目リスト
-
     Returns:
         タスク名 → Taskインスタンスの辞書
     """
     factory = TaskFactory()
     tasks = {}
-
-    # ニュース項目を文字列化
     news_summary = "\n\n".join(
         [
             f"■ {i+1}. {item.get('title', 'タイトルなし')}\n"
@@ -140,12 +109,8 @@ def create_wow_tasks(
             for i, item in enumerate(news_items)
         ]
     )
-
     continuity_prompt = get_continuity_prompt_snippet()
-
     improvement_notes = improvement_notes or {}
-
-    # Task 1: Deep News Analysis
     tasks["task1_deep_analysis"] = factory.create_task(
         task_name="analysis",
         agent=agents["deep_news_analyzer"],
@@ -157,15 +122,13 @@ def create_wow_tasks(
         task_id="task1_deep_analysis",
         task_config={"agent_key": "deep_news_analyzer"},
         prompt_task="deep_news_analysis",
-        expected_output="詳細なニュース分析結果",  # expected_outputを明示的に渡す
+        expected_output="詳細なニュース分析結果",
     )
-
-    # Task 2: Curiosity Gap Design
     tasks["task2_curiosity_gaps"] = factory.create_task(
         task_name="analysis",
         agent=agents["curiosity_gap_researcher"],
         context_data={
-            "deep_analysis_result": "{{ task1_deep_analysis.output }}",  # CrewAIのタスク出力参照形式
+            "deep_analysis_result": "{{ task1_deep_analysis.output }}",
             "continuity_prompt": continuity_prompt,
             "agent_improvement_notes": improvement_notes.get("curiosity_gap_researcher", ""),
         },
@@ -175,8 +138,6 @@ def create_wow_tasks(
         prompt_task="curiosity_gap_design",
         expected_output="視聴者の好奇心を刺激するギャップのリスト",
     )
-
-    # Task 3: Emotional Story Arc Design
     tasks["task3_story_arc"] = factory.create_task(
         task_name="analysis",
         agent=agents["emotional_story_architect"],
@@ -192,13 +153,11 @@ def create_wow_tasks(
         prompt_task="emotional_story_arc_design",
         expected_output="感情的なストーリーアークの設計",
     )
-
-    # Task 4: Script Writing
     tasks["task4_script_writing"] = factory.create_task(
         task_name="script_generation",
         agent=agents["script_writer"],
         context_data={
-            "surprise_points": "{{ task1_deep_analysis.output }}",  # 適切な出力に修正
+            "surprise_points": "{{ task1_deep_analysis.output }}",
             "curiosity_gaps": "{{ task2_curiosity_gaps.output }}",
             "story_arc": "{{ task3_story_arc.output }}",
             "continuity_prompt": continuity_prompt,
@@ -209,10 +168,8 @@ def create_wow_tasks(
         task_config={"agent_key": "script_writer"},
         prompt_task="script_writing",
         expected_output="Pydantic Scriptモデルに準拠したJSON形式の動画スクリプト",
-        output_pydantic=Script,  # Pydantic Scriptモデルを期待
+        output_pydantic=Script,
     )
-
-    # Task 5: Engagement Optimization
     tasks["task5_engagement"] = factory.create_task(
         task_name="quality_check",
         agent=agents["engagement_optimizer"],
@@ -227,8 +184,6 @@ def create_wow_tasks(
         prompt_task="engagement_optimization",
         expected_output="エンゲージメント最適化されたスクリプト",
     )
-
-    # Task 6: Quality Evaluation
     tasks["task6_quality"] = factory.create_task(
         task_name="quality_check",
         agent=agents["quality_guardian"],
@@ -243,8 +198,6 @@ def create_wow_tasks(
         prompt_task="quality_evaluation",
         expected_output="スクリプトの品質評価レポート",
     )
-
-    # Task 7: Japanese Purity Check
     tasks["task7_japanese"] = factory.create_task(
         task_name="quality_check",
         agent=agents["japanese_purity_polisher"],
@@ -260,6 +213,5 @@ def create_wow_tasks(
         prompt_task="japanese_purity_check",
         expected_output="日本語純度チェック結果と修正案",
     )
-
     logger.info(f"✅ Created {len(tasks)} tasks for WOW Script Creation Crew")
     return tasks

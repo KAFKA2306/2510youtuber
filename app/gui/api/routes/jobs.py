@@ -1,25 +1,16 @@
 """Job orchestration endpoints."""
-
 from __future__ import annotations
-
 from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
-
 from app.gui.api import schemas
 from app.gui.api.deps import get_job_manager, get_settings
 from app.gui.core.settings import GuiSettingsEnvelope
 from app.gui.jobs.manager import JobManager, JobResponse
-
 router = APIRouter()
-
-
 @router.get("/", response_model=schemas.JobListResponse)
 async def list_jobs(manager: JobManager = Depends(get_job_manager)) -> schemas.JobListResponse:
     jobs = [JobResponse.from_job(job) for job in await manager.list()]
     return schemas.JobListResponse(jobs=jobs)
-
-
 @router.post("/", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 async def enqueue_job(
     payload: schemas.JobCreateRequest,
@@ -33,8 +24,6 @@ async def enqueue_job(
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
     return JobResponse.from_job(job)
-
-
 @router.get("/{job_id}", response_model=JobResponse)
 async def get_job(job_id: UUID, manager: JobManager = Depends(get_job_manager)) -> JobResponse:
     try:
@@ -42,8 +31,6 @@ async def get_job(job_id: UUID, manager: JobManager = Depends(get_job_manager)) 
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return JobResponse.from_job(job)
-
-
 @router.get("/{job_id}/logs", response_model=schemas.JobLogResponse)
 async def get_job_logs(
     job_id: UUID,
@@ -56,8 +43,6 @@ async def get_job_logs(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     entries = [schemas.JobLogEntry(**entry) for entry in entries_raw]
     return schemas.JobLogResponse(entries=entries)
-
-
 @router.websocket("/{job_id}/stream")
 async def stream_job_logs(
     websocket: WebSocket,
@@ -73,6 +58,6 @@ async def stream_job_logs(
     try:
         async for event in manager.follow_logs(job_id):
             await websocket.send_json(event)
-    except WebSocketDisconnect:  # pragma: no cover - client initiated close
+    except WebSocketDisconnect:
         return
     await websocket.close()

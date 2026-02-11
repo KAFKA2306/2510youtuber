@@ -1,7 +1,5 @@
 """Asynchronous job management for the GUI backend."""
-
 from __future__ import annotations
-
 import asyncio
 import json
 import threading
@@ -11,17 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Mapping, Optional
 from uuid import UUID, uuid4
-
 from pydantic import BaseModel
-
 from app.gui.core.settings import GuiSettings
 from app.gui.jobs.registry import Command, CommandRegistry
 from app.gui.jobs.runners import execute_command
-
-
 class JobLogWriter:
     """Persists job log events to disk and notifies subscribers."""
-
     def __init__(self, job: "Job", manager: "JobManager") -> None:
         if not job.log_path:
             raise ValueError("Job log path must be defined before writing logs")
@@ -32,13 +25,10 @@ class JobLogWriter:
         self._path = job.log_path
         self._file = self._path.open("a", encoding="utf-8")
         self._closed = False
-
     async def __aenter__(self) -> "JobLogWriter":
         return self
-
-    async def __aexit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - cleanup path
+    async def __aexit__(self, exc_type, exc, tb) -> None:
         await self.close()
-
     async def write_event(self, payload: Mapping[str, Any]) -> None:
         event = {
             "job_id": str(self._job.id),
@@ -50,30 +40,24 @@ class JobLogWriter:
         self._sequence += 1
         line = json.dumps(event, ensure_ascii=False)
         async with self._lock:
-            if self._closed:  # pragma: no cover - defensive
+            if self._closed:
                 return
             self._file.write(line + "\n")
             self._file.flush()
         await self._manager._append_log_event(self._job.id, event)
-
     async def close(self) -> None:
         async with self._lock:
             if not self._closed:
                 self._file.close()
                 self._closed = True
-
-
 class JobStatus(str):
     PENDING = "pending"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
-
-
 @dataclass
 class Job:
     """Job metadata persisted in memory."""
-
     id: UUID
     command: Command
     parameters: Mapping[str, Any]
@@ -84,7 +68,6 @@ class Job:
     exit_code: Optional[int] = None
     error: Optional[str] = None
     log_path: Path | None = None
-
     def serialize(self) -> Dict[str, Any]:
         return {
             "id": str(self.id),
@@ -98,11 +81,8 @@ class Job:
             "error": self.error,
             "log_path": str(self.log_path) if self.log_path else None,
         }
-
-
 class JobResponse(BaseModel):
     """API response schema for jobs."""
-
     id: UUID
     command_id: str
     command_name: str
@@ -112,7 +92,6 @@ class JobResponse(BaseModel):
     finished_at: Optional[datetime]
     exit_code: Optional[int]
     error: Optional[str]
-
     @classmethod
     def from_job(cls, job: Job) -> "JobResponse":
         return cls(
@@ -126,11 +105,8 @@ class JobResponse(BaseModel):
             exit_code=job.exit_code,
             error=job.error,
         )
-
-
 class JobManager:
     """Registers and executes jobs asynchronously."""
-
     def __init__(self, registry: CommandRegistry, log_dir: Path) -> None:
         self._registry = registry
         self._log_dir = log_dir
@@ -144,7 +120,6 @@ class JobManager:
         self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
         self._thread.start()
         self._tasks: Dict[UUID, Future[Any]] = {}
-
     async def enqueue(
         self,
         command_id: str,
@@ -170,13 +145,12 @@ class JobManager:
             )
             self._tasks[job_id] = future
             return job
-
     async def _run(self, job: Job, *, settings: GuiSettings) -> None:
         with self._jobs_lock:
             job.status = JobStatus.RUNNING
             job.started_at = datetime.now(timezone.utc)
         log_path = job.log_path
-        assert log_path is not None  # nosec - assigned in enqueue
+        assert log_path is not None
         log_path.parent.mkdir(parents=True, exist_ok=True)
         async with JobLogWriter(job=job, manager=self) as writer:
             await writer.write_event(
@@ -193,7 +167,7 @@ class JobManager:
                     settings=settings,
                     writer=writer,
                 )
-            except Exception as exc:  # pragma: no cover - defensive
+            except Exception as exc:
                 with self._jobs_lock:
                     job.status = JobStatus.FAILED
                     job.error = str(exc)
@@ -227,18 +201,15 @@ class JobManager:
                 job.finished_at = datetime.now(timezone.utc)
         self._tasks.pop(job.id, None)
         self._schedule_notify(job.id)
-
     async def get(self, job_id: UUID) -> Job:
         with self._jobs_lock:
             job = self._jobs.get(job_id)
-        if job is None:  # pragma: no cover
+        if job is None:
             raise KeyError(f"Job '{job_id}' not found")
         return job
-
     async def list(self) -> List[Job]:
         with self._jobs_lock:
             return list(self._jobs.values())
-
     async def stream_logs(self, job_id: UUID, *, tail: Optional[int] = None) -> List[Dict[str, Any]]:
         job = await self.get(job_id)
         if not job.log_path or not job.log_path.exists():
@@ -253,7 +224,6 @@ class JobManager:
             except json.JSONDecodeError:
                 events.append({"message": line})
         return events
-
     async def follow_logs(self, job_id: UUID) -> AsyncIterator[Dict[str, Any]]:
         await self.get(job_id)
         index = 0
@@ -267,23 +237,16 @@ class JobManager:
             if job.status in {JobStatus.SUCCEEDED, JobStatus.FAILED} and index >= len(buffer_snapshot):
                 break
             await asyncio.sleep(0.05)
-
     async def _append_log_event(self, job_id: UUID, event: Dict[str, Any]) -> None:
         with self._buffer_lock:
             buffer = self._log_buffers.setdefault(job_id, [])
             buffer.append(event)
-
     def _schedule_notify(self, job_id: UUID) -> None:
         """Notify listeners that buffered logs changed.
-
         Phase 1 relies on polling `follow_logs`, so there is no dedicated
         notification mechanism yet. Keep the hook in place for future
         integration with condition variables or WebSocket push loops.
         """
-
-        # Intentionally left blank for P1 implementation.
         _ = job_id
-
-
 def get_job_manager(registry: CommandRegistry, log_dir: Path) -> JobManager:
     return JobManager(registry=registry, log_dir=log_dir)

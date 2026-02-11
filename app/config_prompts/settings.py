@@ -2,85 +2,61 @@ import json
 import os
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
-
 import yaml
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, Field
-
 from app.config.paths import ProjectPaths
-
-# .envファイルを読み込む
 load_dotenv(ProjectPaths.DOTENV_FILE)
-
-
 class PromptManager:
     """プロンプトテンプレート管理クラス"""
-
     def __init__(self, prompt_config: Dict[str, Any]):
         self.prompt_config = prompt_config
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.env = self._setup_jinja_env()
-
     def _setup_jinja_env(self):
         """Jinja2環境をセットアップ"""
         template_dirs = [
             os.path.join(self.base_dir, "prompts"),
-            os.path.join(self.base_dir, "..", "config_prompts", "prompts"),  # 既存のプロンプトディレクトリ
+            os.path.join(self.base_dir, "..", "config_prompts", "prompts"),
         ]
-        # config.yamlで指定されたディレクトリも追加
         if "directory" in self.prompt_config:
             template_dirs.append(os.path.join(self.base_dir, "..", "..", self.prompt_config["directory"]))
-
         loader = FileSystemLoader(template_dirs)
         return Environment(
             loader=loader, autoescape=select_autoescape(["html", "xml"]), trim_blocks=True, lstrip_blocks=True
         )
-
     def _resolve_template_path(self, template_name: str) -> str:
         """Resolve a configured template name to an on-disk path for Jinja2."""
-
         file_name = self.prompt_config.get("files", {}).get(template_name, f"{template_name}.yaml")
         candidate = os.path.join("prompts", file_name)
-
         for search_path in self.env.loader.searchpath:
             if os.path.exists(os.path.join(search_path, candidate)):
                 return candidate
-
         return file_name
-
     def get_prompt_template(self, template_name: str) -> str:
         """指定された名前のプロンプトテンプレートを読み込む"""
-
         template_path = self._resolve_template_path(template_name)
         source, _, _ = self.env.loader.get_source(self.env, template_path)
         return source
-
     def render_prompt(self, template_name: str, data: Dict[str, Any]) -> str:
         """プロンプトテンプレートをレンダリングする"""
-
         template_content = self.get_prompt_template(template_name)
         template = self.env.from_string(template_content)
         return template.render(**data)
-
     @lru_cache(maxsize=None)
     def _load_yaml_template(self, template_name: str) -> Dict[str, Any]:
         """Load a YAML template file as a dictionary for structured access."""
-
         template_content = self.get_prompt_template(template_name)
         loaded = yaml.safe_load(template_content)
         if not isinstance(loaded, dict):
             return {}
         return loaded
-
     def load_structured_template(self, template_name: str) -> Dict[str, Any]:
         """Public wrapper for retrieving structured prompt templates as dictionaries."""
-
         return self._load_yaml_template(template_name)
-
     def get_task_definition(self, template_name: str, task_key: str) -> Dict[str, Any]:
         """Return the task block for the given key within a template."""
-
         template_data = self._load_yaml_template(template_name)
         tasks = template_data.get("tasks") if isinstance(template_data, dict) else None
         if not isinstance(tasks, dict) or task_key not in tasks:
@@ -90,127 +66,79 @@ class PromptManager:
             )
         task_definition = tasks[task_key]
         return task_definition if isinstance(task_definition, dict) else {}
-
     def render_text(self, template_text: str, data: Dict[str, Any]) -> str:
         """Render a raw text snippet using the prompt environment."""
-
         template = self.env.from_string(template_text or "")
         return template.render(**data)
-
-
 class SpeakerConfig(BaseModel):
     """話者設定"""
-
     name: str
     role: str
     voice_id: Optional[str] = "default"
     stability: float = 0.5
     speaking_style: str
-
-
 class VideoConfig(BaseModel):
     """動画設定"""
-
     resolution: tuple[int, int] = (1920, 1080)
     quality_preset: str = "high"
     max_duration_minutes: int = 40
-
-
 class QualityThresholds(BaseModel):
     """品質基準"""
-
     wow_score_min: float = 8.0
     retention_prediction_min: float = 50.0
     surprise_points_min: int = 5
     emotion_peaks_min: int = 5
-
-
 class CrewConfig(BaseModel):
     """CrewAI設定"""
-
     enabled: bool = True
     max_quality_iterations: int = 2
     parallel_analysis: bool = True
     verbose: bool = False
-
-
 class ScriptGenerationConfig(BaseModel):
     """Script generation feature toggles."""
-
     quality_gate_llm_enabled: bool = True
-
-
 class AppSettings(BaseModel):
     """アプリケーション統合設定"""
-
     model_config = {"arbitrary_types_allowed": True}
-
-    # API設定
     api_keys: Dict[str, str]
-
-    # 話者設定
     speakers: List[SpeakerConfig]
-
-    # 動画設定
     video: VideoConfig
-
-    # 品質基準
     quality: QualityThresholds
-
-    # CrewAI設定
     crew: CrewConfig
-
     use_crewai_script_generation: bool = True
     use_three_stage_quality_check: bool = True
     script_generation: ScriptGenerationConfig = Field(default_factory=ScriptGenerationConfig)
     max_video_duration_minutes: int = 15
     discord_webhook_url: Optional[str] = None
-    google_credentials_json: Optional[Dict[str, Any]] = None  # Google Sheets認証情報
-    google_sheet_id: Optional[str] = None  # Google Sheet ID
-
-    # プロンプトマネージャーインスタンス
+    google_credentials_json: Optional[Dict[str, Any]] = None
+    google_sheet_id: Optional[str] = None
     prompt_manager: PromptManager
-
     @classmethod
     def load(cls) -> "AppSettings":
         """環境変数 + YAMLから設定を読み込み"""
         config_path = ProjectPaths.CONFIG_YAML
         with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
-
         api_keys = {
             "gemini": os.getenv("GEMINI_API_KEY") or "",
             "elevenlabs": os.getenv("ELEVENLABS_API_KEY") or "",
             "youtube": os.getenv("YOUTUBE_CLIENT_SECRET") or "",
         }
-
         config["api_keys"] = api_keys
-
-        # Handle speakers voice_id_env
         for speaker in config.get("speakers", []):
             if "voice_id_env" in speaker:
                 env_var_name = speaker["voice_id_env"]
                 speaker["voice_id"] = os.getenv(env_var_name)
                 del speaker["voice_id_env"]
-
-        # Handle video resolution
         if "video" in config and "resolution" in config["video"]:
             res = config["video"]["resolution"]
             if isinstance(res, dict) and "width" in res and "height" in res:
                 config["video"]["resolution"] = (res["width"], res["height"])
-
-        # Map quality_thresholds to quality
         if "quality_thresholds" in config:
             config["quality"] = config["quality_thresholds"]
             del config["quality_thresholds"]
-
-        # Add discord_webhook_url from environment variable
         config["discord_webhook_url"] = os.getenv("DISCORD_WEBHOOK_URL")
-
-        # Add google_sheet_id from environment variable
         config["google_sheet_id"] = os.getenv("GOOGLE_SHEET_ID")
-
-        # Google Credentials JSON
         google_creds_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         if google_creds_env:
             google_creds_env = google_creds_env.strip()
@@ -218,23 +146,18 @@ class AppSettings(BaseModel):
                 try:
                     config["google_credentials_json"] = json.loads(google_creds_env)
                 except json.JSONDecodeError:
-                    pass  # Invalid JSON, will be handled by Pydantic if field is not Optional
+                    pass
             else:
                 resolved = ProjectPaths.resolve_relative(google_creds_env)
                 if resolved.exists():
                     with open(resolved, "r", encoding="utf-8") as f:
                         config["google_credentials_json"] = json.load(f)
-
         if "google_credentials_json" not in config or not config["google_credentials_json"]:
             default_creds = ProjectPaths.resolve_google_credentials(None)
             if default_creds and default_creds.exists():
                 with open(default_creds, "r", encoding="utf-8") as f:
                     config["google_credentials_json"] = json.load(f)
-
-        # PromptManagerのインスタンスを生成
         config["prompt_manager"] = PromptManager(config.get("prompts", {}))
-
-        # For compatibility with old cfg object
         config["use_crewai_script_generation"] = config.get("crew", {}).get("enabled", True)
         config["use_three_stage_quality_check"] = not config.get("crew", {}).get("enabled", True)
         if "script_generation" in config:
@@ -242,9 +165,5 @@ class AppSettings(BaseModel):
         else:
             config["script_generation"] = ScriptGenerationConfig()
         config["max_video_duration_minutes"] = config.get("video", {}).get("max_duration_minutes", 15)
-
         return cls(**config)
-
-
-# グローバル設定インスタンス
 settings = AppSettings.load()

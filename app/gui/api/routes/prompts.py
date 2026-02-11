@@ -1,23 +1,15 @@
 """Routes for prompt management in the GUI backend."""
-
 from __future__ import annotations
-
 from fastapi import APIRouter, Depends, HTTPException, status
-
 from app.gui.api import deps, schemas
 from app.gui.prompts.repository import PromptRepository
-
 router = APIRouter()
-
-
 @router.get("/", response_model=list[schemas.PromptSummarySchema])
 async def list_prompts(
     repository: PromptRepository = Depends(deps.get_prompt_repository),
 ) -> list[schemas.PromptSummarySchema]:
     prompts = repository.list_prompts()
     return [schemas.PromptSummarySchema.from_model(prompt) for prompt in prompts]
-
-
 @router.get("/{prompt_id}", response_model=schemas.PromptDetailResponse)
 async def get_prompt(
     prompt_id: str,
@@ -27,7 +19,6 @@ async def get_prompt(
         prompt = repository.get_prompt(prompt_id)
     except KeyError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-
     versions = repository.list_versions(prompt_id)
     version_summaries = [schemas.PromptVersionSchema.from_model(version) for version in versions]
     latest_version_detail = None
@@ -35,14 +26,11 @@ async def get_prompt(
         latest_version = versions[0]
         content = repository.load_content(latest_version)
         latest_version_detail = schemas.PromptVersionDetailSchema.from_model(latest_version, content)
-
     return schemas.PromptDetailResponse(
         prompt=schemas.PromptSummarySchema.from_model(prompt),
         latest_version=latest_version_detail,
         versions=version_summaries,
     )
-
-
 @router.get(
     "/{prompt_id}/versions",
     response_model=list[schemas.PromptVersionSchema],
@@ -57,8 +45,6 @@ async def list_versions(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     versions = repository.list_versions(prompt_id)
     return [schemas.PromptVersionSchema.from_model(version) for version in versions]
-
-
 @router.get(
     "/{prompt_id}/versions/{version}",
     response_model=schemas.PromptVersionDetailSchema,
@@ -74,8 +60,6 @@ async def get_version(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     content = repository.load_content(prompt_version)
     return schemas.PromptVersionDetailSchema.from_model(prompt_version, content)
-
-
 @router.post(
     "/{prompt_id}/versions",
     response_model=schemas.PromptVersionDetailSchema,

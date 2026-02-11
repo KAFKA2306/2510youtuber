@@ -1,0 +1,284 @@
+companies:
+- company_name: 三菱重工業
+  stock_code: 7011
+  company_scale: 売上高4～5兆円
+  financial_indicators:
+    description: 直近5年間の売上高と利益
+    fiscal_years:
+    - year: 2019年度(FY2019)
+      revenue: 約4.08兆円
+      operating_profit: 約2,308億円
+      ordinary_profit: 約1,911億円
+      net_profit: 約1,103億円
+    - year: 2020年度
+      revenue: 約4.04兆円
+      operating_profit: 約1,262億円
+      ordinary_profit: ▲326億円(赤字転落)
+      net_profit: 約871億円
+    - year: 2021年度
+      revenue: 約3.70兆円
+      operating_profit: 約521億円
+      ordinary_profit: 約493億円
+      net_profit: 約406億円
+    - year: 2022年度
+      revenue: 約3.86兆円
+      operating_profit: 約992億円
+      ordinary_profit: 約1,736億円
+      net_profit: 約1,135億円
+    - year: 2023年度
+      revenue: 約4.20兆円
+      operating_profit: 約1,414億円
+      ordinary_profit: 約1,911億円
+      net_profit: 約1,305億円
+    notes: 2021年度には経常赤字から黒字に転換し、2023年度まで増収増益基調が続いています。
+  order_backlog:
+    description: 重工業の大型案件受注により受注高が増加傾向にあります。
+    details:
+    - 2023年度は受注高6兆6,840億円(前年度比+49%)と大幅に増加
+    - 2024年度も7兆円超を記録
+    - 受注残高も積み上がっており(公式発表値はありませんが、受注残は過去最高水準とみられます)
+  trading_volume:
+    description: 同社株の取引量は近年増加傾向です。
+    recent_average: 直近3か月の1日平均出来高は約5,149万株
+    trends:
+    - 2025年には業績上方修正や防衛関連期待で出来高が急増する場面も見られました(例えば2025年10月6日には約8,033万株の売買高)
+    - 2019~2021年頃は1日数百万株規模でしたが、2023年前後から数千万株規模の出来高が常態化しています
+- company_name: IHI
+  stock_code: 7013
+  company_scale: 売上高1～1.6兆円
+  financial_indicators:
+    description: 2019年度に業績悪化で赤字に陥った後、2020~2022年度は回復傾向、しかし2023年度に再び大幅赤字となりました。
+    fiscal_years:
+    - year: 2019年度
+      revenue: 約1.48兆円
+      operating_profit: 約168億円(営業損失)
+      ordinary_profit: 約308億円(経常損失)
+      notes: 大幅赤字
+    - year: 2020年度
+      revenue: 約1.39兆円
+      operating_profit: 約280億円
+      ordinary_profit: 約135億円
+      notes: 黒字回復
+    - year: 2021年度
+      revenue: 約1.17兆円
+      operating_profit: 約815億円
+      ordinary_profit: 約726億円
+      net_profit: 約660億円
+    - year: 2022年度
+      revenue: 約1.35兆円
+      operating_profit: 約820億円
+      ordinary_profit: 約649億円
+      net_profit: 約445億円
+      notes: 堅調
+    - year: 2023年度
+      revenue: 約1.32兆円
+      operating_profit: 約701億円(営業損失)
+      ordinary_profit: 約723億円(経常損失)
+      net_profit: 約682億円(純損失)
+      notes: 民間航空エンジン事業の減速等で大赤字に転落
+    - year: 2024年度
+      revenue: 約1.63兆円
+      operating_profit: 1,435億円
+      net_profit: 1,127億円
+      notes: 過去最高水準の黒字
+  order_backlog:
+    description: 主力の航空・宇宙・防衛事業などで受注が拡大しています。
+    details:
+    - 2023年度通期の受注高は前期比+27.2%の1兆7,511億円
+    - 期末連結受注残高も前年を大きく上回りました
+    - 航空エンジンや防衛向けでは、2025年3月期決算時点で同セグメントの受注残高が6,059億円(前年末比+1,549億円)
+    - 大型案件の増加により、全社の受注残高も増勢に転じています
+  trading_volume:
+    description: IHI株の出来高は2020年前後までは1日あたり数百万株規模でしたが、直近では取引活発化により増加しています。
+    recent_average: 直近3か月の平均日次出来高は約521万株
+    trends:
+    - 防衛予算拡大期待など材料が出た2025年には一時的に出来高が4,000万株近くまで膨らむ日もありました
+    - 2023年前後からは概ね数百万~1,000万株超のレンジで推移しており、以前に比べ流動性が高まっています
+- company_name: 日立製作所
+  stock_code: 6501
+  company_scale: 売上高9～10兆円
+  financial_indicators:
+    description: 日立は近年10兆円規模の売上を維持しつつ利益体質を改善しています。
+    fiscal_years:
+    - year: 2021年3月期(FY2020)
+      revenue: 約8兆7,292億円
+      operating_profit: 4,952億円
+      ordinary_profit: 8,444億円
+      net_profit: 5,016億円
+    - year: 2022年3月期
+      revenue: 約10兆2,646億円
+      operating_profit: 7,382億円
+      ordinary_profit: 8,393億円
+      net_profit: 5,834億円
+    - year: 2023年3月期
+      revenue: 約10兆8,811億円
+      operating_profit: 7,481億円
+      ordinary_profit: 8,200億円
+      net_profit: 6,491億円
+    - year: 2024年3月期
+      revenue: 約9兆7,287億円
+      operating_profit: 7,558億円
+      ordinary_profit: 8,258億円
+      net_profit: 5,899億円
+    - year: 2025年3月期
+      revenue: 約9兆7,834億円
+      operating_profit: 9,716億円
+      ordinary_profit: 9,627億円
+      net_profit: 6,157億円
+      notes: 増益を達成
+    notes: 社内構造改革やグローバル事業売却の影響で2024年度に減収となりましたが、利益率は改善傾向にあります。
+  order_backlog:
+    description: 日立はIT・エネルギー・インフラ等幅広い事業を持つため、特定の「受注残高」を一括開示していません。
+    details:
+    - システム事業などでは安定的な受注を確保しており、社会イノベーション事業の好調により各事業部門で堅調な受注残を維持しています
+    - 大型案件としては、グリッド(送配電)や鉄道システム分野で近年海外からの受注獲得が相次ぎ、これらが売上に貢献する見通しです
+    - 総じて、受注は概ね売上と同程度の水準で推移し、今後も安定成長が見込まれます
+  trading_volume:
+    description: 日立株は安定した流動性があり、平均出来高は近年1,000万~2,000万株前後で推移しています。
+    recent_average: 直近3か月の平均日次出来高は約1,497.8万株
+    trends:
+    - 市場の関心が高まった局面では出来高が増え、例えばOpenAIとの協業報道があった2025年10月上旬には一時3,000万株近い取引高を記録しました
+    - 株価が上昇した2023年夏頃には出来高ランキング上位に入る日もあり、平時でも1,000万株超の出来高を維持しています
+- company_name: J-POWER(電源開発)
+  stock_code: 9513
+  company_scale: 売上高0.9～1.8兆円
+  financial_indicators:
+    description: 電源開発は電力卸供給事業が主体で、燃料市況に業績が左右されます。直近5期は業績の振れ幅が大きく、2023年度に売上急増・利益急伸した後、2024年度は反動減となりました。
+    fiscal_years:
+    - year: 2021年3月期
+      revenue: 約9,091億円
+      operating_profit: 778億円
+      ordinary_profit: 609億円
+      net_profit: 223億円
+      notes: 燃料安で低調
+    - year: 2022年3月期
+      revenue: 約1兆844億円
+      operating_profit: 870億円
+      ordinary_profit: 728億円
+      net_profit: 697億円
+      notes: 増収増益
+    - year: 2023年3月期
+      revenue: 1兆8,419億円(前期比+69.8%)
+      operating_profit: 1,838億円
+      ordinary_profit: 1,707億円
+      net_profit: 1,136億円
+      notes: 燃料価格高騰の影響で過去最高の収益を計上
+    - year: 2024年3月期
+      revenue: 1兆2,580億円(▲31.7%)
+      operating_profit: 1,057億円
+      ordinary_profit: 1,185億円
+      net_profit: 778億円
+      notes: 燃料価格落ち着きで大幅減収減益
+    - year: 2025年3月期
+      revenue: 1兆3,167億円
+      operating_profit: 1,383億円
+      net_profit: 924億円
+      notes: やや持ち直し
+  order_backlog:
+    description: 電源開発は自社発電所からの電力販売が収益源であり、一般の製造業のような「受注高」指標は用いていません。
+    details:
+    - 電力卸契約については長期固定が多く、新規案件としては海外発電プロジェクト(例:タイやインドネシアの発電所建設・運営)を受注しています
+    - 海外事業の受注残高は連結売上の一部に留まりますが、国内外で安定した電力販売契約(長期PPA)を多数抱えている点が特徴です
+    - 総じて、受注残という概念は薄く、電力需要と市場価格に応じた売上推移となっています
+  trading_volume:
+    description: J-POWER株の出来高はプライム市場上位企業に比べると少なめ
+    recent_average: 直近3か月の平均日次出来高は約73.6万株
+    trends:
+    - 通常は一日数十万~数百万株の取引規模で推移
+    - 2022~2023年はエネルギー価格高騰を背景に出来高も増える傾向
+    - 直近では燃料市況が落ち着いたこともあり、出来高は数十万株程度の水準に落ち着いています
+    - 大型の材料(規制緩和や増配など)が出た場合には出来高が一時的に増加する可能性がありますが、流動性は他の同規模企業と同程度です
+- company_name: 東芝
+  stock_code: 6502
+  company_scale: 売上高3.3～3.7兆円
+  financial_indicators:
+    description: 東芝は2023年に株式非公開化されましたが、公開企業だった直近数年の業績
+    fiscal_years:
+    - year: 2019年3月期
+      revenue: 約3兆6,935億円
+      operating_profit: 354億円
+      ordinary_profit: 109億円
+      net_profit: 約1兆132億円
+      notes: メモリ事業売却の特益計上でメモリ売却益により巨額黒字
+    - year: 2020年3月期
+      revenue: 約3兆3,899億円
+      operating_profit: 1,304億円
+      ordinary_profit: ▲475億円(減損等で経常赤字)
+      net_profit: 純損失1,146億円
+    - year: 2021年3月期
+      revenue: 約3兆543億円
+      operating_profit: 1,044億円
+      ordinary_profit: 1,534億円
+      net_profit: 1,139億円
+      notes: 黒字回復
+    - year: 2022年3月期
+      revenue: 約3兆3,370億円
+      operating_profit: 1,589億円
+      ordinary_profit: 2,391億円
+      net_profit: 1,946億円
+      notes: 増収増益
+    - year: 2023年3月期
+      revenue: 約3兆3,617億円
+      operating_profit: 1,105億円
+      ordinary_profit: 1,889億円
+      net_profit: 1,265億円
+    notes: メモリ売却益の特別要因を除けば安定した利益水準でしたが、構造改革の遅れもあり売上は横ばい傾向でした。
+  order_backlog:
+    description: 東芝は多角的事業ポートフォリオを持ち、単一の受注高統計はありません。
+    details:
+    - 社会インフラ・エネルギー・デバイス各分野でそれぞれ受注活動を行っています
+    - エネルギーシステム(原子力・送配電など)やインフラシステム(鉄道・産業機器など)では堅調な受注を維持し、一部大型案件(鉄道システム輸出や発電設備更新工事など)を受注残高として抱えていました
+    - 全社合算の受注残高は非公表であり、2023年の非公開化に伴い以後も詳細な開示は行われていません
+  trading_volume:
+    description: 東芝株は2023年のTOB(株式公開買付け)に向けた動きで出来高が急増しました。
+    trends:
+    - 平常時は一日あたり数百万株規模でしたが、2023年上期には買収観測を背景に出来高が急増し、一時は出来高ランキング上位の常連となりました(東芝TOB発表前後には日々数千万株の売買)
+    - 買収合意直前の2023年8月上旬には出来高が5000万株前後に達した日もあります
+    - TOB成立後の2023年末に東芝株は上場廃止となったため、現在は市場で取引されていませんが、公開買付け前の出来高増加は特筆されます
+- company_name: ダイキン工業
+  stock_code: 6367
+  company_scale: 売上高2.5～4.7兆円
+  financial_indicators:
+    description: 空調大手のダイキンはグローバル需要拡大で売上・利益とも着実に成長しています。
+    fiscal_years:
+    - year: 2021年3月期
+      revenue: 約2兆4,934億円
+      operating_profit: 2,386億円
+      ordinary_profit: 2,402億円
+      net_profit: 1,562億円
+    - year: 2022年3月期
+      revenue: 約3兆1,091億円
+      operating_profit: 3,164億円
+      ordinary_profit: 3,275億円
+      net_profit: 2,177億円
+    - year: 2023年3月期
+      revenue: 約3兆9,816億円
+      operating_profit: 3,770億円
+      ordinary_profit: 3,662億円
+      net_profit: 2,578億円
+    - year: 2024年3月期
+      revenue: 約4兆3,953億円
+      operating_profit: 3,921億円
+      ordinary_profit: 3,545億円
+      net_profit: 2,603億円
+    - year: 2025年3月期
+      revenue: 約4兆7,523億円
+      operating_profit: 4,017億円
+      ordinary_profit: 3,664億円
+      net_profit: 2,648億円
+      notes: 過去最高を更新
+    notes: グローバルでの空調需要増加と値上げ効果により、この5年間で売上規模が約2倍に拡大しています。
+  order_backlog:
+    description: ダイキンは空調機器の製造販売が主であり、一般的な受注残高は大きくありません。
+    details:
+    - 製品は在庫販売が中心で受注生産比率は低めです
+    - 工事計装など一部を除き受注高の開示も行っていません
+    - グローバル販売網での販売計画に基づき生産を増強しており、実質的に需要に沿った出荷(販売見込み)が堅調に推移しています
+    - 大口プロジェクト案件は少ないものの、家庭用から産業用まで幅広い空調ニーズを背景に販売は順調で、結果として売上高の成長につながっています
+  trading_volume:
+    description: ダイキン株の出来高は比較的安定しています
+    recent_average: 直近3か月の平均日次出来高は約116万株
+    trends:
+    - 株価水準(現在1株数万円台)が高いため売買代金は大きいものの、株式数は分散しており日々の出来高は数十万~200万株程度で推移します
+    - 2020年頃は1日50万株前後でしたが、近年は株価上昇とともに出来高も増加傾向で、平均100万株超の水準となっています
+    - 市場の注目度が上がった局面(例えば業績上方修正時など)では出来高が200万株を超えることもありますが、基本的には安定した流動性を維持しています

@@ -1,11 +1,8 @@
 """動画レビューAIサービス
-
 生成済み・投稿済み動画を1分ごとのスクリーンショットで分析し、
 次の動画制作に活かすフィードバックを生成する。
 """
-
 from __future__ import annotations
-
 import json
 import logging
 import math
@@ -14,10 +11,8 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
-
 import ffmpeg
 import google.generativeai as genai
-
 from app.api_rotation import get_rotation_manager
 from app.config.settings import settings
 from app.llm_logging import llm_logging_context, record_llm_interaction
@@ -28,20 +23,13 @@ from app.models.video_review import (
 )
 from app.utils import FileUtils
 from app.video_feedback import get_feedback_collector
-
 logger = logging.getLogger(__name__)
-
-
 class ScreenshotExtractionError(Exception):
     """スクリーンショット抽出に失敗したときの例外"""
-
-
 class VideoScreenshotExtractor:
     """FFmpegを用いた動画スクリーンショット抽出ユーティリティ"""
-
     def __init__(self, ffmpeg_path: Optional[str] = None):
         self.ffmpeg_path = ffmpeg_path or settings.ffmpeg_path
-
     def extract(
         self,
         video_path: str,
@@ -57,13 +45,10 @@ class VideoScreenshotExtractor:
             raise ValueError("max_screenshots must be positive")
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video not found: {video_path}")
-
         FileUtils.ensure_directory(output_dir)
-
         existing = sorted(Path(output_dir).glob("*.png"))
         duration = self._get_video_duration(video_path)
         expected_count = max(1, min(max_screenshots, math.ceil(duration / interval_seconds)))
-
         if existing and not force:
             logger.info(
                 "Reusing %d existing screenshots in %s (expected %d)",
@@ -72,13 +57,11 @@ class VideoScreenshotExtractor:
                 expected_count,
             )
             return self._build_metadata(existing[:expected_count], interval_seconds, duration)
-
         for png in existing:
             try:
                 png.unlink()
             except OSError:
                 logger.debug("Failed to remove old screenshot: %s", png)
-
         output_pattern = os.path.join(output_dir, "shot_%03d.png")
         logger.info(
             "Extracting screenshots from %s every %ss (max %d) into %s",
@@ -87,7 +70,6 @@ class VideoScreenshotExtractor:
             max_screenshots,
             output_dir,
         )
-
         try:
             (
                 ffmpeg.input(video_path)
@@ -99,16 +81,13 @@ class VideoScreenshotExtractor:
                 )
                 .overwrite_output()
             ).run(cmd=[self.ffmpeg_path], quiet=True)
-        except ffmpeg.Error as exc:  # type: ignore[attr-defined]
+        except ffmpeg.Error as exc:
             logger.error("FFmpeg error during screenshot extraction: %s", exc)
             raise ScreenshotExtractionError(str(exc)) from exc
-
         generated = sorted(Path(output_dir).glob("shot_*.png"))
         if not generated:
             raise ScreenshotExtractionError("No screenshots were generated")
-
         return self._build_metadata(generated[:expected_count], interval_seconds, duration)
-
     def _get_video_duration(self, video_path: str) -> float:
         try:
             probe = ffmpeg.probe(video_path)
@@ -118,10 +97,9 @@ class VideoScreenshotExtractor:
             return float(probe.get("format", {}).get("duration", 0.0))
         except FileNotFoundError:
             return self._probe_duration_with_ffmpeg(video_path)
-        except ffmpeg.Error as exc:  # type: ignore[attr-defined]
+        except ffmpeg.Error as exc:
             logger.warning("Failed to probe video duration: %s", exc)
             return self._probe_duration_with_ffmpeg(video_path)
-
     def _probe_duration_with_ffmpeg(self, video_path: str) -> float:
         try:
             result = subprocess.run(
@@ -134,17 +112,14 @@ class VideoScreenshotExtractor:
         except FileNotFoundError:
             logger.warning("FFmpeg binary not available to probe duration")
             return 0.0
-
         output = result.stderr or result.stdout
         match = re.search(r"Duration: (?P<h>\d+):(?P<m>\d+):(?P<s>\d+(?:\.\d+)?)", output)
         if not match:
             return 0.0
-
         hours = int(match.group("h"))
         minutes = int(match.group("m"))
         seconds = float(match.group("s"))
         return hours * 3600 + minutes * 60 + seconds
-
     def _build_metadata(
         self,
         files: List[Path],
@@ -162,11 +137,8 @@ class VideoScreenshotExtractor:
                 )
             )
         return screenshots
-
-
 class GeminiVisionReviewer:
     """Geminiを用いてスクリーンショットからフィードバックを生成"""
-
     def __init__(
         self,
         model: str,
@@ -177,7 +149,6 @@ class GeminiVisionReviewer:
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
         self.rotation_manager = get_rotation_manager()
-
     def review(
         self,
         video_path: str,
@@ -186,15 +157,12 @@ class GeminiVisionReviewer:
     ) -> VideoReviewFeedback:
         if not screenshots:
             raise ValueError("screenshots must not be empty")
-
         prompt = self._build_prompt(video_path, screenshots, metadata)
         image_parts = []
         for shot in screenshots:
             with open(shot.path, "rb") as img_file:
                 image_parts.append({"mime_type": "image/png", "data": img_file.read()})
-
         image_paths = [shot.path for shot in screenshots]
-
         def api_call(api_key_value: str) -> str:
             genai.configure(api_key=api_key_value)
             model = genai.GenerativeModel(f"models/{self.model_name}")
@@ -208,7 +176,6 @@ class GeminiVisionReviewer:
                 generation_config=generation_config,
             )
             text = response.text
-
             try:
                 record_llm_interaction(
                     provider="gemini",
@@ -224,11 +191,9 @@ class GeminiVisionReviewer:
                     response={"text": text},
                     metadata={"component": "video_review"},
                 )
-            except Exception:  # pragma: no cover - diagnostics only
+            except Exception:
                 logger.debug("Failed to log video review interaction", exc_info=True)
-
             return text
-
         try:
             with llm_logging_context(component="video_review", video=os.path.basename(video_path)):
                 raw_response = self.rotation_manager.execute_with_rotation(
@@ -239,15 +204,12 @@ class GeminiVisionReviewer:
         except Exception as exc:
             logger.error("Gemini review failed: %s", exc)
             raise
-
         try:
             data = json.loads(raw_response)
         except json.JSONDecodeError as exc:
             logger.warning("Failed to parse JSON from Gemini. Raw response: %s", raw_response[:500])
             raise ValueError("Gemini response was not valid JSON") from exc
-
         return VideoReviewFeedback(**data)
-
     def _build_prompt(
         self,
         video_path: str,
@@ -261,7 +223,6 @@ class GeminiVisionReviewer:
         screenshot_lines = [
             f"{idx + 1}. {shot.timestamp_label} ({os.path.basename(shot.path)})" for idx, shot in enumerate(screenshots)
         ]
-
         context_block = "\n".join(
             [
                 "あなたは金融系YouTubeチャンネルの品質管理AIです。",
@@ -270,11 +231,9 @@ class GeminiVisionReviewer:
                 "視聴者は30代の投資家層で、最新ニュースを短時間で理解したいと考えています。",
             ]
         )
-
         video_info_line = f"動画タイトル: {title}" if title else "動画タイトル: 不明"
         duration_line = f"推定尺: {duration}" if duration else "推定尺: 未取得"
         screenshots_block = "\n".join(["スクリーンショット一覧:", *screenshot_lines])
-
         instructions = "\n".join(
             [
                 "出力フォーマットは以下のJSON構造に従ってください:",
@@ -289,7 +248,6 @@ class GeminiVisionReviewer:
                 "未知の場合は" "不明" "と記載せず、推測で埋めないでください。",
             ]
         )
-
         return "\n".join(
             [
                 context_block,
@@ -299,11 +257,8 @@ class GeminiVisionReviewer:
                 instructions,
             ]
         )
-
-
 class VideoReviewService:
     """スクリーンショット抽出とAIフィードバックを統合するサービス"""
-
     def __init__(
         self,
         screenshot_extractor: Optional[VideoScreenshotExtractor] = None,
@@ -318,7 +273,6 @@ class VideoReviewService:
             max_output_tokens=review_settings.max_output_tokens,
         )
         self.feedback_collector = get_feedback_collector() if review_settings.store_feedback else None
-
     def review_video(
         self,
         video_path: str,
@@ -328,11 +282,9 @@ class VideoReviewService:
     ) -> VideoReviewResult:
         if not self.settings.enabled:
             raise RuntimeError("Video review is disabled via configuration")
-
         base_name = video_id or Path(video_path).stem
         safe_dir_name = FileUtils.safe_filename(base_name)
         output_dir = os.path.join(self.settings.output_dir, safe_dir_name)
-
         screenshots = self.screenshot_extractor.extract(
             video_path=video_path,
             output_dir=output_dir,
@@ -340,13 +292,11 @@ class VideoReviewService:
             max_screenshots=self.settings.max_screenshots,
             force=force_capture,
         )
-
         feedback = self.reviewer.review(
             video_path=video_path,
             screenshots=screenshots,
             metadata=metadata,
         )
-
         result = VideoReviewResult(
             video_path=video_path,
             video_id=video_id,
@@ -354,19 +304,13 @@ class VideoReviewService:
             screenshots=screenshots,
             feedback=feedback,
         )
-
         if self.feedback_collector and video_id:
             try:
                 self.feedback_collector.record_ai_review(video_id, result)
             except Exception as exc:
                 logger.warning("Failed to record AI review for %s: %s", video_id, exc)
-
         return result
-
-
 _review_service_instance: Optional[VideoReviewService] = None
-
-
 def get_video_review_service() -> VideoReviewService:
     """サービスシングルトンを取得"""
     global _review_service_instance
