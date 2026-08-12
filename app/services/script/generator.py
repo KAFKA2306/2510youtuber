@@ -4,8 +4,10 @@ import logging
 import textwrap
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
 import yaml
 from pydantic import BaseModel, Field, ValidationError
+
 from app.adapters.llm import LLMClient
 from app.adapters.llm import _extract_message_text as adapter_extract_message_text
 from app.config.settings import settings
@@ -18,17 +20,20 @@ from app.services.script.validator import (
     ensure_dialogue_structure,
 )
 logger = logging.getLogger(__name__)
+
 class ScriptGenerationMetadata(BaseModel):
     wow_score: Optional[float] = Field(default=None, description='WOW score')
     japanese_purity_score: Optional[float] = Field(default=None, description='Japanese purity score (0-100)')
     retention_prediction: Optional[float] = Field(default=None, description='Predicted audience retention (0-1)')
     quality_report: Optional['ScriptQualityReport'] = Field(default=None, description='Static quality heuristics calculated locally')
+
 class ScriptQualityReport(BaseModel):
     dialogue_lines: int
     total_nonempty_lines: int
     distinct_speakers: int
     warnings: List[str] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)
+
 class StructuredScriptPayload(BaseModel):
     title: str
     dialogues: List[DialogueEntry]
@@ -36,19 +41,24 @@ class StructuredScriptPayload(BaseModel):
     wow_score: Optional[float] = None
     japanese_purity_score: Optional[float] = None
     retention_prediction: Optional[float] = None
+
     def to_script(self) -> Script:
         return Script.model_validate(self.model_dump())
+
     def to_metadata(self) -> ScriptGenerationMetadata:
         return ScriptGenerationMetadata(wow_score=self.wow_score, japanese_purity_score=self.japanese_purity_score, retention_prediction=self.retention_prediction)
+
 @dataclass
 class ScriptGenerationResult:
     script: Script
     metadata: ScriptGenerationMetadata
     raw_response: str
     structured_yaml: str
+
 class SpeakerRoster:
     MIN_SPEAKERS = 2
     DEFAULT_PLACEHOLDERS = ('ナビゲーター', 'アナリスト')
+
     def __init__(self, speakers: Iterable[str]) -> None:
         cleaned = [name.strip() for name in speakers if isinstance(name, str) and name.strip()]
         self.configured_names: List[str] = list(cleaned)
@@ -58,9 +68,11 @@ class SpeakerRoster:
             cleaned.append(next_name)
             self.added_names.append(next_name)
         self._names = cleaned
+
     @classmethod
     def from_settings(cls) -> 'SpeakerRoster':
         return cls((speaker.name for speaker in settings.speakers))
+
     @staticmethod
     def _next_placeholder(current: List[str]) -> str:
         for candidate in SpeakerRoster.DEFAULT_PLACEHOLDERS:
@@ -72,19 +84,24 @@ class SpeakerRoster:
             if candidate not in current:
                 return candidate
             index += 1
+
     @property
     def names(self) -> List[str]:
         return list(self._names)
+
     @property
     def was_augmented(self) -> bool:
         return bool(self.added_names)
+
     @property
     def warning_message(self) -> Optional[str]:
         if not self.was_augmented:
             return None
         joined = '、'.join(self.added_names)
         return f'設定された話者が不足していたため、台本生成で代替話者({joined})を補っています。'
+
 class StructuredScriptGenerator:
+
     def __init__(self, client: Optional[LLMClient]=None, max_attempts: int=3, temperature: float=0.6, allowed_speakers: Optional[Sequence[str]]=None) -> None:
         self.max_attempts = max(1, max_attempts)
         model_name = settings.gemini_models.get('script_generation')
@@ -96,6 +113,7 @@ class StructuredScriptGenerator:
         self._quality_gate_enabled = settings.script_generation.quality_gate_llm_enabled
         if self._speaker_roster.was_augmented:
             logger.warning('Speaker roster augmented with fallback names: configured=%s, added=%s', self._speaker_roster.configured_names, self._speaker_roster.added_names)
+
     def generate(self, news_items: List[Dict[str, Any]], target_duration_minutes: Optional[int]=None) -> ScriptGenerationResult:
         news_digest = self._format_news_digest(news_items)
         prompt = self._build_prompt(news_digest, target_duration_minutes)
@@ -174,11 +192,13 @@ class StructuredScriptGenerator:
             raw_response='',
             structured_yaml=structured_yaml,
         )
+
     def _build_prompt(self, news_digest: str, target_duration_minutes: Optional[int]) -> str:
         speaker_list = ', '.join(self._allowed_speakers)
         duration_hint = f'目標尺はおよそ{target_duration_minutes}分です。' if target_duration_minutes else ''
         template = f'\n        以下の金融ニュース要約に基づき、視聴者が理解しやすい対話形式の台本を作成してください。\n\n        {duration_hint}\n\n        出力条件:\n        - 話者は必ず以下の名前のみを使用: {speaker_list}\n        - 各台詞は「{{speaker}}: {{line}}」形式にできる内容で、日本語で書く\n        - 行頭に話者名を付与し、会話を最低24ターン以上構成する\n        - 数値・視覚指示・行動提案を織り交ぜる\n        - JSON形式のみで回答し、余計な文章やコードブロックは付けない\n\n        出力JSONのスキーマ例:\n        {{\n          "title": "string",\n          "summary": "string",\n          "dialogues": [\n            {{ "speaker": "{self._allowed_speakers[0]}", "line": "対話文" }}\n          ],\n          "wow_score": 8.2,\n          "japanese_purity_score": 97.5,\n          "retention_prediction": 0.54\n        }}\n\n        ニュース要約:\n        {news_digest}\n        '
         return textwrap.dedent(template).strip()
+
     def _parse_payload(self, response_text: str) -> StructuredScriptPayload:
         json_blob = self._extract_json_block(response_text)
         if not json_blob:
@@ -191,6 +211,7 @@ class StructuredScriptGenerator:
             return StructuredScriptPayload.model_validate(data)
         except ValidationError as exc:
             raise ValueError(f'Structured payload validation failed: {exc}') from exc
+
     @staticmethod
     def _extract_json_block(text: str) -> Optional[str]:
         stripped = text.strip()
@@ -198,11 +219,13 @@ class StructuredScriptGenerator:
             return None
         if stripped.startswith('{') and StructuredScriptGenerator._is_balanced_json(stripped):
             return stripped
+
         search_start = 0
         while True:
             start = stripped.find('{', search_start)
             if start == -1:
                 return None
+
             slice_text = stripped[start:]
             end_index = StructuredScriptGenerator._find_matching_brace(slice_text)
             if end_index is None:
@@ -210,15 +233,19 @@ class StructuredScriptGenerator:
                 if search_start >= len(stripped):
                     return None
                 continue
+
             candidate = slice_text[:end_index + 1]
             if StructuredScriptGenerator._is_balanced_json(candidate):
                 return candidate
+
             search_start = start + 1
             if search_start >= len(stripped):
                 return None
+
     @staticmethod
     def _extract_message_text(response: Dict[str, Any]) -> str:
         return adapter_extract_message_text(response)
+
     @staticmethod
     def _find_matching_brace(text: str) -> Optional[int]:
         depth = 0
@@ -246,6 +273,7 @@ class StructuredScriptGenerator:
                 if depth == 0:
                     return idx
         return None
+
     @staticmethod
     def _is_balanced_json(text: str) -> bool:
         try:
@@ -253,7 +281,19 @@ class StructuredScriptGenerator:
             return True
         except json.JSONDecodeError:
             return False
+
     def _build_script_from_text(self, response_text: str) -> Tuple[Script, ScriptQualityReport]:
+        recovered_payload = self._recover_structured_payload(response_text)
+        if recovered_payload:
+            try:
+                script = recovered_payload.to_script()
+            except ValidationError as exc:
+                logger.debug('Recovered payload failed strict validation: %s', exc)
+            else:
+                logger.info('Recovered structured script payload from fallback text')
+                quality_report = self._compute_quality_report(script)
+                return (script, quality_report)
+
         validation: Optional[ScriptValidationResult] = None
         try:
             validation = ensure_dialogue_structure(response_text, allowed_speakers=self._allowed_speakers, min_dialogue_lines=10)
@@ -272,6 +312,56 @@ class StructuredScriptGenerator:
         script = Script(title=title, dialogues=dialogues)
         quality_report = self._build_quality_report_from_validation(validation, script)
         return (script, quality_report)
+
+    def _recover_structured_payload(self, response_text: str) -> Optional[StructuredScriptPayload]:
+        candidates: List[str] = []
+        json_candidate = self._extract_json_block(response_text)
+        if json_candidate:
+            candidates.append(json_candidate)
+
+        stripped = self._strip_markdown_fences(response_text)
+        if stripped and stripped != response_text:
+            nested_candidate = self._extract_json_block(stripped)
+            if nested_candidate:
+                candidates.append(nested_candidate)
+            candidates.append(stripped)
+
+        candidates.append(response_text)
+        seen: set[str] = set()
+        for candidate in candidates:
+            normalized = candidate.strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            for loader in (json.loads, yaml.safe_load):
+                try:
+                    data = loader(normalized)
+                except Exception:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                try:
+                    return StructuredScriptPayload.model_validate(data)
+                except ValidationError:
+                    continue
+        return None
+
+    @staticmethod
+    def _strip_markdown_fences(text: str) -> str:
+        if '```' not in text:
+            return text
+        segments = text.split('```')
+        rebuilt: List[str] = []
+        for index, segment in enumerate(segments):
+            if index % 2 == 1:
+                newline_index = segment.find('\n')
+                if newline_index != -1:
+                    segment = segment[newline_index + 1:]
+                else:
+                    segment = ''
+            rebuilt.append(segment)
+        return ''.join(rebuilt)
+
     def _dialogues_from_validation(self, validation: Optional[ScriptValidationResult]) -> List[DialogueEntry]:
         if not validation:
             return []
@@ -285,6 +375,7 @@ class StructuredScriptGenerator:
             content = content.strip() or '(内容未設定)'
             dialogues.append(DialogueEntry(speaker=speaker or self._allowed_speakers[len(dialogues) % len(self._allowed_speakers)], line=content))
         return dialogues
+
     def _fabricate_dialogues(self, response_text: str) -> List[DialogueEntry]:
         dialogues: List[DialogueEntry] = []
         for raw_line in response_text.splitlines():
@@ -311,6 +402,7 @@ class StructuredScriptGenerator:
             alternate = self._allowed_speakers[1 % len(self._allowed_speakers)]
             dialogues.append(DialogueEntry(speaker=alternate, line='(補完台詞)'))
         return dialogues
+
     def _ensure_min_dialogues(self, dialogues: Sequence[DialogueEntry]) -> List[DialogueEntry]:
         if not dialogues:
             raise ValueError('Structured payload did not contain any dialogue lines')
@@ -327,6 +419,7 @@ class StructuredScriptGenerator:
             fallback_speaker = first_speaker or (self._allowed_speakers[0] if self._allowed_speakers else 'ナビゲーター')
         normalized.append(DialogueEntry(speaker=fallback_speaker, line='(補完台詞)'))
         return normalized
+
     def _canonicalize_speaker(self, label: Optional[str]) -> Optional[str]:
         if not label:
             return None
@@ -337,6 +430,7 @@ class StructuredScriptGenerator:
         if mapped in self._allowed_speaker_set:
             return mapped
         return None
+
     def _infer_title(self, response_text: str) -> str:
         for line in response_text.splitlines():
             candidate = line.strip()
@@ -346,6 +440,7 @@ class StructuredScriptGenerator:
                 continue
             return candidate[:80]
         return '自動生成スクリプト'
+
     def _build_quality_report_from_validation(self, validation: Optional[ScriptValidationResult], script: Script) -> ScriptQualityReport:
         if not validation:
             return self._apply_roster_warnings(ScriptQualityReport(dialogue_lines=len(script.dialogues), total_nonempty_lines=len(script.dialogues), distinct_speakers=len({d.speaker for d in script.dialogues}), warnings=[], errors=[]))
@@ -355,12 +450,14 @@ class StructuredScriptGenerator:
         actual_speakers = len({entry.speaker for entry in script.dialogues if entry.speaker})
         report = report.copy(update={'dialogue_lines': max(report.dialogue_lines, actual_dialogues), 'total_nonempty_lines': max(report.total_nonempty_lines, actual_nonempty), 'distinct_speakers': max(report.distinct_speakers, actual_speakers)})
         return self._apply_roster_warnings(report)
+
     def _compute_quality_report(self, script: Script) -> ScriptQualityReport:
         try:
             validation = ensure_dialogue_structure(script.to_text(), allowed_speakers=self._allowed_speakers, min_dialogue_lines=10)
         except ScriptFormatError as exc:
             validation = exc.result
         return self._build_quality_report_from_validation(validation, script)
+
     def _apply_roster_warnings(self, report: ScriptQualityReport) -> ScriptQualityReport:
         warning = self._speaker_roster.warning_message
         if not warning:
@@ -370,6 +467,7 @@ class StructuredScriptGenerator:
             return report
         existing.append(warning)
         return report.copy(update={'warnings': existing})
+
     def _dump_script_to_yaml(self, script: Script) -> str:
         payload = script.model_dump(mode='json')
         yaml_blob = yaml.safe_dump(payload, allow_unicode=True, sort_keys=False)
@@ -380,6 +478,7 @@ class StructuredScriptGenerator:
         if not isinstance(loaded, dict):
             raise ValueError('Structured script YAML must decode to a mapping')
         return yaml_blob
+
     def _build_backup_script(self, news_items: List[Dict[str, Any]], target_duration_minutes: Optional[int]=None) -> Script:
         topics: List[Dict[str, str]] = []
         for index, item in enumerate(news_items, start=1):
@@ -390,6 +489,7 @@ class StructuredScriptGenerator:
         secondary = self._allowed_speakers[1]
         narrator = self._allowed_speakers[2] if len(self._allowed_speakers) > 2 else None
         dialogues: List[DialogueEntry] = []
+
         def add_dialogue(speaker: str, line: str) -> None:
             dialogues.append(DialogueEntry(speaker=speaker, line=line))
         duration_hint = f'尺はおよそ{target_duration_minutes}分を想定しています。' if target_duration_minutes else ''
@@ -419,6 +519,7 @@ class StructuredScriptGenerator:
         headline = topics[0]['title']
         title = f'{title_prefix}: {headline}'[:80]
         return Script(title=title, dialogues=dialogues)
+
     @staticmethod
     def _format_news_digest(news_items: List[Dict[str, Any]]) -> str:
         if not news_items:
