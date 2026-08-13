@@ -28,4 +28,4 @@ jobs:
         with:
           python-version: '3.11'
       - name: Verify synchronous collector runs off the event loop thread
-        run: python -c "import asyncio,threading; from app.workflow.ports import SyncNewsCollectionAdapter; main=threading.get_ident(); seen=[]; collector=lambda p,m:(seen.append(threading.get_ident()) or [{'title':p}]); out=asyncio.run(SyncNewsCollectionAdapter(collector).collect_news('prompt','daily')); assert out[0]['title']=='prompt'; assert seen and seen[0] != main"
+        run: python -c "import asyncio,threading,importlib.util; spec=importlib.util.spec_from_file_location('workflow_ports','app/workflow/ports.py'); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); main=threading.get_ident(); seen=[]; collector=lambda p,m:(seen.append(threading.get_ident()) or [{'title':p}]); out=asyncio.run(module.SyncNewsCollectionAdapter(collector).collect_news('prompt','daily')); assert out[0]['title']=='prompt'; assert seen and seen[0] != main"
