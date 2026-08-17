@@ -23,7 +23,7 @@
 
 | 内容 | ファイル |
 | --- | --- |
-| 開発・運用ルール | [CLAUDE.md](CLAUDE.md) |
+| 開発・運用ルール | [AGENTS.md](AGENTS.md) |
 | 詳細資料 | [docs/](docs/) |
 | 全体設定 | [config.yaml](config.yaml) |
 | エージェント用プロンプト | [app/config/prompts/](app/config/prompts/) |
@@ -78,7 +78,7 @@ uv run ruff format --check .
 ├── docs/                   # 文書
 ├── scripts/                # 運用・検証スクリプト
 ├── config.yaml             # 全体設定
-└── CLAUDE.md               # 開発ガイド
+└── CLAUDE.md               # Claude Code向けAGENTS.md読み込み
 ```
 
 ## 運用上の注意
