@@ -1,5 +1,8 @@
 # 2510youtuber — AIエージェントによるYouTube動画生成
 
+[![Python syntax safety](https://github.com/KAFKA2306/2510youtuber/actions/workflows/python-syntax-safety.yml/badge.svg)](https://github.com/KAFKA2306/2510youtuber/actions/workflows/python-syntax-safety.yml)
+[![News collection async contract](https://github.com/KAFKA2306/2510youtuber/actions/workflows/news-collection-async-contract.yml/badge.svg)](https://github.com/KAFKA2306/2510youtuber/actions/workflows/news-collection-async-contract.yml)
+
 **リポジトリ:** https://github.com/KAFKA2306/2510youtuber
 
 ニュースや設定情報から動画台本を作り、音声・画像・字幕・動画へ変換する処理を、CrewAIベースのエージェントとメディア処理サービスで管理するプロジェクトです。
