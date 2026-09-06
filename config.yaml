@@ -252,7 +252,7 @@ youtube_optimization:
 # プロンプト設定
 # ============================================
 prompts:
-  directory: app/config/prompts
+  directory: app/config_prompts/prompts
   files:
     agents: agents.yaml
     analysis: analysis.yaml
