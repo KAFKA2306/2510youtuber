@@ -14,3 +14,7 @@ def test_configured_prompt_files_exist_in_single_directory() -> None:
         assert (prompt_dir / file_name).is_file(), file_name
 
     assert not (root / "app/config/prompts").exists()
+
+
+if __name__ == "__main__":
+    test_configured_prompt_files_exist_in_single_directory()
