@@ -27,7 +27,6 @@
 | 詳細資料 | [docs/](docs/) |
 | 全体設定 | [config.yaml](config.yaml) |
 | エージェント用プロンプト | [app/config/prompts/](app/config/prompts/) |
-| Serena用メモリ | [.serena/memories/](.serena/memories/) |
 
 ## 実行
 
