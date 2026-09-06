@@ -26,7 +26,7 @@
 | 開発・運用ルール | [AGENTS.md](AGENTS.md) |
 | 詳細資料 | [docs/](docs/) |
 | 全体設定 | [config.yaml](config.yaml) |
-| エージェント用プロンプト | [app/config/prompts/](app/config/prompts/) |
+| エージェント用プロンプト | [app/config_prompts/prompts/](app/config_prompts/prompts/) |
 
 ## 実行
 
