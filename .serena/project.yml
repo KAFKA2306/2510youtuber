@@ -60,6 +60,9 @@ read_only: false
 #  * `write_memory`: Writes a named memory (for future reference) to Serena's project-specific memory store.
 excluded_tools: []
 
+# Do not inherit user-global default modes or Serena memory behavior.
+default_modes: ["no-memories"]
+
 # initial prompt for the project. It will always be given to the LLM upon activating the project
 # (contrary to the memories, which are loaded on demand).
 initial_prompt: ""
