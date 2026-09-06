@@ -363,7 +363,7 @@ response = litellm.completion(
 
 **プロンプト外部化**:
 ```yaml
-# app/config/prompts/agents.yaml
+# app/config_prompts/prompts/agents.yaml
 deep_news_analyzer:
   role: 経済ニュース深層分析の専門家
   goal: ニュースの裏にある驚きと示唆を発掘する
