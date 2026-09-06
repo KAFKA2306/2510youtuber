@@ -201,7 +201,7 @@ verify_config:
 ```
 
 ### 2.3 Prompt Store
-- SQLiteでメタデータ、実体はYAMLファイルを `app/config/prompts/` へ保存。
+- SQLiteでメタデータ、実体はYAMLファイルを `app/config_prompts/prompts/` へ保存。
 - 変更時は新しいバージョンを作成し、`prompts_history/` にスナップショットを残す。
 - FastAPI経由でCRUD提供。ジョブ起動時に最新リビジョンを `WorkflowContext` に注入。
 
