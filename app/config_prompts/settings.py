@@ -15,24 +15,24 @@ class PromptManager:
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.env = self._setup_jinja_env()
     def _setup_jinja_env(self):
-        """Jinja2環境をセットアップ"""
-        template_dirs = [
-            os.path.join(self.base_dir, "prompts"),
-            os.path.join(self.base_dir, "..", "config_prompts", "prompts"),
-        ]
-        if "directory" in self.prompt_config:
-            template_dirs.append(os.path.join(self.base_dir, "..", "..", self.prompt_config["directory"]))
-        loader = FileSystemLoader(template_dirs)
+        """Build a loader for the single configured prompt directory."""
+        configured_dir = self.prompt_config.get("directory")
+        if not configured_dir:
+            raise ValueError("prompts.directory is required")
+        prompt_dir = os.path.abspath(os.path.join(self.base_dir, "..", "..", configured_dir))
+        if not os.path.isdir(prompt_dir):
+            raise FileNotFoundError(f"Configured prompt directory does not exist: {configured_dir}")
+        loader = FileSystemLoader([prompt_dir])
         return Environment(
             loader=loader, autoescape=select_autoescape(["html", "xml"]), trim_blocks=True, lstrip_blocks=True
         )
     def _resolve_template_path(self, template_name: str) -> str:
-        """Resolve a configured template name to an on-disk path for Jinja2."""
+        """Resolve a configured template and fail if the canonical file is missing."""
         file_name = self.prompt_config.get("files", {}).get(template_name, f"{template_name}.yaml")
-        candidate = os.path.join("prompts", file_name)
-        for search_path in self.env.loader.searchpath:
-            if os.path.exists(os.path.join(search_path, candidate)):
-                return candidate
+        prompt_dir = self.env.loader.searchpath[0]
+        template_path = os.path.join(prompt_dir, file_name)
+        if not os.path.isfile(template_path):
+            raise FileNotFoundError(f"Configured prompt template does not exist: {file_name}")
         return file_name
     def get_prompt_template(self, template_name: str) -> str:
         """指定された名前のプロンプトテンプレートを読み込む"""
