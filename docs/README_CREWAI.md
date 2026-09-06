@@ -143,7 +143,7 @@ quality_thresholds:
 
 ### プロンプトカスタマイズ
 
-**app/config/prompts/agents.yaml**:
+**app/config_prompts/prompts/agents.yaml**:
 ```yaml
 agents:
   deep_news_analyzer:
@@ -203,7 +203,7 @@ Could not clean all English: ['user', 'Task', 'json', 'wow_score']
 **確認方法**:
 ```bash
 grep -A 3 "最終出力は、以下のJSON形式のみを出力" \
-  app/config/prompts/quality_check.yaml
+  app/config_prompts/prompts/quality_check.yaml
 ```
 
 **修正**: 最新版にアップデート（Phase 3で解決済み）
