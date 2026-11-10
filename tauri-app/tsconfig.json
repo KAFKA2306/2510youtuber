@@ -3,7 +3,7 @@
   "compilerOptions": {
     "allowJs": true,
     "checkJs": false,
-    "types": ["svelte"]
+    "types": ["svelte", "vite/client"]
   },
   "include": [
     "src/**/*.d.ts",
