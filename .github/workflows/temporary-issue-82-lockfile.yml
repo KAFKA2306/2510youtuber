@@ -1,0 +1,36 @@
+name: Temporary issue 82 lockfile repair and build verification
+on:
+  push:
+    branches: [fix/security-issue-82-sveltekit-devalue]
+    paths:
+      - tauri-app/package.json
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Check out exact repair branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - name: Update lockfile and run essential checks
+        working-directory: tauri-app
+        run: |
+          node --version
+          npm --version
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm update nanoid postcss rollup source-map-js --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --no-audit --no-fund
+          npm run check
+          npm run build
+      - name: Commit verified lockfile to repair branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tauri-app/package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "fix(security): regenerate and verify patched npm lockfile"
+            git push origin HEAD:fix/security-issue-82-sveltekit-devalue
+          fi
