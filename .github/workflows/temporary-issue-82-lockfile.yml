@@ -23,6 +23,8 @@ jobs:
         run: |
           node --version
           npm --version
+          # Invalidate lockfile records that require Vite 5; npm resolves the replacement peers.
+          node -e "const fs=require('node:fs');const p='package-lock.json';const l=JSON.parse(fs.readFileSync(p,'utf8'));for(const n of ['node_modules/@sveltejs/vite-plugin-svelte','node_modules/@sveltejs/vite-plugin-svelte-inspector','node_modules/vite'])delete l.packages[n];fs.writeFileSync(p,JSON.stringify(l,null,2)+'\\n');"
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm update nanoid postcss rollup source-map-js --package-lock-only --ignore-scripts --no-audit --no-fund
           npm ci --no-audit --no-fund
