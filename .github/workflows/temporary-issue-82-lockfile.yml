@@ -1,13 +1,15 @@
 name: Temporary issue 82 lockfile repair and build verification
 on:
-  push:
-    branches: [fix/security-issue-82-sveltekit-devalue]
+  pull_request:
+    branches: [main]
     paths:
       - tauri-app/package.json
+      - .github/workflows/temporary-issue-82-lockfile.yml
 permissions:
   contents: write
 jobs:
   repair:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
@@ -15,6 +17,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: true
+          ref: ${{ github.event.pull_request.head.ref }}
       - name: Update lockfile and run essential checks
         working-directory: tauri-app
         run: |
