@@ -36,6 +36,8 @@ jobs:
           fi
       - name: Compile Python sources
         run: python -m compileall -q app tests
+      - name: Verify synchronous collector runs off the event loop thread
+        run: python -c "import asyncio,threading,importlib.util; spec=importlib.util.spec_from_file_location('workflow_ports','app/workflow/ports.py'); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); main=threading.get_ident(); seen=[]; collector=lambda p,m:(seen.append(threading.get_ident()) or [{'title':p}]); out=asyncio.run(module.SyncNewsCollectionAdapter(collector).collect_news('prompt','daily')); assert out[0]['title']=='prompt'; assert seen and seen[0] != main"
       - name: Verify canonical prompt configuration
         run: |
           python -m pip install --quiet PyYAML
