@@ -1,7 +1,6 @@
 # 2510youtuber — AIエージェントによるYouTube動画生成
 
 [![Python syntax safety](https://github.com/KAFKA2306/2510youtuber/actions/workflows/python-syntax-safety.yml/badge.svg)](https://github.com/KAFKA2306/2510youtuber/actions/workflows/python-syntax-safety.yml)
-[![News collection async contract](https://github.com/KAFKA2306/2510youtuber/actions/workflows/news-collection-async-contract.yml/badge.svg)](https://github.com/KAFKA2306/2510youtuber/actions/workflows/news-collection-async-contract.yml)
 
 **リポジトリ:** https://github.com/KAFKA2306/2510youtuber
 
